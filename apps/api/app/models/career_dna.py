@@ -36,6 +36,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.career_action_planner import (
+        CareerActionPlan,
+        CareerActionPlannerPreference,
+    )
     from app.models.career_passport import (
         CareerPassportPreference,
         CountryComparison,
@@ -479,6 +483,19 @@ class CareerDNA(UUIDMixin, TimestampMixin, Base):
     )
     predictive_career_preference: Mapped[PredictiveCareerPreference | None] = relationship(
         "PredictiveCareerPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Career Action Planner™ relationships
+    career_action_plans: Mapped[list[CareerActionPlan]] = relationship(
+        "CareerActionPlan",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_action_planner_preference: Mapped[CareerActionPlannerPreference | None] = relationship(
+        "CareerActionPlannerPreference",
         back_populates="career_dna",
         uselist=False,
         cascade="all, delete-orphan",

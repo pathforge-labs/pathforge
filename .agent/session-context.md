@@ -4,55 +4,48 @@
 
 ## Current Session
 
-| Field       | Value                                               |
-| :---------- | :-------------------------------------------------- |
-| Date        | 2026-02-23                                          |
-| Focus       | Sprint 20 — AI Trust Layer™ Enhancements (R4/R5/R6) |
-| Branch      | main                                                |
-| Last Commit | 065dbf2                                             |
+| Field       | Value                                      |
+| :---------- | :----------------------------------------- |
+| Date        | 2026-02-23                                 |
+| Focus       | Sprint 21 — Career Action Planner™ (R1-R4) |
+| Branch      | main                                       |
+| Last Commit | 18bef4c                                    |
 
 ## Work Done
 
-- **Sprint 20 implementation** — AI Trust Layer™ (4 components + PoC)
-  - `app/core/llm_observability.py` (MOD) — TransparencyRecord, TransparencyLog, confidence scoring
-  - `app/core/llm.py` (MOD) — 2 transparency wrappers
-  - `app/schemas/ai_transparency.py` (NEW) — 3 Pydantic models
-  - `app/api/v1/ai_transparency.py` (NEW) — 3 REST endpoints
+- **Sprint 21 implementation** — Career Action Planner™ (10 endpoints + audit fixes)
+  - `app/models/career_action_planner.py` (NEW) — 5 models + 4 StrEnums
+  - `app/schemas/career_action_planner.py` (NEW) — 14 Pydantic schemas
+  - `app/ai/career_action_planner_analyzer.py` (NEW) — 4 LLM methods + 4 validators
+  - `app/ai/career_action_planner_prompts.py` (NEW) — 4 versioned prompt templates
+  - `app/services/career_action_planner_service.py` (NEW) — pipeline orchestration (718 lines)
+  - `app/services/_career_action_planner_helpers.py` (NEW) — 3 typed DTOs + 4 extracted helpers
+  - `app/api/v1/career_action_planner.py` (NEW) — 10 REST endpoints
   - `app/main.py` (MOD) — router wiring
-  - `app/ai/career_dna_analyzer.py` (MOD) — 5 LLM methods → tuple[data, TransparencyRecord]
-  - `app/services/career_dna_service.py` (MOD) — transparency logging in 4 compute helpers
-  - `tests/test_llm_observability.py` (NEW) — 33 unit tests
-  - `tests/test_ai_transparency_api.py` (NEW) — 8 API tests
-  - `tests/test_ai_transparency_integration.py` (NEW) — 3 integration tests
-- **Sprint 20 Enhancements R1/R2/R3** — Closed first 3 audit findings
-  - R1: `app/models/ai_transparency.py` (NEW) — `AITransparencyRecord` model + Alembic migration
-  - R1: `app/core/llm_observability.py` (MOD) — async `_persist_to_db()` with graceful degradation
-  - R2: `app/api/v1/ai_transparency.py` (MOD) — `@limiter.limit` on 3 endpoints
-  - R3: `tests/test_career_dna_transparency.py` (NEW) — 10 per-method transparency tests
-- **Sprint 20 Enhancements R4/R5/R6** — Closed final 3 audit findings
-  - R4: `app/core/config.py` (MOD) — `rate_limit_ai_health` + `rate_limit_ai_analyses` settings
-  - R4: `app/api/v1/ai_transparency.py` (MOD) — configurable `settings.*` limiter refs
-  - R5: `app/core/llm_observability.py` (MOD) — async DB fallback in `get_recent`/`get_by_id`/`get_user_for_analysis`
-  - R6: `app/core/llm_observability.py` (MOD) — `_persistence_failures` + `pending_persistence_count`
-  - R6: `app/schemas/ai_transparency.py` (MOD) — 2 new `AIHealthResponse` fields
-  - `tests/test_llm_observability.py` (MOD) — 10 tests converted to async + R6 assertions
-- **Tier-1 retrospective audits** — all 9 domains Tier-1 Compliant (all phases)
+  - `app/models/__init__.py` (MOD) — model registration
+  - `app/models/career_dna.py` (MOD) — backref relationships
+  - `tests/test_career_action_planner.py` (NEW) — 73 unit tests
+  - `tests/test_career_action_planner_llm.py` (NEW) — 12 mocked LLM integration tests
+- **Audit R1-R4** — all 4 findings resolved:
+  - R1: 3 typed pipeline DTOs (`DashboardResult`, `GeneratePlanResult`, `ComparePlansResult`)
+  - R2: 12 mocked LLM integration tests covering all 4 analyzer methods
+  - R3: `bandit` + `pip-audit` installed and verified (0 issues)
+  - R4: Service file split (896 → 718 lines), 4 functions extracted
 
 ## Quality Gates
 
-| Gate       | Status               |
-| :--------- | :------------------- |
-| ESLint     | ✅ 0 errors          |
-| TypeScript | ✅ 0 errors          |
-| Ruff       | ✅ 0 errors          |
-| MyPy       | ✅ 0 errors          |
-| Pytest     | ✅ 727 passed        |
-| npm audit  | ✅ 0 vulnerabilities |
-| Build      | ✅ 24/24 routes      |
+| Gate      | Status               |
+| :-------- | :------------------- |
+| Ruff      | ✅ 0 errors          |
+| MyPy      | ✅ 0 errors          |
+| Pytest    | ✅ 800 passed        |
+| Bandit    | ✅ 0 issues          |
+| npm audit | ✅ 0 vulnerabilities |
+| Build     | ✅ 24/24 routes      |
 
 ## Handoff Notes
 
-- Sprint 20 is **fully complete** — AI Trust Layer™ delivered with zero deferred items
-- All quality gates passed, Tier-1 audit clean across all 3 enhancement phases
-- **0 open blockers** — clean slate for Sprint 21
-- Next sprint: Sprint 21 (Phase C continuation or Phase D)
+- Sprint 21 is **fully complete** — Career Action Planner™ delivered with all 4 audit findings resolved
+- All quality gates passed, Tier-1 audit clean
+- **0 open blockers** — clean slate for Sprint 22
+- Next sprint: Sprint 22 (Phase C continuation or Phase D)

@@ -418,6 +418,32 @@
 > - Tier-1 retrospective audit (post-R4/R5/R6) — all 9 domains Tier-1 Compliant ✅
 > - **Zero deferred items remain** — AI Trust Layer™ fully production-grade
 
+### Sprint 21 — Career Action Planner™ (✅ Complete)
+
+- [x] Career Sprint Methodology™ — time-boxed career development cycles
+- [x] Intelligence-to-Action Bridge™ — converts intelligence → actions
+- [x] Adaptive Plan Recalculation™ — dynamic re-prioritization
+- [x] R1: Typed pipeline DTOs (3 frozen dataclasses replacing `dict[str, Any]`)
+- [x] R2: Mocked LLM integration tests (12 tests covering all 4 analyzer methods)
+- [x] R3: Security scanning tools installed (`bandit` + `pip-audit`)
+- [x] R4: Service file split (896 → 718 lines, 4 functions extracted)
+
+> **Implementation detail:**
+>
+> - 5 SQLAlchemy models (`CareerActionPlan`, `PlanMilestone`, `MilestoneProgress`, `PlanRecommendation`, `CareerActionPlannerPreference`) + 4 StrEnums
+> - 14 Pydantic schemas with `data_source` + `disclaimer` transparency fields
+> - 4 versioned AI prompt templates (priorities, milestones, progress evaluation, recommendations)
+> - CareerActionPlannerAnalyzer (4 LLM methods + 4 static helpers + 4 clamping validators, `MAX_PLAN_CONFIDENCE` 0.85 cap)
+> - CareerActionPlannerService pipeline orchestration (~718 lines) + `_career_action_planner_helpers.py` (218 lines)
+> - 3 typed pipeline DTOs: `DashboardResult`, `GeneratePlanResult`, `ComparePlansResult` (frozen dataclasses)
+> - 10 REST endpoints at `/api/v1/career-action-planner` (dashboard, scan, detail, status, milestones, progress, compare, preferences)
+> - Alembic migration `0a1b2c3d4e5g` — 5 tables with FK CASCADE + indexes + CheckConstraint (confidence ≤ 0.85)
+> - Input sanitization via `sanitize_user_text` on all LLM inputs
+> - `LLMError` try/except with safe fallbacks on all 4 LLM methods
+> - 73 new tests + 12 mocked LLM integration tests (800/800 total suite passing)
+> - Tier-1 retrospective audit passed — 4 findings resolved (R1: typed DTOs, R2: LLM tests, R3: security tools, R4: service split)
+> - 3 proprietary innovations: Career Sprint Methodology™, Intelligence-to-Action Bridge™, Adaptive Plan Recalculation™
+
 ---
 
 ## Ad-Hoc Work Log
@@ -484,3 +510,4 @@
 | 18     | 3             | 3         | 0            | 1        |
 | 19     | 4             | 12        | 0            | 1        |
 | 20     | 7             | 7         | 0            | 2        |
+| 21     | 7             | 7         | 0            | 1        |

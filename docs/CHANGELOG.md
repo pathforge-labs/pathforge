@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 21] — Career Action Planner™ — 2026-02-23
+
+### Added
+
+- **Career Action Planner™** — time-boxed career development planning system:
+  - 5 SQLAlchemy models + 4 StrEnums, 14 Pydantic schemas
+  - 4 LLM methods (priorities, milestones, progress evaluation, recommendations) + 4 clamping validators
+  - CareerActionPlannerService pipeline (~718 lines) + helper module (218 lines)
+  - 3 typed pipeline DTOs: `DashboardResult`, `GeneratePlanResult`, `ComparePlansResult`
+  - 10 REST endpoints at `/api/v1/career-action-planner`
+  - Alembic migration `0a1b2c3d4e5g` — 5 tables
+  - 73 unit tests + 12 mocked LLM integration tests (800/800 total passing)
+- **Career Sprint Methodology™** — time-boxed career development cycles
+- **Intelligence-to-Action Bridge™** — converts intelligence engine outputs → actionable milestones
+- **Adaptive Plan Recalculation™** — dynamic re-prioritization based on progress + new intelligence
+- Security scanning tools: `bandit` + `pip-audit` installed in dev environment
+
+### Changed
+
+- `career_action_planner_service.py` — extracted 4 helpers + `compare_plans` to `_career_action_planner_helpers.py` (896 → 718 lines)
+- `career_action_planner.py` (API routes) — 3 endpoints updated to use typed DTO attribute access
+- `main.py` — `career_action_planner.router` wired at `/api/v1`
+
+---
+
 ## [Sprint 20] — AI Trust Layer™ — 2026-02-23
 
 ### Added

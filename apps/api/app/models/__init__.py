@@ -9,6 +9,13 @@ from app.models.ai_transparency import AITransparencyRecord
 from app.models.analytics import CVExperiment, FunnelEvent, MarketInsight
 from app.models.application import Application, CVVersion
 from app.models.base import Base
+from app.models.career_action_planner import (
+    CareerActionPlan,
+    CareerActionPlannerPreference,
+    MilestoneProgress,
+    PlanMilestone,
+    PlanRecommendation,
+)
 from app.models.career_dna import (
     CareerDNA,
     ExperienceBlueprint,
@@ -103,6 +110,8 @@ __all__ = [
     "BlacklistEntry",
     "CVExperiment",
     "CVVersion",
+    "CareerActionPlan",
+    "CareerActionPlannerPreference",
     "CareerDNA",
     "CareerForecast",
     "CareerPassportPreference",
@@ -133,9 +142,12 @@ __all__ = [
     "MarketInsight",
     "MarketPosition",
     "MatchResult",
+    "MilestoneProgress",
     "OpportunitySurface",
     "OutreachTemplate",
     "PeerCohortAnalysis",
+    "PlanMilestone",
+    "PlanRecommendation",
     "PredictiveCareerPreference",
     "Preference",
     "ReskillingPathway",
