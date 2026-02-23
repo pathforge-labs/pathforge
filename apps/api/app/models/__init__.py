@@ -53,6 +53,13 @@ from app.models.interview_intelligence import (
     STARExample,
 )
 from app.models.matching import JobListing, MatchResult
+from app.models.predictive_career import (
+    CareerForecast,
+    DisruptionForecast,
+    EmergingRole,
+    OpportunitySurface,
+    PredictiveCareerPreference,
+)
 from app.models.preference import BlacklistEntry, Preference
 from app.models.resume import Resume, Skill
 from app.models.salary_intelligence import (
@@ -95,6 +102,7 @@ __all__ = [
     "CVExperiment",
     "CVVersion",
     "CareerDNA",
+    "CareerForecast",
     "CareerPassportPreference",
     "CareerPulseEntry",
     "CareerResilienceSnapshot",
@@ -104,6 +112,8 @@ __all__ = [
     "CompanySignal",
     "CountryComparison",
     "CredentialMapping",
+    "DisruptionForecast",
+    "EmergingRole",
     "ExperienceBlueprint",
     "FunnelEvent",
     "GrowthVector",
@@ -121,8 +131,10 @@ __all__ = [
     "MarketInsight",
     "MarketPosition",
     "MatchResult",
+    "OpportunitySurface",
     "OutreachTemplate",
     "PeerCohortAnalysis",
+    "PredictiveCareerPreference",
     "Preference",
     "ReskillingPathway",
     "Resume",

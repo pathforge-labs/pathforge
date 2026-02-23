@@ -64,6 +64,13 @@ if TYPE_CHECKING:
         InterviewPreference,
         InterviewPrep,
     )
+    from app.models.predictive_career import (
+        CareerForecast,
+        DisruptionForecast,
+        EmergingRole,
+        OpportunitySurface,
+        PredictiveCareerPreference,
+    )
     from app.models.salary_intelligence import (
         SalaryEstimate,
         SalaryHistoryEntry,
@@ -444,6 +451,34 @@ class CareerDNA(UUIDMixin, TimestampMixin, Base):
     )
     ci_preference: Mapped[CollectiveIntelligencePreference | None] = relationship(
         "CollectiveIntelligencePreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Predictive Career Engine™ relationships
+    emerging_roles: Mapped[list[EmergingRole]] = relationship(
+        "EmergingRole",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    disruption_forecasts: Mapped[list[DisruptionForecast]] = relationship(
+        "DisruptionForecast",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    opportunity_surfaces: Mapped[list[OpportunitySurface]] = relationship(
+        "OpportunitySurface",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_forecasts: Mapped[list[CareerForecast]] = relationship(
+        "CareerForecast",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    predictive_career_preference: Mapped[PredictiveCareerPreference | None] = relationship(
+        "PredictiveCareerPreference",
         back_populates="career_dna",
         uselist=False,
         cascade="all, delete-orphan",

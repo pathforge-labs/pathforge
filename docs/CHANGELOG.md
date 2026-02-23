@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 19] — Predictive Career Engine™ — 2026-02-23
+
+### Added
+
+- **Predictive Career Engine™** — industry's first individual-facing predictive intelligence system:
+  - 5 SQLAlchemy models (`EmergingRole`, `DisruptionForecast`, `OpportunitySurface`, `CareerForecast`, `PredictiveCareerPreference`) + 5 StrEnums
+  - 14 Pydantic schemas with `data_source` + `disclaimer` transparency fields
+  - Alembic migration `7g8h9i0j1k2l` — 5 tables with FK CASCADE, indexes, `CheckConstraint` (confidence ≤ 0.85)
+  - AI analyzer: 4 LLM methods + 2 static helpers + 4 clamping validators, `MAX_PC_CONFIDENCE` 0.85 cap
+  - PredictiveCareerService pipeline orchestration (~594 lines)
+  - 8 REST endpoints at `/api/v1/predictive-career` (dashboard, scan, 4 analysis, preferences GET/PUT)
+  - 71 new tests (673/673 total passing)
+- **Emerging Role Radar™** — skill-overlap + trend detection for nascent roles
+- **Disruption Forecast Engine™** — per-user severity scoring + mitigation strategies
+- **Proactive Opportunity Surfacing** — multi-signal time-sensitive opportunity detection
+- **Career Forecast Index™** — composite 4-component weighted score (0-100), no competitor equivalent
+- 4 versioned OWASP LLM01-hardened prompt templates (emerging roles, disruption, opportunity, career forecast)
+- Architecture reference: `docs/architecture/sprint-19-predictive-career-engine.md`
+- Ethics safeguards: confidence cap (0.85), transparency fields, anti-panic prompts, no outcome guarantees
+
+---
+
 ## [Sprint 18] — Infrastructure & Auth Integration — 2026-02-22
 
 ### Added

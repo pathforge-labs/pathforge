@@ -28,6 +28,7 @@ from app.api.v1 import (
     health,
     hidden_job_market,
     interview_intelligence,
+    predictive_career,
     salary_intelligence,
     skill_decay,
     threat_radar,
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     application.include_router(interview_intelligence.router, prefix="/api/v1")
     application.include_router(hidden_job_market.router, prefix="/api/v1")
     application.include_router(collective_intelligence.router, prefix="/api/v1")
+    application.include_router(predictive_career.router, prefix="/api/v1")
 
     return application
 
