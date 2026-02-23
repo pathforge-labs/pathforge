@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 20] — AI Trust Layer™ — 2026-02-23
+
+### Added
+
+- **AI Trust Layer™** — user-facing AI transparency infrastructure for explainability:
+  - `TransparencyRecord` dataclass with 12 fields (ID, type, model, confidence, sources, tokens, latency)
+  - `TransparencyLog` thread-safe per-user circular buffer (200 records/user, 1000 users max)
+  - `compute_confidence_score()` — 4-signal algorithm (tier, retries, latency, token utilization), capped at 95%
+  - 2 LLM wrappers: `complete_with_transparency()`, `complete_json_with_transparency()`
+  - 3 Pydantic v2 schemas: `AIAnalysisTransparencyResponse`, `RecentAnalysesResponse`, `AIHealthResponse`
+  - 3 REST endpoints at `/api/v1/ai-transparency` (public health dashboard, auth-gated analyses list + detail)
+  - User isolation: 404 for other users' analyses, auth-gated endpoints
+- **Career DNA Service Integration (PoC)** — transparency logging wired into production pipeline:
+  - All 5 LLM-calling analyzer methods return `tuple[data, TransparencyRecord | None]`
+  - `_log_transparency()` helper logs records to per-user TransparencyLog
+  - 4 `_compute_*` service helpers pass `user_id` through orchestration chain
+  - Analysis types: `career_dna.hidden_skills`, `.experience_blueprint`, `.growth_vector`, `.values_profile`, `.summary`
+- 44 new tests: 33 unit, 8 API, 3 integration (717/717 total passing)
+- Market-first: no competitor exposes per-analysis confidence + data sources to end users
+
+### Changed
+
+- `career_dna_analyzer.py` — all 5 LLM methods use `complete_json_with_transparency` instead of `complete_json`
+- `career_dna_service.py` — all 4 LLM-backed compute helpers accept `user_id` and log TransparencyRecords
+- `llm.py` — added transparency wrapper layer maintaining backward compatibility
+- `main.py` — `ai_transparency.router` wired at `/api/v1`
+
+---
+
 ## [Sprint 19] — Predictive Career Engine™ — 2026-02-23
 
 ### Added

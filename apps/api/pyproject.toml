@@ -38,6 +38,7 @@ dev = [
 ]
 ai = [
     "litellm>=1.55.0",
+    "langfuse>=2.50.0",
     "langchain>=0.3.0",
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=2.0.0",

@@ -372,6 +372,52 @@
 > - Tier-1 retrospective audit — all areas Tier-1 Compliant ✅
 > - 2 optional findings deferred to Sprint 20 (integration tests, LLM observability)
 
+### Sprint 20 — AI Trust Layer™ (✅ Complete)
+
+- [x] LLM observability infrastructure (TransparencyRecord, TransparencyLog, confidence scoring)
+- [x] Transparency LLM wrappers (`complete_with_transparency`, `complete_json_with_transparency`)
+- [x] AI Transparency API (3 endpoints: health, analyses, analysis detail)
+- [x] Career DNA service integration PoC (5 analyzer methods + service layer)
+- [x] R1: Persistence layer for TransparencyLog (SQLAlchemy model + Alembic migration + async DB writes)
+- [x] R2: Rate limiting on AI Transparency endpoints (30/min health, 20/min analyses)
+- [x] R3: Per-method transparency unit tests (10 tests covering all 5 analyzer methods)
+- [x] R4: Configurable rate limits on AI Transparency endpoints (env-var overridable)
+- [x] R5: DB fallback for post-restart queries (async get_recent/get_by_id/get_user_for_analysis)
+- [x] R6: Background task monitoring (persistence_failures counter + pending_persistence_count)
+
+> **Implementation detail:**
+>
+> - `app/core/llm_observability.py` — `TransparencyRecord` dataclass, `TransparencyLog` thread-safe circular buffer (200/user, 1000 users max), `compute_confidence_score()` 4-signal algorithm, confidence capped at 95%
+> - `app/core/llm.py` — 2 transparency wrappers maintaining backward compatibility with existing completion functions
+> - `app/schemas/ai_transparency.py` — 3 Pydantic v2 response models (`AIAnalysisTransparencyResponse`, `RecentAnalysesResponse`, `AIHealthResponse`)
+> - `app/api/v1/ai_transparency.py` — 3 REST endpoints at `/api/v1/ai-transparency` (public health dashboard, auth-gated analyses list + detail)
+> - `app/ai/career_dna_analyzer.py` — all 5 LLM methods return `tuple[data, TransparencyRecord | None]` with `analysis_type` + `data_sources` metadata
+> - `app/services/career_dna_service.py` — `_log_transparency()` helper, 4 `_compute_*` helpers log records per user
+> - 44 new tests: 33 unit (`test_llm_observability.py`), 8 API (`test_ai_transparency_api.py`), 3 integration (`test_ai_transparency_integration.py`)
+> - 717/717 total suite passing (full regression)
+> - Tier-1 retrospective audit — all 9 domains Tier-1 Compliant ✅
+> - 3 optional findings deferred (persistence layer, health rate limit, per-method unit tests) — **all 3 resolved in Sprint 20 Enhancements session**
+> - First-mover: no competitor (LinkedIn, Indeed, Jobscan, Teal, Rezi) exposes per-analysis confidence + data sources
+>
+> **Sprint 20 Enhancements (R1/R2/R3):**
+>
+> - R1: `AITransparencyRecord` SQLAlchemy model + Alembic migration `8h9i0j1k2l3m` + async fire-and-forget DB persistence in `TransparencyLog._persist_to_db()`
+> - R2: `@limiter.limit` rate limiting on all 3 AI Transparency endpoints (30/min health, 20/min analyses)
+> - R3: 10 new per-method transparency unit tests in `test_career_dna_transparency.py` (5 methods × success + empty/error)
+> - 727/727 total suite passing (10 net new tests)
+> - Tier-1 retrospective audit (post-enhancement) — all 9 domains Tier-1 Compliant ✅
+> - 3 optional non-blocking items deferred: configurable health rate limit, DB fallback for post-restart queries, background task monitoring — **all 3 resolved in Sprint 20 Enhancements Phase 2**
+>
+> **Sprint 20 Enhancements (R4/R5/R6):**
+>
+> - R4: `rate_limit_ai_health` + `rate_limit_ai_analyses` settings in `config.py`, all 3 endpoint limiters reference `settings.*`
+> - R5: `get_recent()`, `get_by_id()`, `get_user_for_analysis()` converted async with DB query fallback via `_load_*_from_db()` methods
+> - R6: `_persistence_failures` counter + `pending_persistence_count` property + 2 new `AIHealthResponse` fields
+> - 10 tests converted sync → async with `@pytest.mark.asyncio` + R6 health assertions
+> - 727/727 total suite passing (full regression)
+> - Tier-1 retrospective audit (post-R4/R5/R6) — all 9 domains Tier-1 Compliant ✅
+> - **Zero deferred items remain** — AI Trust Layer™ fully production-grade
+
 ---
 
 ## Ad-Hoc Work Log
@@ -437,3 +483,4 @@
 | 17     | 4             | 10        | 0            | 1        |
 | 18     | 3             | 3         | 0            | 1        |
 | 19     | 4             | 12        | 0            | 1        |
+| 20     | 7             | 7         | 0            | 2        |

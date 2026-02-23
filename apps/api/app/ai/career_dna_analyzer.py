@@ -10,10 +10,13 @@ Orchestrates LLM calls for each dimension:
     - Values Profile Extraction
     - Market Position (data-driven, no LLM)
     - Career DNA Summary Synthesis
+
+AI Trust Layer™ Integration:
+    Each LLM-powered method captures a TransparencyRecord alongside
+    results, enabling user-facing explainability for every analysis.
 """
 
 import logging
-import time
 from typing import Any
 
 from app.ai.career_dna_prompts import (
@@ -25,7 +28,12 @@ from app.ai.career_dna_prompts import (
     HIDDEN_SKILLS_USER_PROMPT,
     VALUES_PROFILE_USER_PROMPT,
 )
-from app.core.llm import LLMError, LLMTier, complete_json
+from app.core.llm import (
+    LLMError,
+    LLMTier,
+    complete_json_with_transparency,
+)
+from app.core.llm_observability import TransparencyRecord
 from app.core.prompt_sanitizer import sanitize_user_text
 
 logger = logging.getLogger(__name__)
@@ -36,7 +44,8 @@ class CareerDNAAnalyzer:
     AI pipeline for Career DNA™ analysis.
 
     Each method performs a focused LLM call and returns
-    validated structured data. All results include confidence
+    validated structured data alongside a TransparencyRecord
+    for the AI Trust Layer™. All results include confidence
     scores and evidence for explainability.
     """
 
@@ -44,7 +53,7 @@ class CareerDNAAnalyzer:
     async def discover_hidden_skills(
         explicit_skills: list[str],
         experience_text: str,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], TransparencyRecord | None]:
         """
         Discover hidden transferable skills via LLM inference.
 
@@ -56,21 +65,19 @@ class CareerDNAAnalyzer:
             experience_text: Raw experience descriptions to analyze.
 
         Returns:
-            List of hidden skill dicts with: skill_name, confidence,
-            evidence, source_text.
+            Tuple of (hidden_skills_list, TransparencyRecord or None).
         """
         if not experience_text or not experience_text.strip():
             logger.warning("Empty experience text for hidden skills discovery")
-            return []
+            return [], None
 
         # Sanitize user-provided text before LLM prompt
         clean_exp, _ = sanitize_user_text(
             experience_text, max_length=6000, context="hidden_skills_exp",
         )
 
-        start = time.monotonic()
         try:
-            data: dict[str, Any] = await complete_json(
+            data, record = await complete_json_with_transparency(
                 prompt=HIDDEN_SKILLS_USER_PROMPT.format(
                     explicit_skills=", ".join(explicit_skills) or "None listed",
                     experience_text=clean_exp,
@@ -79,33 +86,33 @@ class CareerDNAAnalyzer:
                 tier=LLMTier.PRIMARY,
                 temperature=0.1,
                 max_tokens=2048,
+                analysis_type="career_dna.hidden_skills",
+                data_sources=["experience_text", "skills_list"],
             )
             skills: list[dict[str, Any]] = data.get("hidden_skills", [])
             # Cap confidence at 0.9 for inferred skills
             for skill in skills:
                 if skill.get("confidence", 0) > 0.9:
                     skill["confidence"] = 0.9
-            elapsed = time.monotonic() - start
             logger.info(
-                "Hidden skills discovered: %d skills (%.2fs)",
+                "Hidden skills discovered: %d skills (%dms, confidence=%.2f)",
                 len(skills),
-                elapsed,
+                record.latency_ms,
+                record.confidence_score,
             )
-            return skills
+            return skills, record
 
         except LLMError as exc:
-            elapsed = time.monotonic() - start
             logger.error(
-                "Hidden skills discovery failed (%.2fs): %s",
-                elapsed,
+                "Hidden skills discovery failed: %s",
                 str(exc)[:200],
             )
-            return []
+            return [], None
 
     @staticmethod
     async def analyze_experience_blueprint(
         experience_text: str,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], TransparencyRecord | None]:
         """
         Analyze career experience pattern.
 
@@ -113,22 +120,19 @@ class CareerDNAAnalyzer:
             experience_text: Raw experience descriptions.
 
         Returns:
-            Dict with: total_years, role_count, avg_tenure_months,
-            career_direction, industry_diversity, seniority_trajectory,
-            pattern_analysis.
+            Tuple of (blueprint_dict, TransparencyRecord or None).
         """
         if not experience_text or not experience_text.strip():
             logger.warning("Empty experience text for blueprint analysis")
-            return _default_blueprint()
+            return _default_blueprint(), None
 
         # Sanitize user-provided text before LLM prompt
         clean_exp, _ = sanitize_user_text(
             experience_text, max_length=6000, context="blueprint_exp",
         )
 
-        start = time.monotonic()
         try:
-            data: dict[str, Any] = await complete_json(
+            data, record = await complete_json_with_transparency(
                 prompt=EXPERIENCE_BLUEPRINT_USER_PROMPT.format(
                     experience_text=clean_exp,
                 ),
@@ -136,26 +140,29 @@ class CareerDNAAnalyzer:
                 tier=LLMTier.FAST,
                 temperature=0.0,
                 max_tokens=1024,
+                analysis_type="career_dna.experience_blueprint",
+                data_sources=["experience_text"],
             )
-            elapsed = time.monotonic() - start
-            logger.info("Experience blueprint analyzed (%.2fs)", elapsed)
-            return data
+            logger.info(
+                "Experience blueprint analyzed (%dms, confidence=%.2f)",
+                record.latency_ms,
+                record.confidence_score,
+            )
+            return data, record
 
         except LLMError as exc:
-            elapsed = time.monotonic() - start
             logger.error(
-                "Experience blueprint analysis failed (%.2fs): %s",
-                elapsed,
+                "Experience blueprint analysis failed: %s",
                 str(exc)[:200],
             )
-            return _default_blueprint()
+            return _default_blueprint(), None
 
     @staticmethod
     async def compute_growth_vector(
         experience_text: str,
         skills_text: str,
         preferences_text: str,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], TransparencyRecord | None]:
         """
         Compute career trajectory projection.
 
@@ -167,12 +174,11 @@ class CareerDNAAnalyzer:
             preferences_text: User's stated career preferences.
 
         Returns:
-            Dict with: current_trajectory, projected_roles, skill_velocity,
-            growth_score, analysis_reasoning.
+            Tuple of (growth_vector_dict, TransparencyRecord or None).
         """
         if not experience_text or not experience_text.strip():
             logger.warning("Empty data for growth vector computation")
-            return _default_growth_vector()
+            return _default_growth_vector(), None
 
         # Sanitize user-provided text before LLM prompt
         clean_exp, _ = sanitize_user_text(
@@ -187,9 +193,8 @@ class CareerDNAAnalyzer:
             context="growth_prefs",
         )
 
-        start = time.monotonic()
         try:
-            data: dict[str, Any] = await complete_json(
+            data, record = await complete_json_with_transparency(
                 prompt=GROWTH_VECTOR_USER_PROMPT.format(
                     experience_text=clean_exp,
                     skills_text=clean_skills,
@@ -199,28 +204,31 @@ class CareerDNAAnalyzer:
                 tier=LLMTier.PRIMARY,
                 temperature=0.1,
                 max_tokens=1536,
+                analysis_type="career_dna.growth_vector",
+                data_sources=["experience_text", "skills_list", "preferences"],
             )
             # Clamp growth_score to 0-100
             score = data.get("growth_score", 50.0)
             data["growth_score"] = max(0.0, min(100.0, float(score)))
-            elapsed = time.monotonic() - start
-            logger.info("Growth vector computed (%.2fs)", elapsed)
-            return data
+            logger.info(
+                "Growth vector computed (%dms, confidence=%.2f)",
+                record.latency_ms,
+                record.confidence_score,
+            )
+            return data, record
 
         except LLMError as exc:
-            elapsed = time.monotonic() - start
             logger.error(
-                "Growth vector computation failed (%.2fs): %s",
-                elapsed,
+                "Growth vector computation failed: %s",
                 str(exc)[:200],
             )
-            return _default_growth_vector()
+            return _default_growth_vector(), None
 
     @staticmethod
     async def extract_values_profile(
         experience_text: str,
         preferences_text: str,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], TransparencyRecord | None]:
         """
         Extract career values from patterns and preferences.
 
@@ -233,12 +241,11 @@ class CareerDNAAnalyzer:
             preferences_text: User-stated career preferences.
 
         Returns:
-            Dict with: work_style, impact_preference, environment_fit,
-            derived_values, confidence.
+            Tuple of (values_profile_dict, TransparencyRecord or None).
         """
         if not experience_text or not experience_text.strip():
             logger.warning("Empty data for values profile extraction")
-            return _default_values_profile()
+            return _default_values_profile(), None
 
         # Sanitize user-provided text before LLM prompt
         clean_exp, _ = sanitize_user_text(
@@ -250,9 +257,8 @@ class CareerDNAAnalyzer:
             context="values_prefs",
         )
 
-        start = time.monotonic()
         try:
-            data: dict[str, Any] = await complete_json(
+            data, record = await complete_json_with_transparency(
                 prompt=VALUES_PROFILE_USER_PROMPT.format(
                     experience_text=clean_exp,
                     preferences_text=clean_prefs,
@@ -261,22 +267,25 @@ class CareerDNAAnalyzer:
                 tier=LLMTier.PRIMARY,
                 temperature=0.1,
                 max_tokens=1024,
+                analysis_type="career_dna.values_profile",
+                data_sources=["experience_text", "preferences"],
             )
             # Cap confidence
             confidence = data.get("confidence", 0.5)
             data["confidence"] = max(0.0, min(1.0, float(confidence)))
-            elapsed = time.monotonic() - start
-            logger.info("Values profile extracted (%.2fs)", elapsed)
-            return data
+            logger.info(
+                "Values profile extracted (%dms, confidence=%.2f)",
+                record.latency_ms,
+                record.confidence_score,
+            )
+            return data, record
 
         except LLMError as exc:
-            elapsed = time.monotonic() - start
             logger.error(
-                "Values profile extraction failed (%.2fs): %s",
-                elapsed,
+                "Values profile extraction failed: %s",
                 str(exc)[:200],
             )
-            return _default_values_profile()
+            return _default_values_profile(), None
 
     @staticmethod
     async def synthesize_summary(
@@ -285,7 +294,7 @@ class CareerDNAAnalyzer:
         growth_summary: str,
         values_summary: str,
         market_summary: str,
-    ) -> str:
+    ) -> tuple[str, TransparencyRecord | None]:
         """
         Create an executive summary from all Career DNA dimensions.
 
@@ -297,11 +306,10 @@ class CareerDNAAnalyzer:
             market_summary: Market position overview.
 
         Returns:
-            2-3 sentence career DNA narrative string.
+            Tuple of (summary_string, TransparencyRecord or None).
         """
-        start = time.monotonic()
         try:
-            data: dict[str, Any] = await complete_json(
+            data, record = await complete_json_with_transparency(
                 prompt=CAREER_DNA_SUMMARY_USER_PROMPT.format(
                     skills_summary=skills_summary or "Not analyzed",
                     experience_summary=experience_summary or "Not analyzed",
@@ -313,19 +321,25 @@ class CareerDNAAnalyzer:
                 tier=LLMTier.FAST,
                 temperature=0.2,
                 max_tokens=512,
+                analysis_type="career_dna.summary",
+                data_sources=[
+                    "skill_genome", "experience_blueprint",
+                    "growth_vector", "values_profile", "market_position",
+                ],
             )
-            elapsed = time.monotonic() - start
-            logger.info("Career DNA summary synthesized (%.2fs)", elapsed)
-            return str(data.get("summary", ""))
+            logger.info(
+                "Career DNA summary synthesized (%dms, confidence=%.2f)",
+                record.latency_ms,
+                record.confidence_score,
+            )
+            return str(data.get("summary", "")), record
 
         except LLMError as exc:
-            elapsed = time.monotonic() - start
             logger.error(
-                "Career DNA summary synthesis failed (%.2fs): %s",
-                elapsed,
+                "Career DNA summary synthesis failed: %s",
                 str(exc)[:200],
             )
-            return ""
+            return "", None
 
     @staticmethod
     def compute_market_position(

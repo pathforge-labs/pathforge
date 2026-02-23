@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
     ai,
+    ai_transparency,
     analytics,
     applications,
     auth,
@@ -28,6 +29,7 @@ from app.api.v1 import (
     health,
     hidden_job_market,
     interview_intelligence,
+    observability,
     predictive_career,
     salary_intelligence,
     skill_decay,
@@ -38,6 +40,7 @@ from app.api.v1 import (
 )
 from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
+from app.core.llm_observability import initialize_observability
 from app.core.logging_config import setup_logging
 from app.core.middleware import BotTrapMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
@@ -48,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown events."""
     # Startup
     setup_logging(debug=settings.debug)
+    initialize_observability()
     yield
     # Shutdown
 
@@ -111,6 +115,8 @@ def create_app() -> FastAPI:
     application.include_router(hidden_job_market.router, prefix="/api/v1")
     application.include_router(collective_intelligence.router, prefix="/api/v1")
     application.include_router(predictive_career.router, prefix="/api/v1")
+    application.include_router(observability.router, prefix="/api/v1")
+    application.include_router(ai_transparency.router, prefix="/api/v1")
 
     return application
 

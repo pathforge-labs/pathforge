@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     llm_timeout: int = 60
     llm_max_retries: int = 3
 
+    # ── LLM Observability (Langfuse) ────────────────────────
+    # Disabled by default — zero overhead until explicitly enabled.
+    # Self-hostable: set langfuse_host to your own instance.
+    llm_observability_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
     # ── Voyage AI Embeddings ─────────────────────────────────
     voyage_model: str = "voyage-3"
     voyage_embed_batch_size: int = 128
@@ -86,6 +94,8 @@ class Settings(BaseSettings):
     rate_limit_match: str = "30/minute"
     rate_limit_tailor: str = "10/minute"
     rate_limit_career_dna: str = "3/minute"
+    rate_limit_ai_health: str = "30/minute"
+    rate_limit_ai_analyses: str = "20/minute"
     ratelimit_storage_uri: str = "memory://"
 
     # ── Security Disclosure ──────────────────────────────────────

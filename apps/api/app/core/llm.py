@@ -24,6 +24,12 @@ from typing import Any
 import litellm
 
 from app.core.config import settings
+from app.core.llm_observability import (
+    TransparencyRecord,
+    compute_confidence_score,
+    confidence_label,
+    get_collector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +111,7 @@ async def complete(
         try:
             result = await _call_with_retry(
                 model=model,
+                tier=attempt_tier.value,
                 prompt=prompt,
                 system_prompt=system_prompt,
                 response_format=response_format,
@@ -174,11 +181,154 @@ async def complete_json(
         ) from exc
 
 
+
+# ── AI Trust Layer™ — Transparency Wrappers ────────────────────
+
+
+async def complete_with_transparency(
+    *,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.PRIMARY,
+    response_format: dict[str, Any] | None = None,
+    temperature: float = 0.1,
+    max_tokens: int = 4096,
+    analysis_type: str = "",
+    data_sources: list[str] | None = None,
+) -> tuple[str, TransparencyRecord]:
+    """Call complete() and return both the result and transparency metadata.
+
+    This wrapper captures latency, token usage, retry count, and computes
+    an algorithmic confidence score — enabling the AI Trust Layer™ to
+    show users how and why AI reached its conclusions.
+
+    Args:
+        prompt: The user prompt.
+        system_prompt: Optional system prompt.
+        tier: Which model tier to use.
+        response_format: Optional JSON schema for structured output.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        analysis_type: Human-readable analysis label (e.g., 'career_dna.hidden_skills').
+        data_sources: List of data sources feeding this analysis.
+
+    Returns:
+        Tuple of (response_text, TransparencyRecord).
+    """
+    collector = get_collector()
+    calls_before = collector._global.total_calls
+
+    start = time.monotonic()
+    try:
+        result = await complete(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tier=tier,
+            response_format=response_format,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        elapsed = time.monotonic() - start
+        success = True
+    except LLMError:
+        elapsed = time.monotonic() - start
+        success = False
+        raise
+    finally:
+        # Calculate retries from how many new calls the collector tracked
+        calls_after = collector._global.total_calls
+        retries = max(0, (calls_after - calls_before) - 1)
+
+    # Extract token usage from the collector's latest metrics
+    metrics = collector.get_metrics()
+    tier_metrics = metrics.get("by_tier", {}).get(tier.value, {})
+    prompt_tokens = tier_metrics.get("total_prompt_tokens", 0)
+    completion_tokens = tier_metrics.get("total_completion_tokens", 0)
+
+    # Compute confidence
+    score = compute_confidence_score(
+        tier=tier.value,
+        retries=retries,
+        latency_seconds=elapsed,
+        completion_tokens=completion_tokens,
+        max_tokens=max_tokens,
+    )
+
+    record = TransparencyRecord(
+        analysis_type=analysis_type,
+        model=_resolve_model(tier),
+        tier=tier.value,
+        confidence_score=score,
+        confidence_label=confidence_label(score),
+        data_sources=data_sources or [],
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        latency_ms=int(elapsed * 1000),
+        success=success,
+        retries=retries,
+    )
+
+    return result, record
+
+
+async def complete_json_with_transparency(
+    *,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.FAST,
+    temperature: float = 0.0,
+    max_tokens: int = 4096,
+    analysis_type: str = "",
+    data_sources: list[str] | None = None,
+) -> tuple[dict[str, Any], TransparencyRecord]:
+    """Call complete_json() and return both the result and transparency metadata.
+
+    Convenience wrapper for JSON responses with the AI Trust Layer™.
+
+    Args:
+        prompt: The user prompt.
+        system_prompt: Optional system prompt.
+        tier: Which model tier to use.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        analysis_type: Human-readable analysis label.
+        data_sources: List of data sources feeding this analysis.
+
+    Returns:
+        Tuple of (parsed_json_dict, TransparencyRecord).
+    """
+    raw_result, record = await complete_with_transparency(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        tier=tier,
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        max_tokens=max_tokens,
+        analysis_type=analysis_type,
+        data_sources=data_sources,
+    )
+
+    # Strip markdown code fences if present
+    cleaned = raw_result.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        cleaned = "\n".join(lines[1:-1]).strip()
+
+    try:
+        parsed: dict[str, Any] = json.loads(cleaned)
+        return parsed, record
+    except json.JSONDecodeError as exc:
+        raise LLMError(
+            f"LLM returned invalid JSON: {str(exc)[:200]}"
+        ) from exc
+
+
 # ── Internal Retry Logic ───────────────────────────────────────
 
 async def _call_with_retry(
     *,
     model: str,
+    tier: str,
     prompt: str,
     system_prompt: str,
     response_format: dict[str, Any] | None,
@@ -214,23 +364,47 @@ async def _call_with_retry(
             # Extract response text
             content = response.choices[0].message.content or ""
 
-            # Log usage
+            # Log usage + record metrics
             usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+
             if usage:
                 logger.info(
                     "LLM [%s] %d prompt + %d completion tokens, %.2fs",
                     model,
-                    usage.prompt_tokens,
-                    usage.completion_tokens,
+                    prompt_tokens,
+                    completion_tokens,
                     elapsed,
                 )
             else:
                 logger.info("LLM [%s] completed in %.2fs", model, elapsed)
 
+            # Record success metrics
+            get_collector().record_call(
+                model=model,
+                tier=tier,
+                latency_seconds=elapsed,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                success=True,
+            )
+
             return content
 
         except Exception as exc:
+            elapsed = time.monotonic() - start
             last_error = exc
+
+            # Record failure metrics
+            get_collector().record_call(
+                model=model,
+                tier=tier,
+                latency_seconds=elapsed,
+                success=False,
+                error_type=type(exc).__name__,
+            )
+
             if attempt < max_retries:
                 wait = 2 ** attempt  # 1s, 2s, 4s
                 logger.warning(

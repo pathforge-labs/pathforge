@@ -5,6 +5,7 @@ Central import point for all SQLAlchemy models.
 Alembic auto-generates migrations from these imports.
 """
 
+from app.models.ai_transparency import AITransparencyRecord
 from app.models.analytics import CVExperiment, FunnelEvent, MarketInsight
 from app.models.application import Application, CVVersion
 from app.models.base import Base
@@ -94,6 +95,7 @@ from app.models.transition_pathways import (
 from app.models.user import User
 
 __all__ = [
+    "AITransparencyRecord",
     "AlertPreference",
     "Application",
     "AutomationRisk",
