@@ -23,6 +23,7 @@ from app.api.v1 import (
     auth,
     blacklist,
     career_action_planner,
+    career_command_center,
     career_dna,
     career_passport,
     career_simulation,
@@ -30,12 +31,14 @@ from app.api.v1 import (
     health,
     hidden_job_market,
     interview_intelligence,
+    notifications,
     observability,
     predictive_career,
     salary_intelligence,
     skill_decay,
     threat_radar,
     transition_pathways,
+    user_profile,
     users,
     well_known,
 )
@@ -117,6 +120,9 @@ def create_app() -> FastAPI:
     application.include_router(collective_intelligence.router, prefix="/api/v1")
     application.include_router(predictive_career.router, prefix="/api/v1")
     application.include_router(career_action_planner.router, prefix="/api/v1")
+    application.include_router(career_command_center.router, prefix="/api/v1")
+    application.include_router(notifications.router, prefix="/api/v1")
+    application.include_router(user_profile.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
 

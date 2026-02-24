@@ -45,6 +45,57 @@ def _compile_json_sqlite(type_, compiler, **kw):
     return "TEXT"
 
 
+# PostgreSQL UUID → TEXT (SQLite stores as string representation)
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
+
+@compiles(PG_UUID, "sqlite")
+def _compile_uuid_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
+
+# Patch UUID bind processor to accept both uuid.UUID and str values
+# in SQLite. The default processor calls value.hex which fails on strings.
+import uuid as _uuid
+
+_original_uuid_bind = PG_UUID.bind_processor
+
+
+def _patched_uuid_bind(self, dialect):
+    """Return a processor that handles both UUID objects and strings."""
+    if dialect.name == "sqlite":
+        def process(value):
+            if value is None:
+                return None
+            if isinstance(value, _uuid.UUID):
+                return str(value)
+            return str(value)
+        return process
+    return _original_uuid_bind(self, dialect)
+
+
+PG_UUID.bind_processor = _patched_uuid_bind  # type: ignore[assignment]
+
+# Also patch result_processor to convert TEXT back to uuid.UUID for SQLite
+_original_uuid_result = PG_UUID.result_processor
+
+
+def _patched_uuid_result(self, dialect, coltype):
+    """Convert TEXT strings back to uuid.UUID objects for SQLite."""
+    if dialect.name == "sqlite":
+        if getattr(self, "as_uuid", False):
+            def process(value):
+                if value is not None:
+                    return _uuid.UUID(str(value))
+                return None
+            return process
+        return None  # Return raw string if as_uuid=False
+    return _original_uuid_result(self, dialect, coltype)
+
+
+PG_UUID.result_processor = _patched_uuid_result  # type: ignore[assignment]
+
+
 # ── Now import models (which triggers Base.metadata population) ──
 from app.models.base import Base
 

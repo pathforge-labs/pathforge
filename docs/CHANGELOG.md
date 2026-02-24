@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 22] — Career Orchestration Layer — 2026-02-24
+
+### Added
+
+- **Unified Career Command Center™** — 12-engine orchestration dashboard:
+  - Career Vitals™ weighted composite score (0-100, 85% confidence cap)
+  - Engine Heartbeat™ 4-tier classification + trend detection
+  - 3 SQLAlchemy models + 5 StrEnums, 10+ Pydantic schemas, 8 REST endpoints
+- **Notification Engine™** — event-driven career notifications:
+  - Severity tiers, digest scheduling, quiet hours, preference-based suppression
+  - 2 SQLAlchemy models + 3 StrEnums, 10+ Pydantic schemas, 8 REST endpoints
+- **User Profile & GDPR Data Export** — Article 20+ compliant:
+  - Export pipeline with AI methodology disclosure + SHA-256 checksums
+  - 1-export-per-24h rate limiting, onboarding status tracking
+  - 2 SQLAlchemy models + 3 StrEnums, 10+ Pydantic schemas, 7 REST endpoints
+- Alembic migration `0b1c2d3e4f5g` — 7 tables with FK CASCADE + indexes + CHECK constraints
+- 101 Sprint 22 tests: 39 CCC + 35 Notification + 27 Profile (901/901 total passing)
+- SQLite UUID compatibility fix in `conftest.py` (DDL compiler + bind/result processors)
+
+### Changed
+
+- `main.py` — 3 new routers registered at `/api/v1`
+- `models/__init__.py` — 7 new models + `__all__` sort fix
+- `conftest.py` — UUID type compatibility for PostgreSQL ↔ SQLite test environments
+
+---
+
 ## [Sprint 21] — Career Action Planner™ — 2026-02-23
 
 ### Added

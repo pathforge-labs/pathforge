@@ -16,6 +16,10 @@ from app.models.career_action_planner import (
     PlanMilestone,
     PlanRecommendation,
 )
+from app.models.career_command_center import (
+    CareerSnapshot,
+    CommandCenterPreference,
+)
 from app.models.career_dna import (
     CareerDNA,
     ExperienceBlueprint,
@@ -61,6 +65,11 @@ from app.models.interview_intelligence import (
     STARExample,
 )
 from app.models.matching import JobListing, MatchResult
+from app.models.notification import (
+    CareerNotification,
+    NotificationDigest,
+    NotificationPreference,
+)
 from app.models.predictive_career import (
     CareerForecast,
     DisruptionForecast,
@@ -100,6 +109,7 @@ from app.models.transition_pathways import (
     TransitionPreference,
 )
 from app.models.user import User
+from app.models.user_profile import DataExportRequest, UserProfile
 
 __all__ = [
     "AITransparencyRecord",
@@ -114,15 +124,19 @@ __all__ = [
     "CareerActionPlannerPreference",
     "CareerDNA",
     "CareerForecast",
+    "CareerNotification",
     "CareerPassportPreference",
     "CareerPulseEntry",
     "CareerResilienceSnapshot",
     "CareerSimulation",
+    "CareerSnapshot",
     "CollectiveIntelligencePreference",
+    "CommandCenterPreference",
     "CompanyInsight",
     "CompanySignal",
     "CountryComparison",
     "CredentialMapping",
+    "DataExportRequest",
     "DisruptionForecast",
     "EmergingRole",
     "ExperienceBlueprint",
@@ -143,6 +157,8 @@ __all__ = [
     "MarketPosition",
     "MatchResult",
     "MilestoneProgress",
+    "NotificationDigest",
+    "NotificationPreference",
     "OpportunitySurface",
     "OutreachTemplate",
     "PeerCohortAnalysis",
@@ -177,6 +193,7 @@ __all__ = [
     "TransitionPath",
     "TransitionPreference",
     "User",
+    "UserProfile",
     "ValuesProfile",
     "VisaAssessment",
 ]
