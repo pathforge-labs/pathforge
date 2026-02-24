@@ -602,7 +602,9 @@ pathforge/
 
 ## 7. Delivery Roadmap
 
-### Phase A: Core Platform (MVP)
+> **Document ownership (ADR-010)**: This section defines _phase-level_ scope and sprint assignments. Sprint-level task tracking (checklists, status, velocity) lives in `docs/ROADMAP.md`.
+
+### Phase A: Core Platform — MVP (✅ Complete, Sprints 1–7)
 
 | Sprint | Focus               | Duration     | Key Deliverables                                                       |
 | :----- | :------------------ | :----------- | :--------------------------------------------------------------------- |
@@ -616,7 +618,7 @@ pathforge/
 
 > **Architecture note**: Career DNA data schema is baked in from Sprint 1. Every feature generates Career DNA signals, even before the intelligence layer is activated.
 
-### Phase B: Career Intelligence — Tier 1 Revolutionary Features (Post-MVP)
+### Phase B: Career Intelligence — Tier 1 Revolutionary (✅ Complete, Sprints 8–12)
 
 | Sprint | Focus                           | Duration     | Key Deliverables                                                                                                                                                             |
 | :----- | :------------------------------ | :----------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -626,7 +628,7 @@ pathforge/
 | **11** | 🔥 Salary Intelligence Engine™  | 2-3 sessions | Personalized salary calculation, skill→salary impact modeling, historical trajectory tracking                                                                                |
 | **12** | Transition Pathways             | 2-3 sessions | Anonymized career movement patterns, proven pivot paths, success probability                                                                                                 |
 
-### Phase C: Network Intelligence — Tier 2 Revolutionary Features
+### Phase C: Network Intelligence — Tier 2 Revolutionary (✅ Complete, Sprints 13–21)
 
 | Sprint | Focus                           | Duration     | Key Deliverables                                                                                  |
 | :----- | :------------------------------ | :----------- | :------------------------------------------------------------------------------------------------ |
@@ -635,9 +637,58 @@ pathforge/
 | **15** | 🔥 Hidden Job Market Detector   | 3-4 sessions | Company growth signal monitoring, pre-listing opportunity surfacing, proactive outreach templates |
 | **16** | 🔥 Cross-Border Career Passport | 2-3 sessions | Credential translation, visa feasibility, CoL adjustment, EU qualification mapping                |
 | **17** | Collective Intelligence         | 2-3 sessions | Anonymized career analytics, industry pulse dashboard, salary compass                             |
-| **18** | Predictive Career Engine        | 3-4 sessions | Emerging role detection, proactive opportunity surfacing, disruption forecasting                  |
+| **18** | Infrastructure & Auth           | 1 session    | `app.core.auth`, rate limiting on CI endpoints, auth-aware test fixtures                          |
+| **19** | 🔥 Predictive Career Engine™    | 1 session    | Emerging role detection, proactive opportunity surfacing, disruption forecasting                  |
+| **20** | 🔥 AI Trust Layer™              | 2 sessions   | LLM observability, transparency records, confidence scoring, persistence layer                    |
+| **21** | 🔥 Career Action Planner™       | 1 session    | Career Sprint Methodology™, Intelligence-to-Action Bridge™, Adaptive Plan Recalculation™          |
 
-**Total estimated**: ~18-24 sessions for MVP (Phase A), ~12-16 sessions for Tier 1 Intelligence (Phase B), ~16-21 sessions for Tier 2 Intelligence (Phase C). Full platform: ~46-61 sessions.
+### Phase D: Career Orchestration (✅ Complete, Sprints 22–23)
+
+| Sprint | Focus                | Duration   | Key Deliverables                                                                            |
+| :----- | :------------------- | :--------- | :------------------------------------------------------------------------------------------ |
+| **22** | Career Orchestration | 3 sessions | Unified Career Command Center™, Notification Engine™, GDPR Data Export, 23 endpoints        |
+| **23** | Delivery Layer       | 1 session  | Cross-Engine Recommendation Intelligence™, Career Workflow Automation Engine™, 19 endpoints |
+
+> **Milestone**: 12 intelligence engines, 156 API endpoints, 66 models, 1,016 tests, 0 CVEs.
+
+### Phase E: Integration Layer (⏳ Upcoming, Sprints 24–25)
+
+> Connect the 12 backend engines to the frontend. No new AI features — pure wiring.
+
+| Sprint | Focus                         | Duration   | Key Deliverables                                                                      |
+| :----- | :---------------------------- | :--------- | :------------------------------------------------------------------------------------ |
+| **24** | API Client & Auth Integration | 2 sessions | TypeScript API client, auth context, protected routes, TanStack Query hooks           |
+| **25** | Core User Flow                | 2 sessions | Resume upload UI, Career DNA generation flow, onboarding wizard, settings integration |
+
+### Phase F: Dashboard Experience (⏳ Upcoming, Sprints 26–28)
+
+> Build the intelligence dashboard — where PathForge's 12 engines become user-facing.
+
+| Sprint | Focus                                 | Duration     | Key Deliverables                                                                    |
+| :----- | :------------------------------------ | :----------- | :---------------------------------------------------------------------------------- |
+| **26** | Career DNA & Threat Radar Dashboard   | 2-3 sessions | 6-dimension DNA visualization, Resilience Score, Skill Shield Matrix, alert cards   |
+| **27** | Intelligence Hub                      | 2-3 sessions | Skill Decay tracker, Salary Intelligence, Career Simulation, Transition Pathways    |
+| **28** | Network Intelligence & Command Center | 2-3 sessions | Hidden Job Market, Career Passport, Interview Prep, Command Center, Recommendations |
+
+### Phase G: Data Pipeline (⏳ Upcoming, Sprint 29)
+
+> Wire production data sources and verify infrastructure.
+
+| Sprint | Focus                 | Duration   | Key Deliverables                                                                       |
+| :----- | :-------------------- | :--------- | :------------------------------------------------------------------------------------- |
+| **29** | Production Data Layer | 2 sessions | PostgreSQL + pgvector setup, Redis production config, job aggregation worker, Langfuse |
+
+### Phase H: Production Hardening (⏳ Upcoming, Sprint 30)
+
+> Make the platform reliable, observable, and continuously deployable.
+
+| Sprint | Focus                       | Duration   | Key Deliverables                                                                       |
+| :----- | :-------------------------- | :--------- | :------------------------------------------------------------------------------------- |
+| **30** | Reliability & Observability | 2 sessions | Sentry, CD pipeline, E2E tests (Playwright), structured logging, performance baselines |
+
+**Completed**: ~35 sessions across Phases A–D (23 sprints).
+**Remaining to launch**: ~14–18 sessions across Phases E–H (7 sprints).
+**Post-launch** (tracked in `docs/ROADMAP.md` only): Mobile (Phase I, 2 sprints), Growth & Monetization (Phase J, 2 sprints).
 
 ---
 

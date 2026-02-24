@@ -1,7 +1,8 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-24 | **Current Phase**: D (Career Orchestration) — Sprint 23 complete
+> **Last Updated**: 2026-02-24 | **Current Phase**: E (Integration Layer) — Sprint 24 next
+> **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
 
@@ -498,6 +499,103 @@
 
 ---
 
+## Phase E: Integration Layer
+
+### Sprint 24 — API Client & Auth Integration (⏳ Next)
+
+- [ ] TypeScript API client with typed request/response for all 156 endpoints
+- [ ] Auth context provider (JWT token management, refresh, logout)
+- [ ] Protected route middleware (redirect unauthenticated users)
+- [ ] API error handling and retry logic (TanStack Query)
+- [ ] Data fetching hooks for dashboard shell
+- [ ] Backend health check integration in dashboard
+
+### Sprint 25 — Core User Flow
+
+- [ ] Resume upload UI + file validation + progress indicator
+- [ ] Resume parsing trigger + polling/streaming state
+- [ ] Career DNA generation flow (parse → analyze → display)
+- [ ] Onboarding wizard (register → upload → generate DNA → dashboard)
+- [ ] User settings page connected to `/api/v1/user-profile`
+
+---
+
+## Phase F: Dashboard Experience
+
+### Sprint 26 — Career DNA & Threat Radar Dashboard
+
+- [ ] Career DNA 6-dimension visualization (radar/hexagonal chart)
+- [ ] Career Resilience Score™ display with historical trend
+- [ ] Skills Shield™ Matrix visualization (shields vs exposures)
+- [ ] Threat/Opportunity alert cards with action buttons
+- [ ] Career Moat Score display
+- [ ] Responsive layout with skeleton loaders
+
+### Sprint 27 — Intelligence Hub
+
+- [ ] Skill Decay tracker with freshness indicators + velocity map
+- [ ] Salary Intelligence display with skill impact modeling
+- [ ] Career Simulation "what-if" interface (5 scenario types)
+- [ ] Transition Pathways explorer with success probability
+- [ ] Shared intelligence card component system
+
+### Sprint 28 — Network Intelligence & Command Center
+
+- [ ] Hidden Job Market signal feed with outreach templates
+- [ ] Cross-Border Passport comparison tool
+- [ ] Interview Intelligence prep interface
+- [ ] Career Command Center (unified 12-engine dashboard)
+- [ ] Notification preferences UI + digest scheduling
+- [ ] Recommendation feed with priority-weighted sorting
+
+---
+
+## Phase G: Data Pipeline
+
+### Sprint 29 — Production Data Layer
+
+- [ ] PostgreSQL + pgvector production setup (Supabase or Railway)
+- [ ] Alembic migration CI verification
+- [ ] Redis production configuration (rate limiting backing store)
+- [ ] Job aggregation scheduled worker (Adzuna/Jooble cron)
+- [ ] LiteLLM production model routing verification
+- [ ] Langfuse LLM observability activation
+
+---
+
+## Phase H: Production Hardening
+
+### Sprint 30 — Reliability & Observability
+
+- [ ] Sentry error tracking (API + Web)
+- [ ] CD pipeline (`deploy.yml` — auto-deploy on merge to production)
+- [ ] E2E test suite (Playwright — auth, upload, DNA generation, dashboard)
+- [ ] Structured JSON logging for Railway
+- [ ] Performance baselines (Lighthouse, API response time benchmarks)
+- [ ] Rate limiting with Redis backing (replace in-memory)
+
+---
+
+## Post-Launch (Phases I–J)
+
+> Detailed task breakdowns will be created when these phases begin.
+
+### Phase I — Mobile (Sprints 31–32)
+
+- [ ] Expo Router setup, auth flow, API client
+- [ ] Resume upload from mobile (camera + file picker)
+- [ ] Career DNA view + intelligence summaries
+- [ ] Push notifications (Expo Notifications)
+
+### Phase J — Growth & Monetization (Sprints 33–34)
+
+- [ ] Stripe billing (subscription tiers, feature gating, usage metering)
+- [ ] Admin dashboard (user management, system health)
+- [ ] Waitlist → onboarding conversion flow
+- [ ] Public career profiles (opt-in)
+
+---
+
 ## Ad-Hoc Work Log
 
 > Unplanned tasks that emerged during development. These are logged here and attributed to the sprint during which they occurred.
@@ -566,3 +664,10 @@
 | 21     | 7             | 7         | 0            | 1        |
 | 22     | 6             | 6         | 1            | 3        |
 | 23     | 4             | 4         | 0            | 1        |
+| 24     | —             | —         | —            | —        |
+| 25     | —             | —         | —            | —        |
+| 26     | —             | —         | —            | —        |
+| 27     | —             | —         | —            | —        |
+| 28     | —             | —         | —            | —        |
+| 29     | —             | —         | —            | —        |
+| 30     | —             | —         | —            | —        |
