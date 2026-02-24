@@ -4,8 +4,9 @@ PathForge API — Auth Routes
 Registration, login, token refresh, and logout endpoints.
 """
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from jose import JWTError, jwt
+from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -103,7 +104,7 @@ async def refresh_token(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
             )
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
@@ -144,5 +145,5 @@ async def logout(
 
             remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
             await token_blacklist.revoke(jti, ttl_seconds=remaining)
-    except JWTError:
+    except PyJWTError:
         pass  # Token already invalid — nothing to revoke

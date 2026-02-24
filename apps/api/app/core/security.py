@@ -14,9 +14,10 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import bcrypt
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,7 +98,7 @@ async def get_current_user(
         jti: str | None = payload.get("jti")
         if user_id is None or token_type != "access":
             raise credentials_exception
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise credentials_exception from exc
 
     # Check token blacklist (graceful degradation if Redis unavailable)

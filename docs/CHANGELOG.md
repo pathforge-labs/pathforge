@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 23] — Delivery Layer — 2026-02-24
+
+### Added
+
+- **Cross-Engine Recommendation Intelligence™** — multi-engine fusion pipeline:
+  - Priority-Weighted Score™ algorithm: urgency(0.40) × impact(0.35) × inverse_effort(0.25)
+  - Cross-Engine Correlation Map™ with per-recommendation engine attribution
+  - Confidence cap at 0.85 (CheckConstraint enforced) — prevents AI overconfidence
+  - 4 SQLAlchemy models + 3 StrEnums, 8 response + 3 request schemas, 9 REST endpoints
+  - 6 recommendation template types with ENGINE_DISPLAY_NAMES for 12 engines
+- **Career Workflow Automation Engine™** — smart career workflow system:
+  - 5 Smart Workflow Templates™: Skill Acceleration, Threat Response, Opportunity Capture, Salary Negotiation, Career Review
+  - Trigger-based activation (engine_change, vitals_threshold, scheduled, manual)
+  - Step-level tracking with auto-complete logic and WorkflowExecution audit trail
+  - 4 SQLAlchemy models + 3 StrEnums, 7 response + 4 request schemas, 10 REST endpoints
+- 115 Sprint 23 tests (80 unit + 35 integration) — 1,016/1,016 total passing
+
+### Changed
+
+- `main.py` — 2 new routers registered at `/api/v1`
+- `models/__init__.py` — 8 new models imported + `__all__` expanded
+
+### Fixed
+
+- **R1**: Alembic migration `0c2d3e4f5g6h` — 8 tables for Delivery Layer (4 RI + 4 WF)
+- **pip CVE-2026-1703**: Upgraded pip 25.2 → 26.0.1 (executable injection fix)
+- **cryptography CVE-2026-26007**: Upgraded 46.0.4 → 46.0.5
+- **ecdsa CVE-2024-23342**: Migrated `python-jose` → `PyJWT 2.11.0` (eliminates transitive ecdsa dependency)
+
+---
+
 ## [Sprint 22] — Career Orchestration Layer — 2026-02-24
 
 ### Added

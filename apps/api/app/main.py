@@ -34,6 +34,7 @@ from app.api.v1 import (
     notifications,
     observability,
     predictive_career,
+    recommendation_intelligence,
     salary_intelligence,
     skill_decay,
     threat_radar,
@@ -41,6 +42,7 @@ from app.api.v1 import (
     user_profile,
     users,
     well_known,
+    workflow_automation,
 )
 from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
@@ -123,6 +125,8 @@ def create_app() -> FastAPI:
     application.include_router(career_command_center.router, prefix="/api/v1")
     application.include_router(notifications.router, prefix="/api/v1")
     application.include_router(user_profile.router, prefix="/api/v1")
+    application.include_router(recommendation_intelligence.router, prefix="/api/v1")
+    application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
 

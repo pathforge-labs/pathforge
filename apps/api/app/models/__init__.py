@@ -78,6 +78,12 @@ from app.models.predictive_career import (
     PredictiveCareerPreference,
 )
 from app.models.preference import BlacklistEntry, Preference
+from app.models.recommendation_intelligence import (
+    CrossEngineRecommendation,
+    RecommendationBatch,
+    RecommendationCorrelation,
+    RecommendationPreference,
+)
 from app.models.resume import Resume, Skill
 from app.models.salary_intelligence import (
     SalaryEstimate,
@@ -110,6 +116,12 @@ from app.models.transition_pathways import (
 )
 from app.models.user import User
 from app.models.user_profile import DataExportRequest, UserProfile
+from app.models.workflow_automation import (
+    CareerWorkflow,
+    WorkflowExecution,
+    WorkflowPreference,
+    WorkflowStep,
+)
 
 __all__ = [
     "AITransparencyRecord",
@@ -130,12 +142,14 @@ __all__ = [
     "CareerResilienceSnapshot",
     "CareerSimulation",
     "CareerSnapshot",
+    "CareerWorkflow",
     "CollectiveIntelligencePreference",
     "CommandCenterPreference",
     "CompanyInsight",
     "CompanySignal",
     "CountryComparison",
     "CredentialMapping",
+    "CrossEngineRecommendation",
     "DataExportRequest",
     "DisruptionForecast",
     "EmergingRole",
@@ -166,6 +180,9 @@ __all__ = [
     "PlanRecommendation",
     "PredictiveCareerPreference",
     "Preference",
+    "RecommendationBatch",
+    "RecommendationCorrelation",
+    "RecommendationPreference",
     "ReskillingPathway",
     "Resume",
     "STARExample",
@@ -196,4 +213,7 @@ __all__ = [
     "UserProfile",
     "ValuesProfile",
     "VisaAssessment",
+    "WorkflowExecution",
+    "WorkflowPreference",
+    "WorkflowStep",
 ]
