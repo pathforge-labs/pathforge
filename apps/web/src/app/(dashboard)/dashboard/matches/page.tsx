@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MatchCard } from "@/components/match-card";
-import { ai, type MatchCandidate, type TailorCVResponse } from "@/lib/api";
+import { tailorCV } from "@/lib/api-client/ai";
+import type { MatchCandidate, TailorCVResponse } from "@/types/api/ai";
 
 export default function MatchesPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function MatchesPage() {
     if (!resumeId) return;
     setTailoringId(jobId);
     try {
-      const result = await ai.tailorCV(resumeId, jobId);
+      const result = await tailorCV(resumeId, jobId);
       setTailorResult(result);
     } catch {
       setError("Failed to tailor CV. Please try again.");

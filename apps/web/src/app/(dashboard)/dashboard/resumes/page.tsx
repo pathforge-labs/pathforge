@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ai, type ParseResumeResponse } from "@/lib/api";
+import { parseResume } from "@/lib/api-client/ai";
+import type { ParseResumeResponse } from "@/types/api/ai";
 
 export default function ResumesPage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function ResumesPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await ai.parseResume(rawText);
+      const result = await parseResume(rawText);
       setParsed(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse resume.");

@@ -8,6 +8,7 @@ import {
 } from "@/config/brand";
 import { ThemeProvider } from "next-themes";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { Providers } from "@/providers";
 import "./globals.css";
 
 const inter = Inter({
@@ -115,8 +116,10 @@ export default function RootLayout({
         className={`${inter.variable} ${plusJakartaSans.variable} font-sans antialiased`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <GoogleAnalytics />
-          {children}
+          <Providers>
+            <GoogleAnalytics />
+            {children}
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

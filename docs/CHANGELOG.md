@@ -5,6 +5,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 24] — API Client & Auth Integration (Remediation + Tests) — 2026-02-25
+
+### Added
+
+- **Vitest test infrastructure** — greenfield setup for frontend API client layer:
+  - `vitest.config.mts` — happy-dom environment, `@/` path aliases, Tier-1 coverage thresholds (80/75/80/80)
+  - `__tests__/test-helpers.ts` — shared fetch/localStorage mock utilities + response builders
+  - 3 npm scripts: `test`, `test:watch`, `test:coverage`
+- **60 unit tests across 5 suites** — comprehensive API client coverage:
+  - `http.test.ts` (20): auth headers, 401 refresh flow, error parsing, AbortController, convenience methods
+  - `token-manager.test.ts` (9): storage ops, state queries, listener notifications, error resilience
+  - `refresh-queue.test.ts` (7): single-flight queueing, concurrent resolution, failure propagation
+  - `auth.test.ts` (4): login, register, refresh, logout endpoint verification
+  - `domains.test.ts` (20): AI, Applications, Analytics, Blacklist, Health, Users
+- **16 hook tests** (`hooks.test.ts`) — TanStack Query hook validation:
+  - Auth-gating (disabled when unauthenticated), query delegation, mutation triggers + cache invalidation
+  - All 4 hook files: useHealth, useCareerDna, useCommandCenter, useNotifications
+- **22 provider tests** — AuthProvider + QueryProvider:
+  - `auth-provider.test.ts` (18): 7 reducer pure-function + 10 integration (session, login, register, logout, multi-tab) + 1 useAuth guard
+  - `query-provider.test.ts` (4): 4xx retry skip, mutation no-retry, window focus disabled
+
+### Changed
+
+- **R1: Legacy API migration** — 10 consumer files migrated from `lib/api.ts` → `lib/api-client/` domain modules
+- **R2: AbortController support** — optional `signal` property on `RequestOptions`, forwarded to native `fetch`
+- **O1: CI test gate** — `pnpm test` step added to `web-quality` job in `ci.yml` (lint → test → build)
+- `package.json` — Vitest, `@vitest/coverage-v8`, `happy-dom`, `@testing-library/react`, `@testing-library/dom` added as devDependencies
+
+### Removed
+
+- `lib/api.ts` — legacy monolith API client (superseded by domain-split `lib/api-client/`)
+
+---
+
 ## [Sprint 23] — Delivery Layer — 2026-02-24
 
 ### Added

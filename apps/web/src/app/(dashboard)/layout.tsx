@@ -6,7 +6,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { users, type UserResponse } from "@/lib/api";
+import { usersApi } from "@/lib/api-client/users";
+import type { UserResponse } from "@/types/api";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -37,7 +38,7 @@ export default function DashboardLayout({
       return;
     }
 
-    users
+    usersApi
       .me()
       .then(setUser)
       .catch(() => {

@@ -11,9 +11,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  applications as applicationsApi,
-  type ApplicationResponse,
-} from "@/lib/api";
+  listApplications,
+  updateApplicationStatus,
+  deleteApplication,
+} from "@/lib/api-client/applications";
+import type { ApplicationResponse } from "@/types/api/applications";
 
 const STATUS_CONFIG: Record<
   string,
@@ -38,7 +40,7 @@ export default function ApplicationsPage() {
   const fetchApps = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await applicationsApi.list(
+      const data = await listApplications(
         activeFilter ?? undefined,
         1,
         100,
@@ -57,7 +59,7 @@ export default function ApplicationsPage() {
 
   const handleStatusUpdate = async (appId: string, newStatus: string) => {
     try {
-      await applicationsApi.updateStatus(appId, newStatus);
+      await updateApplicationStatus(appId, newStatus);
       await fetchApps();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to update status");
@@ -67,7 +69,7 @@ export default function ApplicationsPage() {
   const handleDelete = async (appId: string) => {
     if (!confirm("Remove this application?")) return;
     try {
-      await applicationsApi.delete(appId);
+      await deleteApplication(appId);
       await fetchApps();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to delete");

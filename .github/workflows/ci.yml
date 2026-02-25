@@ -109,6 +109,10 @@ jobs:
         working-directory: apps/web
         run: pnpm lint
 
+      - name: Test
+        working-directory: apps/web
+        run: pnpm test
+
       - name: Build
         working-directory: apps/web
         run: pnpm build

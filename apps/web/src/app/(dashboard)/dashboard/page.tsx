@@ -5,17 +5,18 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { health, type HealthResponse } from "@/lib/api";
+import { healthApi } from "@/lib/api-client/health";
+import type { ReadinessCheckResponse } from "@/types/api/health";
 
 export default function DashboardPage() {
-  const [apiHealth, setApiHealth] = useState<HealthResponse | null>(null);
+  const [apiHealth, setApiHealth] = useState<ReadinessCheckResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
-    health
+    healthApi
       .ready()
       .then(setApiHealth)
-      .catch((err) => setHealthError(err.message));
+      .catch((err: Error) => setHealthError(err.message));
   }, []);
 
   return (

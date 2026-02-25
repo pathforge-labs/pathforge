@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-24 | **Current Phase**: E (Integration Layer) — Sprint 24 next
+> **Last Updated**: 2026-02-25 | **Current Phase**: E (Integration Layer) — Sprint 25 next
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -501,14 +501,49 @@
 
 ## Phase E: Integration Layer
 
-### Sprint 24 — API Client & Auth Integration (⏳ Next)
+### Sprint 24 — API Client & Auth Integration (✅ Complete)
 
-- [ ] TypeScript API client with typed request/response for all 156 endpoints
-- [ ] Auth context provider (JWT token management, refresh, logout)
-- [ ] Protected route middleware (redirect unauthenticated users)
-- [ ] API error handling and retry logic (TanStack Query)
-- [ ] Data fetching hooks for dashboard shell
-- [ ] Backend health check integration in dashboard
+- [x] TypeScript API client with typed request/response (8 domain modules)
+- [x] Auth context provider (JWT token management, refresh, logout)
+- [x] Protected route guards (AuthGuard with returnTo, GuestGuard)
+- [x] API error handling and retry logic (TanStack Query v5)
+- [x] Data fetching hooks — health, Career DNA, Command Center, notifications
+- [x] Backend health check integration (30s polling)
+
+> **Implementation detail:**
+>
+> - `lib/http.ts` — `fetchWithAuth` with auto-refresh on 401, `ApiError` class, `fetchPublic`, 5 convenience methods (get/post/put/patch/del)
+> - `lib/token-manager.ts` — SSR-safe localStorage + in-memory cache, multi-tab sync via `storage` events
+> - `lib/refresh-queue.ts` — single-flight token refresh preventing race conditions
+> - `providers/auth-provider.tsx` — `useReducer` 4-state machine (idle/loading/authenticated/unauthenticated), session restore, multi-tab sync
+> - `providers/query-provider.tsx` — TanStack Query v5 client with smart retry (skip 4xx), 5min stale time
+> - `types/api/` — 8 type files (common, auth, health, career-dna, threat-radar, career-command-center, notifications, user-profile) mirroring Pydantic schemas
+> - `lib/api-client/` — 8 domain API client modules (auth, users, health, career-dna, threat-radar, career-command-center, notifications, user-profile)
+> - `lib/query-keys.ts` — centralized typed query key factory with `as const` tuples
+> - `hooks/api/` — 4 hook files (use-health, use-career-dna, use-command-center, use-notifications) with auth-gated queries
+> - `components/auth/auth-guard.tsx` — client-side route protection with `returnTo` parameter
+> - `components/auth/guest-guard.tsx` — redirects authenticated users away from login/register
+> - 30 new files total, 0 regressions, 1016/1016 backend tests passing
+> - Tier-1 retrospective audit — all areas Tier-1 Compliant ✅
+> - `lib/api-client/` directory (not `lib/api/`) to coexist with legacy `lib/api.ts` monolith
+>
+> **Audit Remediation (R1/R2) + Test Coverage:**
+>
+> - R1: Legacy `lib/api.ts` migration — 10 consumer files migrated to domain-split `lib/api-client/`, legacy file deleted
+> - R2: `AbortController` support — optional `signal` property in `RequestOptions`, forwarded to native `fetch`
+> - Vitest infrastructure: `vitest.config.mts` + `test-helpers.ts` + `happy-dom` + `@vitest/coverage-v8`
+> - 60 frontend tests (5 suites): `http.test.ts` (20), `token-manager.test.ts` (9), `refresh-queue.test.ts` (7), `auth.test.ts` (4), `domains.test.ts` (20)
+> - Coverage thresholds enforced: 80% lines, 75% branches, 80% functions, 80% statements
+> - Tier-1 audit (post-remediation) — all 8 areas Tier-1 Compliant ✅, 3 optional enhancements deferred (CI coverage gate, hook tests, provider tests)
+>
+> **O1/O2/O3 Enhancements:**
+>
+> - O1: `pnpm test` step added to CI `web-quality` job (lint → test → build)
+> - O2: 16 hook tests (`hooks.test.ts`) — auth-gating, query delegation, mutation triggers + invalidation for all 4 hook files
+> - O3: 18 AuthProvider tests (7 reducer pure-function + 10 integration + 1 useAuth guard) + 4 QueryProvider tests (retry logic, window focus)
+> - Exported `authReducer`, `initialState`, `AuthState`, `AuthAction` for pure-function testing
+> - Dependencies: `@testing-library/react`, `@testing-library/dom` added as devDependencies
+> - Final count: **98 frontend tests** (8 suites, 2.77s) — Tier-1 audit all 5 areas Compliant ✅
 
 ### Sprint 25 — Core User Flow
 
@@ -664,7 +699,7 @@
 | 21     | 7             | 7         | 0            | 1        |
 | 22     | 6             | 6         | 1            | 3        |
 | 23     | 4             | 4         | 0            | 1        |
-| 24     | —             | —         | —            | —        |
+| 24     | 6             | 15        | 0            | 3        |
 | 25     | —             | —         | —            | —        |
 | 26     | —             | —         | —            | —        |
 | 27     | —             | —         | —            | —        |

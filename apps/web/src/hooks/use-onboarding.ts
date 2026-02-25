@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ai, type ParseResumeResponse, type MatchCandidate } from "@/lib/api";
+import {
+  parseResume as apiParseResume,
+  embedResume as apiEmbedResume,
+  matchResume as apiMatchResume,
+} from "@/lib/api-client/ai";
+import type { ParseResumeResponse, MatchCandidate } from "@/types/api/ai";
 
 export type OnboardingStep = "upload" | "parse" | "embed" | "matches";
 
@@ -45,7 +50,7 @@ export function useOnboarding() {
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const parsed = await ai.parseResume(state.rawText);
+      const parsed = await apiParseResume(state.rawText);
       setState((prev) => ({
         ...prev,
         parsedResume: parsed,
@@ -72,7 +77,7 @@ export function useOnboarding() {
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      await ai.embedResume(state.resumeId);
+      await apiEmbedResume(state.resumeId);
       setState((prev) => ({
         ...prev,
         step: "embed",
@@ -92,7 +97,7 @@ export function useOnboarding() {
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await ai.matchResume(state.resumeId, 5);
+      const result = await apiMatchResume(state.resumeId, 5);
       setState((prev) => ({
         ...prev,
         matches: result.matches,

@@ -12,12 +12,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  analytics,
-  type FunnelMetricsResponse,
-  type MarketInsightsListResponse,
-  type CVExperimentsListResponse,
-  type InsightType,
-} from "@/lib/api";
+  getFunnelMetrics,
+  getMarketInsights,
+  listExperiments,
+  generateInsight,
+} from "@/lib/api-client/analytics";
+import type {
+  FunnelMetricsResponse,
+  MarketInsightsListResponse,
+  CVExperimentsListResponse,
+  InsightType,
+} from "@/types/api/analytics";
 
 /* ── Stage config ──────────────────────────────────────────── */
 
@@ -94,9 +99,9 @@ export default function AnalyticsPage() {
     setError(null);
     try {
       const [funnelData, insightData, expData] = await Promise.all([
-        analytics.getFunnelMetrics("30d"),
-        analytics.getMarketInsights(),
-        analytics.listExperiments(),
+        getFunnelMetrics("30d"),
+        getMarketInsights(),
+        listExperiments(),
       ]);
       setFunnel(funnelData);
       setInsights(insightData);
@@ -117,8 +122,8 @@ export default function AnalyticsPage() {
   const handleGenerate = async (type: InsightType) => {
     setGenerating(type);
     try {
-      await analytics.generateInsight(type, "30d");
-      const updated = await analytics.getMarketInsights();
+      await generateInsight(type, "30d");
+      const updated = await getMarketInsights();
       setInsights(updated);
     } catch {
       /* silently handle */

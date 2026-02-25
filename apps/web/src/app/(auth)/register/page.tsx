@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auth } from "@/lib/api";
+import { authApi } from "@/lib/api-client/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,9 +35,9 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await auth.register({ email, password, full_name: fullName });
+      await authApi.register({ email, password, full_name: fullName });
       // Auto-login after registration
-      const tokens = await auth.login({ email, password });
+      const tokens = await authApi.login({ email, password });
       localStorage.setItem("pathforge_access_token", tokens.access_token);
       localStorage.setItem("pathforge_refresh_token", tokens.refresh_token);
       router.push("/dashboard");
