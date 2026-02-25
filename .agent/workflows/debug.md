@@ -11,30 +11,38 @@ $ARGUMENTS
 ## Purpose
 
 Activates DEBUG mode for systematic investigation of issues, errors, or unexpected behavior.
+Uses the `debugging-strategies` skill (4-phase methodology with Iron Law enforcement).
 
 ---
 
 ## Behavior
 
-1. **Gather Information**
-   - Error message
-   - Reproduction steps
-   - Expected vs actual behavior
-   - Recent changes
+### Phase 1: Root Cause Investigation
 
-2. **Form Hypotheses**
-   - List possible causes
-   - Order by likelihood
+1. **Read error messages** — full stack trace, error codes, line numbers
+2. **Reproduce** — exact steps, consistent trigger, environment details
+3. **Check recent changes** — `git log`, `git diff`, new deps or config
+4. **Multi-component trace** — add diagnostic logging at each layer boundary (API → Service → DB)
 
-3. **Investigate Systematically**
-   - Test each hypothesis
-   - Check logs, data flow
-   - Use elimination method
+> ⚠️ **Iron Law**: NO fixes proposed until Phase 1 is complete.
 
-4. **Fix and Prevent**
-   - Apply fix
-   - Explain root cause
-   - Add prevention measures
+### Phase 2: Pattern Analysis
+
+5. **Find working examples** — similar working code in codebase
+6. **Compare** — identify every difference between working and broken
+7. **Understand dependencies** — config, environment, assumptions
+
+### Phase 3: Hypothesis & Testing
+
+8. **Form single hypothesis** — "I think X because Y"
+9. **Test minimally** — smallest possible change, one variable at a time
+10. **Verify** — worked → Phase 4, didn't → new hypothesis (don't stack fixes)
+
+### Phase 4: Implementation
+
+11. **Create failing test** — automated regression test before fixing
+12. **Implement single fix** — address root cause, one change only
+13. **Verify fix** — failing test passes, full suite green, original issue resolved
 
 ---
 
@@ -43,39 +51,44 @@ Activates DEBUG mode for systematic investigation of issues, errors, or unexpect
 ```markdown
 ## 🔍 Debug: [Issue]
 
-### 1. Symptom
+### Phase 1: Root Cause Investigation
 
-[What's happening]
+**Symptom**: [What's happening]
+**Error**: `[error message]`
+**File**: `[filepath:line]`
+**Recent changes**: [git log/diff findings]
+**Layer trace**: [which boundary fails]
 
-### 2. Information Gathered
+### Phase 2: Pattern Analysis
 
-- Error: `[error message]`
-- File: `[filepath]`
-- Line: [line number]
+**Working reference**: [similar working code]
+**Key differences**: [what's different]
 
-### 3. Hypotheses
+### Phase 3: Hypothesis
 
-1. ❓ [Most likely cause]
-2. ❓ [Second possibility]
-3. ❓ [Less likely cause]
+🎯 **Hypothesis**: "I think [X] is the root cause because [Y]"
+**Test**: [minimal change to verify]
+**Result**: ✅ Confirmed / ❌ Refuted → [new hypothesis]
 
-### 4. Investigation
+### Phase 4: Fix
 
-**Testing hypothesis 1:**
-[What I checked] → [Result]
-
-### 5. Root Cause
-
-🎯 **[Explanation]**
-
-### 6. Fix
-
-[Code changes]
-
-### 7. Prevention
-
-🛡️ [How to prevent in future]
+**Root cause**: [explanation]
+**Regression test**: [test name + assertion]
+**Fix**: [code change]
+**Verification**: [test suite results]
+**Prevention**: 🛡️ [defense-in-depth measures]
 ```
+
+---
+
+## Escalation Protocol
+
+If **3+ fixes** have failed:
+
+1. **STOP** — don't attempt Fix #4
+2. **Question architecture** — is the pattern fundamentally sound?
+3. **Discuss with user** — present evidence from all 3 attempts
+4. **Consider refactor** — architecture change vs. symptom patching
 
 ---
 
@@ -84,15 +97,17 @@ Activates DEBUG mode for systematic investigation of issues, errors, or unexpect
 ```
 /debug login not working
 /debug API returns 500
-/debug form doesn't submit
-/debug data not saving
+/debug tests failing after migration
+/debug CI build broken
+/debug career DNA generation timeout
 ```
 
 ---
 
 ## Key Principles
 
-- **Ask before assuming** — get full error context
-- **Test hypotheses** — don't guess randomly
-- **Explain why** — not just what to fix
-- **Prevent recurrence** — add tests, validation
+- **Root cause first** — no fixes without investigation
+- **One hypothesis at a time** — don't stack changes
+- **Test before fixing** — create failing test first
+- **Fix at source** — use root-cause-tracing, not symptom patching
+- **Defend in depth** — add validation at multiple layers after fix
