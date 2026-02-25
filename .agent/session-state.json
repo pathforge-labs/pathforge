@@ -5,7 +5,7 @@
     "focus": "Sprint 24 — O1/O2/O3 Enhancements (CI Gate + Hook Tests + Provider Tests)",
     "sprint": 24,
     "sprint_status": "complete",
-    "last_commit": "pending",
+    "last_commit": "e54ead6",
     "branch": "main"
   },
   "quality": {
