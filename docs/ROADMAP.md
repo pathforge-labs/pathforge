@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-25 | **Current Phase**: E (Integration Layer) — Sprint 25 next
+> **Last Updated**: 2026-02-26 | **Current Phase**: E (Integration Layer) — Sprint 25 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -545,13 +545,32 @@
 > - Dependencies: `@testing-library/react`, `@testing-library/dom` added as devDependencies
 > - Final count: **98 frontend tests** (8 suites, 2.77s) — Tier-1 audit all 5 areas Compliant ✅
 
-### Sprint 25 — Core User Flow
+### Sprint 25 — Core User Flow (✅ Complete)
 
-- [ ] Resume upload UI + file validation + progress indicator
-- [ ] Resume parsing trigger + polling/streaming state
-- [ ] Career DNA generation flow (parse → analyze → display)
-- [ ] Onboarding wizard (register → upload → generate DNA → dashboard)
-- [ ] User settings page connected to `/api/v1/user-profile`
+- [x] FileUpload component — drag-drop + click-to-browse + client-side validation
+- [x] Onboarding wizard upgrade — 5-step flow (upload → parse → DNA → readiness → dashboard)
+- [x] Career DNA Readiness Score™ — SVG circular progress + 6-dimension indicators (innovation)
+- [x] Dashboard — dynamic data from TanStack Query hooks + conditional CTA
+- [x] Settings — profile CRUD + GDPR data export (Art. 20)
+- [x] TanStack Query hooks — `useUserProfile`, `useOnboardingStatus`, `useUpdateProfile`, `useRequestDataExport`
+- [x] 23 new frontend tests (3 suites) — 121/121 total passing
+- [x] Architecture decision record — `docs/architecture/sprint-25-core-user-flow.md`
+- [x] Tier-1 retrospective audit — all areas Tier-1 Compliant ✅
+
+> **Implementation detail:**
+>
+> - `components/file-upload.tsx` (NEW) — drag-and-drop + click-to-browse, 5MB limit, .txt/.pdf/.doc/.docx accept, accessibility (keyboard, ARIA)
+> - `components/career-dna-readiness.tsx` (NEW) — Career DNA Readiness Score™ with animated SVG ring (0–100), 6 Career DNA dimensions, score-tier coloring (innovation: no competitor offers this)
+> - `hooks/use-onboarding.ts` — upgraded from 4→5 steps, added `file` state + `setFile()`, `generateCareerDna()`, `careerDna` state, FileReader support for `.txt`
+> - `hooks/api/use-user-profile.ts` (NEW) — 4 TanStack Query hooks (2 auth-gated queries, 2 mutations with invalidation)
+> - `app/(dashboard)/dashboard/onboarding/page.tsx` — full rewrite: FileUpload + paste toggle, parse preview, DNA generation progress, Readiness Score, dashboard redirect
+> - `app/(dashboard)/dashboard/page.tsx` — dynamic data from `useCareerDnaSummary`, `useOnboardingStatus`, skeleton loaders, conditional Get Started CTA
+> - `app/(dashboard)/dashboard/settings/page.tsx` — profile CRUD with inline edit form, GDPR data export request, error/success feedback
+> - Query keys already existed in `query-keys.ts` — `userProfile.profile()`, `userProfile.onboarding()`, etc.
+> - 23 new tests: `use-user-profile.test.ts` (7), `file-upload.test.tsx` (8), `use-onboarding.test.ts` (8)
+> - 12-competitor analysis: Eightfold, Gloat, Workday, LinkedIn, Indeed, Glassdoor, Teal, Jobscan, Huntr, O\*NET, BLS, Levels.fyi
+> - First-mover position confirmed: no platform generates individual-owned career intelligence during onboarding
+> - ADR-025-01: .txt native, PDF/DOCX deferred; ADR-025-02: TanStack Query for all fetching; ADR-025-03: Dashboard layout auth deferred to Sprint 26
 
 ---
 
@@ -700,7 +719,7 @@
 | 22     | 6             | 6         | 1            | 3        |
 | 23     | 4             | 4         | 0            | 1        |
 | 24     | 6             | 15        | 0            | 3        |
-| 25     | —             | —         | —            | —        |
+| 25     | 5             | 9         | 1            | 1        |
 | 26     | —             | —         | —            | —        |
 | 27     | —             | —         | —            | —        |
 | 28     | —             | —         | —            | —        |

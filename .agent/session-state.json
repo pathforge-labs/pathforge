@@ -1,11 +1,11 @@
 {
   "version": "1.1.0",
-  "last_updated": "2026-02-25T02:05:00+01:00",
+  "last_updated": "2026-02-26T03:10:00+01:00",
   "session": {
-    "focus": "Sprint 24 — O1/O2/O3 Enhancements (CI Gate + Hook Tests + Provider Tests)",
-    "sprint": 24,
+    "focus": "Sprint 25 — Core User Flow (FileUpload, Onboarding, Dashboard, Settings)",
+    "sprint": 25,
     "sprint_status": "complete",
-    "last_commit": "e54ead6",
+    "last_commit": "pending",
     "branch": "main"
   },
   "quality": {
@@ -13,29 +13,29 @@
     "mypy_errors": 0,
     "eslint_errors": 0,
     "tsc_errors": 0,
-    "test_total": 1114,
-    "test_passed": 1114,
+    "test_total": 1137,
+    "test_passed": 1137,
     "test_failed": 0,
     "test_errors_preexisting": 0,
     "npm_vulnerabilities": 0,
     "pip_vulnerabilities": 0,
-    "frontend_tests": 98,
+    "frontend_tests": 121,
     "backend_tests": 1016
   },
   "codebase": {
     "api_endpoints": 156,
     "models": 66,
     "migrations": 22,
-    "total_tests": 1114,
+    "total_tests": 1137,
     "frontend_api_modules": 8,
-    "frontend_hooks": 4,
+    "frontend_hooks": 5,
     "frontend_type_files": 8,
-    "frontend_test_suites": 8
+    "frontend_test_suites": 11
   },
   "recent_work": [
+    "Sprint 25: Core User Flow — FileUpload, 5-step onboarding, Career DNA Readiness Score™, dashboard, settings, 23 new tests, 121/121 frontend, Tier-1 audit ✅",
     "Sprint 24 O1/O2/O3: CI test gate, 16 hook tests, 22 provider tests — 98 frontend tests total, Tier-1 audit ✅",
     "Sprint 24 Remediation: R1 legacy migration (10 consumers), R2 AbortController, 60 frontend tests, Tier-1 audit ✅",
-    "Sprint 24: API Client & Auth Integration — 30 files, 5 phases, tsc 0 errors, 1016/1016 tests, Tier-1 audit ✅",
-    "Sprint 23: Delivery Layer — 18 files, 115 tests, PyJWT migration, Tier-1 audit, 1016/1016 passing"
+    "Sprint 24: API Client & Auth Integration — 30 files, 5 phases, tsc 0 errors, 1016/1016 tests, Tier-1 audit ✅"
   ]
 }

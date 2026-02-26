@@ -1,37 +1,43 @@
 # Session Context — PathForge
 
-> Last Updated: 2026-02-25
+> Last Updated: 2026-02-26
 
 ## Current Session
 
-| Field       | Value                                                                     |
-| :---------- | :------------------------------------------------------------------------ |
-| Date        | 2026-02-25                                                                |
-| Focus       | Sprint 24 — O1/O2/O3 Enhancements (CI Gate + Hook Tests + Provider Tests) |
-| Branch      | main                                                                      |
-| Last Commit | e54ead6 (feat(web): Sprint 24)                                            |
+| Field       | Value                                                          |
+| :---------- | :------------------------------------------------------------- |
+| Date        | 2026-02-26                                                     |
+| Focus       | Sprint 25 — Core User Flow (FileUpload, Onboarding, Dashboard) |
+| Branch      | main                                                           |
+| Last Commit | pending (Sprint 25 implementation + Tier-1 audit)              |
 
 ## Work Done
 
-- **O1: CI test gate** — `pnpm test` step added between lint and build in `web-quality` job
-- **O2: Hook tests** — 15 tests for all 4 API hook files (auth-gating, query delegation, mutations)
-- **O3: Provider tests** — 10 AuthProvider (state machine, flows, multi-tab) + 4 QueryProvider (retry, config)
-- **Dependencies** — `@testing-library/react` + `@testing-library/dom` installed
-- **Tier-1 audit** — all 5 areas Tier-1 Compliant ✅
+- **FileUpload component** — drag-drop + click-to-browse + client-side validation
+- **Onboarding wizard** — 5-step flow (upload → parse → DNA → readiness → dashboard)
+- **Career DNA Readiness Score™** — SVG circular progress + 6 dimensions (innovation)
+- **Dashboard** — dynamic data from TanStack Query hooks + conditional CTA
+- **Settings** — profile CRUD + GDPR data export
+- **use-user-profile hooks** — 4 TanStack Query hooks
+- **23 new tests** — 121/121 total, 11 suites
+- **12-competitor analysis** — PathForge confirmed as first-mover in individual career intelligence
+- **Architecture decision record** — `docs/architecture/sprint-25-core-user-flow.md`
+- **Tier-1 retrospective audit** — all areas Tier-1 Compliant ✅
 
 ## Quality Gates
 
-| Gate           | Status                            |
-| :------------- | :-------------------------------- |
-| Lint           | ✅ 0 errors                       |
-| Types          | ✅ 0 errors (tsc --noEmit)        |
-| Frontend Tests | ✅ 98/98 passed (8 suites, 2.77s) |
-| Backend Tests  | ⏭️ Skipped (requires PostgreSQL)  |
-| npm audit      | ✅ 0 vulnerabilities              |
-| Build          | ✅ 24 routes, exit 0              |
+| Gate           | Status                           |
+| :------------- | :------------------------------- |
+| Lint           | ✅ 0 errors                      |
+| Types          | ✅ 0 errors (tsc --noEmit)       |
+| Frontend Tests | ✅ 121/121 passed (11 suites)    |
+| Backend Tests  | ⏭️ Skipped (requires PostgreSQL) |
+| npm audit      | ✅ 0 vulnerabilities             |
+| Build          | ✅ 24 routes, exit 0             |
 
 ## Handoff Notes
 
-- All Sprint 24 work complete — O1/O2/O3 enhancements + R1/R2 remediation + 98 frontend tests
-- CI pipeline now gates frontend tests before build merges
-- Next step: Sprint 25 (Core User Flow — resume upload, Career DNA generation, onboarding wizard)
+- All Sprint 25 work complete — 6 new files, 4 modified files, 23 new tests
+- Career DNA Readiness Score™ is a new innovation concept — no competitor offers this
+- Dashboard layout still uses legacy localStorage auth (deferred to Sprint 26, ADR-025-03)
+- Next step: Sprint 26 (Career DNA & Threat Radar Dashboard — 6-dimension visualization, resilience score)
