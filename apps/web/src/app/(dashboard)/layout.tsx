@@ -1,3 +1,10 @@
+/**
+ * PathForge — Dashboard Layout
+ * ==============================
+ * Authenticated shell with sidebar navigation, mobile header, and user profile.
+ * Uses AuthProvider's useAuth hook for session management (ADR-025-03 migration).
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,8 +13,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usersApi } from "@/lib/api-client/users";
-import type { UserResponse } from "@/types/api";
+import { useAuth } from "@/hooks/use-auth";
+
+/* ── Navigation ────────────────────────────────────────────── */
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: "📊" },
@@ -16,9 +24,11 @@ const navigation = [
   { name: "Applications", href: "/dashboard/applications", icon: "📋" },
   { name: "Resumes", href: "/dashboard/resumes", icon: "📄" },
   { name: "Career DNA", href: "/dashboard/career-dna", icon: "🧬" },
-  { name: "Threat Radar", href: "/dashboard/threats", icon: "🛡️" },
+  { name: "Threat Radar", href: "/dashboard/threat-radar", icon: "🛡️" },
   { name: "Settings", href: "/dashboard/settings", icon: "⚙️" },
-];
+] as const;
+
+/* ── Component ─────────────────────────────────────────────── */
 
 export default function DashboardLayout({
   children,
@@ -27,35 +37,22 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<UserResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Redirect unauthenticated users to login
   useEffect(() => {
-    const token = localStorage.getItem("pathforge_access_token");
-    if (!token) {
+    if (!isLoading && !isAuthenticated) {
       router.push("/login");
-      return;
     }
+  }, [isLoading, isAuthenticated, router]);
 
-    usersApi
-      .me()
-      .then(setUser)
-      .catch(() => {
-        localStorage.removeItem("pathforge_access_token");
-        localStorage.removeItem("pathforge_refresh_token");
-        router.push("/login");
-      })
-      .finally(() => setLoading(false));
-  }, [router]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("pathforge_access_token");
-    localStorage.removeItem("pathforge_refresh_token");
+  const handleLogout = async (): Promise<void> => {
+    await logout();
     router.push("/login");
   };
 
-  if (loading) {
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -66,14 +63,14 @@ export default function DashboardLayout({
     );
   }
 
-  const initials = user?.full_name
+  const initials = user?.fullName
     ?.split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2) ?? "PF";
 
-  const isActive = (href: string) => {
+  const isActive = (href: string): boolean => {
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
@@ -150,7 +147,7 @@ export default function DashboardLayout({
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 truncate">
-            <p className="truncate text-sm font-medium">{user?.full_name}</p>
+            <p className="truncate text-sm font-medium">{user?.fullName}</p>
             <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout} title="Sign out">

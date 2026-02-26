@@ -14,6 +14,11 @@ import type {
   CareerDnaGenerateRequest,
   CareerDnaProfileResponse,
   CareerDnaSummaryResponse,
+  ExperienceBlueprintResponse,
+  GrowthVectorResponse,
+  MarketPositionResponse,
+  SkillGenomeEntryResponse,
+  ValuesProfileResponse,
 } from "@/types/api";
 import type { ApiError } from "@/lib/http";
 import { useAuth } from "@/hooks/use-auth";
@@ -49,5 +54,62 @@ export function useGenerateCareerDna() {
       queryClient.invalidateQueries({ queryKey: queryKeys.careerDna.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.commandCenter.all });
     },
+  });
+}
+
+/* ── Dimension Hooks (for Radar Chart) ───────────────────── */
+
+export function useSkillGenome() {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery<SkillGenomeEntryResponse[], ApiError>({
+    queryKey: queryKeys.careerDna.skillGenome(),
+    queryFn: () => careerDnaApi.getSkillGenome(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExperienceBlueprint() {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery<ExperienceBlueprintResponse, ApiError>({
+    queryKey: queryKeys.careerDna.experienceBlueprint(),
+    queryFn: () => careerDnaApi.getExperienceBlueprint(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useGrowthVector() {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery<GrowthVectorResponse, ApiError>({
+    queryKey: queryKeys.careerDna.growthVector(),
+    queryFn: () => careerDnaApi.getGrowthVector(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useValuesProfile() {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery<ValuesProfileResponse, ApiError>({
+    queryKey: queryKeys.careerDna.valuesProfile(),
+    queryFn: () => careerDnaApi.getValuesProfile(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useMarketPosition() {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery<MarketPositionResponse, ApiError>({
+    queryKey: queryKeys.careerDna.marketPosition(),
+    queryFn: () => careerDnaApi.getMarketPosition(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
   });
 }

@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-26 | **Current Phase**: E (Integration Layer) — Sprint 25 complete
+> **Last Updated**: 2026-02-26 | **Current Phase**: F (Dashboard Experience) — Sprint 26 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -576,14 +576,33 @@
 
 ## Phase F: Dashboard Experience
 
-### Sprint 26 — Career DNA & Threat Radar Dashboard
+### Sprint 26 — Career DNA & Threat Radar Dashboard (✅ Complete)
 
-- [ ] Career DNA 6-dimension visualization (radar/hexagonal chart)
-- [ ] Career Resilience Score™ display with historical trend
-- [ ] Skills Shield™ Matrix visualization (shields vs exposures)
-- [ ] Threat/Opportunity alert cards with action buttons
-- [ ] Career Moat Score display
-- [ ] Responsive layout with skeleton loaders
+- [x] Career DNA 6-dimension visualization (pure SVG radar chart — zero deps)
+- [x] Career Resilience Score™ display with 5-factor breakdown gauges
+- [x] Skills Shield™ Matrix visualization (shields vs exposures with AI resistance bars)
+- [x] Threat/Opportunity alert cards with severity badges + action buttons
+- [x] Career Moat Score display (SVG semicircular gauge)
+- [x] Dynamic readiness score (R1 resolution — computed from real dimension data)
+- [x] Dashboard layout auth migration from localStorage to useAuth (R3 resolution)
+- [x] 30 new frontend tests (3 suites) — 151/151 total passing
+- [x] Tier-1 retrospective audit — all areas Tier-1 Compliant ✅
+
+> **Implementation detail:**
+>
+> - Phase 0: `layout.tsx` auth migration from `localStorage.getItem()` to `useAuth()` hook (ADR-025-03 resolved), sidebar URL fix `/threats` → `/threat-radar`, `session-state.json` fix
+> - `hooks/api/use-threat-radar.ts` (NEW) — 6 TanStack Query hooks: overview, resilience, skills shield, alerts (paginated), trigger scan, update alert
+> - `hooks/api/use-career-dna.ts` — 5 new dimension hooks: skill genome, experience blueprint, growth vector, values profile, market position
+> - `components/dashboard/career-dna-radar.tsx` (NEW) — Pure SVG hexagonal radar chart with gradient fill, animated transitions, skeleton loading
+> - `components/dashboard/score-gauge.tsx` (NEW) — Reusable SVG semicircular gauge (0–100), 4-tier color coding
+> - `components/dashboard/alert-card.tsx` (NEW) — Threat alert card with severity badges (critical/high/medium/low), expandable description, action buttons
+> - `components/dashboard/skills-shield-matrix.tsx` (NEW) — Two-column shield vs exposure matrix with protection score gauge, AI resistance + market demand bars
+> - `app/(dashboard)/dashboard/career-dna/page.tsx` (NEW) — Full Career DNA sub-page with dynamic readiness score, radar chart, skill genome table, 4 dimension cards
+> - `app/(dashboard)/dashboard/threat-radar/page.tsx` (NEW) — Full Threat Radar sub-page with resilience gauge, career moat, skills shield matrix, paginated alerts
+> - `app/(dashboard)/dashboard/page.tsx` — wired to live Threat Radar data, dynamic completeness_score, Threat Level card links to `/dashboard/threat-radar`
+> - 30 new tests: `use-threat-radar.test.ts` (13), `career-dna-radar.test.tsx` (7), `alert-card.test.tsx` (11)
+> - Quality Gate architecture document: 12-platform competitive analysis, 5/6 features first-to-market
+> - Sprint 25 audit tracked items resolved: R1 (dynamic readiness) → Phase 2, R3 (auth migration) → Phase 0, R2 (PDF/DOCX) → deferred Sprint 29
 
 ### Sprint 27 — Intelligence Hub
 
@@ -592,6 +611,7 @@
 - [ ] Career Simulation "what-if" interface (5 scenario types)
 - [ ] Transition Pathways explorer with success probability
 - [ ] Shared intelligence card component system
+- [ ] Career Resilience Score™ historical trend line — Sprint 26 audit O2
 
 ### Sprint 28 — Network Intelligence & Command Center
 
@@ -614,6 +634,8 @@
 - [ ] Job aggregation scheduled worker (Adzuna/Jooble cron)
 - [ ] LiteLLM production model routing verification
 - [ ] Langfuse LLM observability activation
+- [ ] PDF/DOCX server-side parsing (`pdfplumber`/`python-docx`) — Sprint 25 audit R2
+- [ ] E2E tests for Career DNA & Threat Radar pages (Playwright) — Sprint 26 audit O1
 
 ---
 

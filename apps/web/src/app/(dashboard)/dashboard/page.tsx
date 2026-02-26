@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { healthApi } from "@/lib/api-client/health";
 import { useCareerDnaSummary } from "@/hooks/api/use-career-dna";
+import { useThreatRadarOverview } from "@/hooks/api/use-threat-radar";
 import { useOnboardingStatus } from "@/hooks/api/use-user-profile";
 import type { ReadinessCheckResponse } from "@/types/api/health";
 
@@ -15,6 +16,7 @@ export default function DashboardPage() {
   const [apiHealth, setApiHealth] = useState<ReadinessCheckResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const careerDna = useCareerDnaSummary();
+  const threatRadar = useThreatRadarOverview();
   const onboardingStatus = useOnboardingStatus();
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function DashboardPage() {
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <div className="text-2xl font-bold">
-                  {hasCareerDna ? "65" : "—"}
+                  {hasCareerDna ? (careerDna.data?.completeness_score ?? "—") : "—"}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
@@ -121,15 +123,23 @@ export default function DashboardPage() {
         </Link>
 
         {/* Threat Level */}
-        <Link href="/dashboard">
+        <Link href="/dashboard/threat-radar">
           <Card className="transition-all duration-200 hover:shadow-md hover:border-primary/20 cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Threat Level</CardTitle>
               <span className="text-2xl">🛡️</span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">—</div>
-              <p className="text-xs text-muted-foreground">Monitoring inactive</p>
+              {threatRadar.isLoading ? (
+                <Skeleton className="h-7 w-16" />
+              ) : (
+                <div className="text-2xl font-bold">
+                  {threatRadar.data?.automation_risk?.risk_level ?? "—"}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {threatRadar.data ? `${threatRadar.data.alerts_summary.unread} unread alerts` : "Monitoring inactive"}
+              </p>
             </CardContent>
           </Card>
         </Link>
