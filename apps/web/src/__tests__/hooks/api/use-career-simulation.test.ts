@@ -49,7 +49,6 @@ import {
   useSimulateGeo,
   useSimulateSkill,
   useDeleteSimulation,
-  useUpdateSimulationPreferences,
 } from "@/hooks/api/use-career-simulation";
 
 // ── Test Helpers ───────────────────────────────────────────

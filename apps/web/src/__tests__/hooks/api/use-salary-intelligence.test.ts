@@ -50,7 +50,6 @@ import {
   useSalaryPreferences,
   useTriggerSalaryScan,
   useRunSalaryScenario,
-  useUpdateSalaryPreferences,
 } from "@/hooks/api/use-salary-intelligence";
 
 // ── Test Helpers ───────────────────────────────────────────

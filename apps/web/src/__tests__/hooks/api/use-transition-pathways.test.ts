@@ -51,10 +51,8 @@ import {
   useTransitionDetail,
   useTransitionSkillBridge,
   useTransitionMilestones,
-  useTransitionPreferences,
   useExploreTransition,
   useDeleteTransition,
-  useUpdateTransitionPreferences,
 } from "@/hooks/api/use-transition-pathways";
 
 // ── Test Helpers ───────────────────────────────────────────
