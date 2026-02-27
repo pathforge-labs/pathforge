@@ -3,7 +3,7 @@
   "sprint": "Sprint 29",
   "phase": "G — Data Pipeline",
   "focus": "Production Data Layer (hardening, infrastructure, audit remediation)",
-  "last_commit": "pending",
+  "last_commit": "4ecbe58",
   "last_session": "2026-02-27T03:32:00+01:00",
   "tracking": {
     "backend_tests": 1016,
