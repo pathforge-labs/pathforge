@@ -3,7 +3,7 @@
   "sprint": "Sprint 30",
   "phase": "H — Production Hardening",
   "focus": "Reliability & Observability (Sentry, CD, Playwright, logging, rate limiting)",
-  "last_commit": "pending",
+  "last_commit": "241aae9",
   "last_session": "2026-02-27T17:33:00+01:00",
   "tracking": {
     "backend_tests": 1016,
