@@ -50,6 +50,14 @@ async def llm_error_handler(_request: Request, exc: LLMError) -> JSONResponse:
         get_request_id(),
         str(exc)[:300],
     )
+
+    # Sprint 30 WS-1: Capture to Sentry with LLM context
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_exception(exc)
+    except ImportError:
+        pass
+
     return _error_response(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="AI service is temporarily unavailable. Please try again shortly.",
@@ -87,6 +95,14 @@ async def generic_error_handler(_request: Request, exc: Exception) -> JSONRespon
         get_request_id(),
         str(exc)[:200],
     )
+
+    # Sprint 30 WS-1: Capture unhandled exceptions to Sentry
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_exception(exc)
+    except ImportError:
+        pass
+
     return _error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="An unexpected error occurred. Please contact support with your request ID.",

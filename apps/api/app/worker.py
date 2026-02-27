@@ -6,7 +6,10 @@ Async task queue powered by ARQ (Redis-based).
 Handles background processing of expensive AI operations:
 - Resume parsing & embedding generation
 - Job matching pipelines
-- CV tailoring
+- Job aggregation (cron)
+
+Sprint 30: Structured logging, job aggregation cron,
+ARQ dead letter queue, configurable pool sizing.
 
 Usage (local):
     python -m arq app.worker.WorkerSettings
@@ -17,16 +20,18 @@ Usage (Docker):
 
 from __future__ import annotations
 
-import logging
-from datetime import timedelta
+import json
+import traceback
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
+import structlog
 from arq import cron
 from arq.connections import RedisSettings
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── Task Functions ─────────────────────────────────────────────
@@ -87,7 +92,7 @@ async def run_matching_pipeline(
         raise
 
 
-# ── Health Check (Cron) ────────────────────────────────────────
+# ── Health Check + Job Aggregation (Cron) ─────────────────────
 
 
 async def worker_health_check(ctx: dict[str, Any]) -> str:
@@ -96,12 +101,80 @@ async def worker_health_check(ctx: dict[str, Any]) -> str:
     return "healthy"
 
 
+async def run_job_aggregation(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate jobs from external providers (cron task, Sprint 30 WS-7)."""
+    logger.info("Starting job aggregation cron")
+
+    try:
+        from app.services.jobs_ingestion_service import JobsIngestionService
+
+        service = JobsIngestionService()
+        result = await service.aggregate_jobs(
+            batch_size=settings.aggregation_batch_size,
+        )
+        logger.info(
+            "Job aggregation completed",
+            jobs_processed=result.get("processed", 0),
+        )
+        return {"status": "completed", **result}
+    except Exception:
+        logger.exception("Job aggregation cron failed")
+        raise
+
+
+# ── Dead Letter Queue (Sprint 30 WS-7) ───────────────────────
+
+DEAD_LETTER_KEY = "pathforge:dead_letters"
+
+
+async def on_job_failure(
+    ctx: dict[str, Any],
+    job_id: str,
+    function_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    exception: BaseException,
+) -> None:
+    """Callback when a job exhausts all retries — push to dead letter queue."""
+    redis = ctx.get("redis")
+    if redis is None:
+        logger.error("Cannot write to DLQ: no Redis connection in context")
+        return
+
+    dead_letter = {
+        "job_id": job_id,
+        "function": function_name,
+        "args": [str(a) for a in args],
+        "error": str(exception),
+        "traceback": traceback.format_exception(exception)[-3:],
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    try:
+        await redis.rpush(DEAD_LETTER_KEY, json.dumps(dead_letter))
+        logger.warning(
+            "Job pushed to dead letter queue",
+            job_id=job_id,
+            function=function_name,
+            error=str(exception),
+        )
+    except Exception:
+        logger.exception("Failed to write to dead letter queue")
+
+
 # ── Startup / Shutdown Hooks ──────────────────────────────────
 
 
 async def startup(ctx: dict[str, Any]) -> None:
-    """Called when the worker starts."""
-    logger.info("PathForge ARQ worker starting up")
+    """Called when the worker starts. Initializes structured logging."""
+    from app.core.logging_config import setup_logging
+
+    setup_logging()
+    logger.info(
+        "PathForge ARQ worker started",
+        max_jobs=settings.worker_max_jobs,
+        queue="pathforge:default",
+    )
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
@@ -128,15 +201,22 @@ def _parse_redis_settings() -> RedisSettings:
 
 
 class WorkerSettings:
-    """ARQ worker configuration."""
+    """ARQ worker configuration (Sprint 30: configurable pool sizing)."""
 
-    functions: ClassVar[list[Any]] = [generate_embeddings, process_resume, run_matching_pipeline]
+    functions: ClassVar[list[Any]] = [
+        generate_embeddings,
+        process_resume,
+        run_matching_pipeline,
+    ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(worker_health_check, minute={0, 15, 30, 45}),
+        # Sprint 30 WS-7: Job aggregation cron (4x daily)
+        cron(run_job_aggregation, hour={0, 6, 12, 18}, minute={5}),
     ]
 
     on_startup = startup
     on_shutdown = shutdown
+    on_job_failure = on_job_failure  # Sprint 30 WS-7: Dead letter queue
 
     redis_settings = _parse_redis_settings()
 
@@ -144,6 +224,10 @@ class WorkerSettings:
     max_tries = 3
     job_timeout = timedelta(minutes=5)
     retry_delay = timedelta(seconds=30)
+
+    # Pool sizing (Sprint 30 WS-7: configurable concurrency)
+    max_jobs = settings.worker_max_jobs
+    max_burst_jobs = settings.worker_max_burst_jobs
 
     # Queue settings
     queue_name = "pathforge:default"

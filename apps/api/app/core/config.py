@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     debug: bool = False
     environment: str = "development"
+    log_level: str = "INFO"  # Sprint 30: environment-configurable log level
 
     # ── Database ────────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/pathforge_dev"
@@ -119,6 +120,18 @@ class Settings(BaseSettings):
     rate_limit_ai_analyses: str = "20/minute"
     ratelimit_storage_uri: str = "memory://"
 
+    # ── Auth Rate Limits (Sprint 30) ─────────────────────────────
+    rate_limit_login: str = "5/minute"       # Brute-force protection
+    rate_limit_register: str = "3/minute"    # Registration abuse prevention
+    rate_limit_refresh: str = "10/minute"    # Token refresh protection
+    rate_limit_global_default: str = "200/minute"  # Configurable global default
+
+    # ── Sentry Error Tracking (Sprint 30) ────────────────────────
+    sentry_dsn: str = ""                    # Empty = disabled, zero overhead
+    sentry_traces_sample_rate: float = 1.0  # Start 100%, dial to 0.1 after baseline week
+    sentry_environment: str = ""            # Defaults to `environment` if empty
+    sentry_release: str = ""                # Defaults to app_version if empty
+
     # ── Security Disclosure ──────────────────────────────────────
     security_contact_email: str = "security@pathforge.eu"
     security_txt_expires_days: int = 365
@@ -130,6 +143,10 @@ class Settings(BaseSettings):
     aggregation_cron_hours: str = "{0, 6, 12, 18}"  # 4× daily cron schedule
     aggregation_batch_size: int = 100
     embedding_daily_limit: int = 1000               # Max jobs embedded per day (cost guard)
+
+    # ── Worker Pool (Sprint 30) ─────────────────────────────────
+    worker_max_jobs: int = 10              # Max concurrent jobs per worker
+    worker_max_burst_jobs: int = 2         # Max burst jobs above max_jobs
 
     # ── Email Delivery (Resend) ──────────────────────────────────
     resend_api_key: str = ""

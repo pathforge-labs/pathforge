@@ -24,6 +24,8 @@ dependencies = [
     "structlog>=24.4.0",
     "arq>=0.26.0",
     "bcrypt>=4.2.0",
+    # Sprint 30: Error tracking
+    "sentry-sdk[fastapi]>=2.19.0",
 ]
 
 [project.optional-dependencies]

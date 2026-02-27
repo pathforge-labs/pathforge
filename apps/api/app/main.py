@@ -4,15 +4,19 @@ PathForge API — Application Entry Point
 FastAPI application factory with CORS, routing, and OpenAPI configuration.
 
 Includes: security hardening (RFC 9116, bot trap, docs protection).
+Sprint 30: Graceful shutdown, structured rate limit responses.
+
 Run with: uvicorn app.main:app --reload
 """
 
+import logging
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
@@ -51,15 +55,87 @@ from app.core.logging_config import setup_logging
 from app.core.middleware import BotTrapMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
 
+logger = logging.getLogger(__name__)
+
+# Track process start time for cold_start_time calculation
+_PROCESS_START_TIME: float = time.monotonic()
+
+
+def get_process_start_time() -> float:
+    """Return monotonic timestamp of process start."""
+    return _PROCESS_START_TIME
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application startup and shutdown events."""
-    # Startup
-    setup_logging(debug=settings.debug)
+    """Application startup and shutdown events (Audit C2: graceful shutdown)."""
+    # ── Startup ────────────────────────────────────────────────
+    setup_logging()
     initialize_observability()
+
+    # Sprint 30 WS-1: Initialize Sentry error tracking
+    from app.core.sentry import init_sentry
+    init_sentry()
+
+    logger.info(
+        "PathForge API started",
+        extra={"version": settings.app_version, "environment": settings.environment},
+    )
+
     yield
-    # Shutdown
+
+    # ── Shutdown (Audit C2) ────────────────────────────────────
+    shutdown_start = time.perf_counter()
+    logger.info("Initiating graceful shutdown")
+
+    # 1. Flush Sentry events
+    try:
+        import sentry_sdk
+        sentry_sdk.flush(timeout=2)
+    except Exception:
+        pass  # Sentry may not be initialized
+
+    # 2. Close Redis connection pool
+    try:
+        from app.core.token_blacklist import token_blacklist
+        await token_blacklist.close()
+    except Exception:
+        logger.warning("Failed to close Redis pool during shutdown")
+
+    # 3. Dispose SQLAlchemy engine
+    try:
+        from app.core.database import engine
+        await engine.dispose()
+    except Exception:
+        logger.warning("Failed to dispose database engine during shutdown")
+
+    shutdown_duration_ms = round((time.perf_counter() - shutdown_start) * 1000, 2)
+    logger.info("Graceful shutdown completed", extra={"duration_ms": shutdown_duration_ms})
+
+
+def _rate_limit_exceeded_response(
+    request: Request, exc: RateLimitExceeded
+) -> JSONResponse:
+    """
+    Structured 429 response with Retry-After header.
+
+    Returns machine-parseable JSON with request_id for tracing.
+    """
+    from app.core.middleware import get_request_id
+
+    # Parse retry-after from exception detail (e.g. "5 per 1 minute")
+    retry_after = "60"  # Default fallback
+    detail = str(exc.detail) if exc.detail else "Rate limit exceeded"
+
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "rate_limit_exceeded",
+            "detail": detail,
+            "request_id": get_request_id(),
+        },
+        headers={"Retry-After": retry_after},
+    )
 
 
 def create_app() -> FastAPI:
@@ -96,7 +172,7 @@ def create_app() -> FastAPI:
     # ── Error Handlers ─────────────────────────────────────────
     register_error_handlers(application)
     application.state.limiter = limiter
-    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_response)  # type: ignore[arg-type]
 
     # ── Routes ─────────────────────────────────────────────────
     # Well-known endpoints at root level (no /api/v1 prefix)

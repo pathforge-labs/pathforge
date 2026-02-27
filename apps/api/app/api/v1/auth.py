@@ -5,12 +5,13 @@ Registration, login, token refresh, and logout endpoints.
 """
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -37,7 +38,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user account",
 )
+@limiter.limit(settings.rate_limit_register)
 async def register(
+    request: Request,
     payload: UserRegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -60,7 +63,9 @@ async def register(
     response_model=TokenResponse,
     summary="Authenticate and receive access + refresh tokens",
 )
+@limiter.limit(settings.rate_limit_login)
 async def login(
+    request: Request,
     payload: UserLoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
@@ -87,7 +92,9 @@ async def login(
     response_model=TokenResponse,
     summary="Refresh an expired access token",
 )
+@limiter.limit(settings.rate_limit_refresh)
 async def refresh_token(
+    request: Request,
     payload: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:

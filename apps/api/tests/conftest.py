@@ -178,7 +178,11 @@ async def db_session(test_engine: Any) -> AsyncGenerator[AsyncSession, None]:
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Provide an async HTTP client wired to the test database."""
     from app.core.database import get_db
+    from app.core.rate_limit import limiter
     from app.main import app
+
+    # Reset rate limiter state between tests (Sprint 30)
+    limiter.reset()
 
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session

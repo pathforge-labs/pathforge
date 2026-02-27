@@ -90,6 +90,14 @@ jobs:
           ENVIRONMENT: testing
           DATABASE_URL: "sqlite+aiosqlite:///./test_alembic.db"
 
+      # Sprint 30 Audit H3: Dependency vulnerability scan
+      - name: Security audit (pip-audit)
+        working-directory: apps/api
+        continue-on-error: true # Non-blocking: initial baseline
+        run: |
+          pip install pip-audit
+          python -m pip_audit --desc --progress-spinner off
+
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
     name: Web — Lint & Build
@@ -125,3 +133,8 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      # Sprint 30 Audit H3: Dependency vulnerability scan
+      - name: Security audit (pnpm audit)
+        continue-on-error: true # Non-blocking: initial baseline
+        run: pnpm audit --prod --no-optional

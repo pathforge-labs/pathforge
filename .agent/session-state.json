@@ -1,17 +1,19 @@
 {
   "version": "1.0.0",
-  "sprint": "Sprint 29",
-  "phase": "G — Data Pipeline",
-  "focus": "Production Data Layer (hardening, infrastructure, audit remediation)",
-  "last_commit": "4ecbe58",
-  "last_session": "2026-02-27T03:32:00+01:00",
+  "sprint": "Sprint 30",
+  "phase": "H — Production Hardening",
+  "focus": "Reliability & Observability (Sentry, CD, Playwright, logging, rate limiting)",
+  "last_commit": "pending",
+  "last_session": "2026-02-27T17:33:00+01:00",
   "tracking": {
     "backend_tests": 1016,
     "frontend_tests": 232,
+    "e2e_specs": 8,
     "test_suites": 24,
     "tsc_errors": 0,
     "npm_audit_vulnerabilities": 0,
-    "files_changed": 16,
-    "audit_findings_remediated": 11
+    "files_changed": 24,
+    "audit_findings_remediated": 11,
+    "workstreams_delivered": 8
   }
 }

@@ -13,6 +13,15 @@
 # testing
 /coverage
 
+# playwright (Sprint 30 WS-3)
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/blob-report/
+
+# performance baselines (Sprint 30 WS-5)
+/perf-baselines/
+
 # next.js
 /.next/
 /out/

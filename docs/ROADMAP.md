@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-27 | **Current Phase**: G (Data Pipeline) — Sprint 29 complete
+> **Last Updated**: 2026-02-27 | **Current Phase**: H (Production Hardening) — Sprint 30 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -650,14 +650,21 @@
 
 ## Phase H: Production Hardening
 
-### Sprint 30 — Reliability & Observability
+### Sprint 30 — Reliability & Observability (✅ Complete)
 
-- [ ] Sentry error tracking (API + Web)
-- [ ] CD pipeline (`deploy.yml` — auto-deploy on merge to production)
-- [ ] E2E test suite (Playwright — auth, upload, DNA generation, dashboard)
-- [ ] Structured JSON logging for Railway
-- [ ] Performance baselines (Lighthouse, API response time benchmarks)
-- [ ] Rate limiting with Redis backing (replace in-memory)
+- [x] Sentry error tracking (API — `sentry.py` with EventScrubber, LLM fingerprinting, sampling ramp)
+- [x] CD pipeline (`deploy.yml` — auto-deploy on merge to production, health check, rollback)
+- [x] E2E test suite (Playwright — 8 spec files: auth, navigation, career-dna, threat-radar, command-center, actions, dashboard, intelligence-hub)
+- [x] Structured JSON logging (correlation ID, PII redaction, OTel naming, env-based levels)
+- [x] Performance baselines (Lighthouse + API P95 script, `docs/baselines/` placeholder)
+- [x] Rate limiting with Redis backing (failover to memory://, auth endpoint protection)
+- [x] Graceful shutdown in lifespan (Sentry flush, Redis close, DB dispose)
+- [x] Redis failover for rate limiting (fail-open with degraded tracking)
+- [x] Deferred Sprint 29 items (job aggregation cron, ARQ dead letter queue, worker pool sizing)
+- [x] CI security scanning (pip-audit + pnpm audit)
+- [-] Frontend Sentry (`@sentry/nextjs`) — deferred to Phase I (Senior Staff decision)
+
+> **Sprint 30 Deliverables**: 24 files (18 modified + 6 new). 8 workstreams, 11 audit findings resolved. `sentry-sdk[fastapi]` added to dependencies, `deploy.yml` CD pipeline, 8 Playwright E2E spec files (~28 tests), `perf-baseline.sh`, `docs/baselines/sprint-30-baselines.md`. Backend: 1,016/1,016 tests, 0 lint errors. Frontend: 0 lint warnings, 0 tsc errors, 0 vulnerabilities, build passes. Tier-1 audit: all areas compliant ✅.
 
 ---
 
@@ -723,36 +730,36 @@
 
 ## Sprint Velocity
 
-| Sprint | Planned Tasks | Completed  | Ad-Hoc Added | Sessions |
-| :----- | :------------ | :--------- | :----------- | :------- |
-| 1-2    | 12            | 12         | 0            | ~4       |
-| 3      | 5             | 5          | 0            | ~2       |
-| 4      | 8             | 8          | 0            | ~3       |
-| 5      | 6             | 6          | 2            | ~3       |
-| 6a     | 12            | 12         | 3            | ~3       |
-| 6a.1   | 6             | 6          | 0            | 1        |
-| 6b     | 3             | 3          | 2            | 1        |
-| 7      | 6             | 7          | 1            | 1        |
-| 8      | 3             | 9          | 1            | 2        |
-| 9      | 8             | 11         | 3            | 1        |
-| 10     | 4             | 10         | 1            | 2        |
-| 11     | 3             | 10         | 1            | 1        |
-| 12     | 3             | 11         | 0            | 1        |
-| 13     | 3             | 13         | 0            | 1        |
-| 14     | 3             | 12         | 1            | 1        |
-| 15     | 3             | 12         | 0            | 1        |
-| 16     | 3             | 11         | 0            | 1        |
-| 17     | 4             | 10         | 0            | 1        |
-| 18     | 3             | 3          | 0            | 1        |
-| 19     | 4             | 12         | 0            | 1        |
-| 20     | 7             | 7          | 0            | 2        |
-| 21     | 7             | 7          | 0            | 1        |
-| 22     | 6             | 6          | 1            | 3        |
-| 23     | 4             | 4          | 0            | 1        |
-| 24     | 6             | 15         | 0            | 3        |
-| 25     | 5             | 9          | 1            | 1        |
-| 26     | —             | —          | —            | —        |
-| 27     | —             | —          | —            | —        |
-| 28     | 6             | 8          | 0            | 1        |
-| 29     | 8             | 7 (+2 def) | 0            | 1        |
-| 30     | —             | —          | —            | —        |
+| Sprint | Planned Tasks | Completed   | Ad-Hoc Added | Sessions |
+| :----- | :------------ | :---------- | :----------- | :------- |
+| 1-2    | 12            | 12          | 0            | ~4       |
+| 3      | 5             | 5           | 0            | ~2       |
+| 4      | 8             | 8           | 0            | ~3       |
+| 5      | 6             | 6           | 2            | ~3       |
+| 6a     | 12            | 12          | 3            | ~3       |
+| 6a.1   | 6             | 6           | 0            | 1        |
+| 6b     | 3             | 3           | 2            | 1        |
+| 7      | 6             | 7           | 1            | 1        |
+| 8      | 3             | 9           | 1            | 2        |
+| 9      | 8             | 11          | 3            | 1        |
+| 10     | 4             | 10          | 1            | 2        |
+| 11     | 3             | 10          | 1            | 1        |
+| 12     | 3             | 11          | 0            | 1        |
+| 13     | 3             | 13          | 0            | 1        |
+| 14     | 3             | 12          | 1            | 1        |
+| 15     | 3             | 12          | 0            | 1        |
+| 16     | 3             | 11          | 0            | 1        |
+| 17     | 4             | 10          | 0            | 1        |
+| 18     | 3             | 3           | 0            | 1        |
+| 19     | 4             | 12          | 0            | 1        |
+| 20     | 7             | 7           | 0            | 2        |
+| 21     | 7             | 7           | 0            | 1        |
+| 22     | 6             | 6           | 1            | 3        |
+| 23     | 4             | 4           | 0            | 1        |
+| 24     | 6             | 15          | 0            | 3        |
+| 25     | 5             | 9           | 1            | 1        |
+| 26     | —             | —           | —            | —        |
+| 27     | —             | —           | —            | —        |
+| 28     | 6             | 8           | 0            | 1        |
+| 29     | 8             | 7 (+2 def)  | 0            | 1        |
+| 30     | 8             | 10 (+1 def) | 1            | 2        |
