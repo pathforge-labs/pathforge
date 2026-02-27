@@ -122,6 +122,8 @@ def _parse_redis_settings() -> RedisSettings:
         port=parsed.port or 6379,
         database=int(parsed.path.lstrip("/") or "0"),
         password=parsed.password,
+        ssl=settings.redis_ssl,
+        conn_timeout=settings.redis_socket_timeout,
     )
 
 
@@ -129,7 +131,9 @@ class WorkerSettings:
     """ARQ worker configuration."""
 
     functions: ClassVar[list[Any]] = [generate_embeddings, process_resume, run_matching_pipeline]
-    cron_jobs: ClassVar[list[Any]] = [cron(worker_health_check, minute={0, 15, 30, 45})]
+    cron_jobs: ClassVar[list[Any]] = [
+        cron(worker_health_check, minute={0, 15, 30, 45}),
+    ]
 
     on_startup = startup
     on_shutdown = shutdown

@@ -83,6 +83,13 @@ jobs:
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
 
+      - name: Alembic drift check
+        working-directory: apps/api
+        run: python -m alembic check
+        env:
+          ENVIRONMENT: testing
+          DATABASE_URL: "sqlite+aiosqlite:///./test_alembic.db"
+
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
     name: Web — Lint & Build

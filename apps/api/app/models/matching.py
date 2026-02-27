@@ -14,6 +14,7 @@ from sqlalchemy import Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import EMBEDDING_DIM
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 
@@ -34,7 +35,7 @@ class JobListing(UUIDMixin, TimestampMixin, Base):
         comment="SHA256 of normalized(title+company+location) for dedup",
     )
     structured_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    embedding = mapped_column(Vector(3072), nullable=True)
+    embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     # Relationships
     match_results: Mapped[list[MatchResult]] = relationship(

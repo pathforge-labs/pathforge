@@ -1,14 +1,17 @@
 {
   "version": "1.0.0",
-  "sprint": "Sprint 28",
-  "phase": "F — Dashboard Experience",
-  "focus": "Network Intelligence & Command Center (Hidden Market, Career Passport, Interview Prep, Command Center, Notifications, Actions)",
-  "last_commit": "3c7f69a",
-  "last_session": "2026-02-26T16:50:00+01:00",
+  "sprint": "Sprint 29",
+  "phase": "G — Data Pipeline",
+  "focus": "Production Data Layer (hardening, infrastructure, audit remediation)",
+  "last_commit": "pending",
+  "last_session": "2026-02-27T03:32:00+01:00",
   "tracking": {
+    "backend_tests": 1016,
     "frontend_tests": 232,
     "test_suites": 24,
     "tsc_errors": 0,
-    "npm_audit_vulnerabilities": 0
+    "npm_audit_vulnerabilities": 0,
+    "files_changed": 16,
+    "audit_findings_remediated": 11
   }
 }

@@ -4,7 +4,10 @@ PathForge API — Rate Limiter
 Per-user rate limiting for expensive AI endpoints.
 
 Uses SlowAPI with JWT-based user identification.
-In-memory storage for development, Redis-ready for production.
+Storage backend is configurable: in-memory for development,
+Redis for production (multi-instance correctness).
+
+Sprint 29: Fixed audit C1 — storage_uri now reads from config.
 """
 
 from __future__ import annotations
@@ -14,6 +17,8 @@ import logging
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +42,12 @@ def _get_user_or_ip(request: Request) -> str:
 
 
 # ── Limiter Instance ───────────────────────────────────────────
-# In-memory storage for development. For production, configure:
-#   RATELIMIT_STORAGE_URI=redis://localhost:6379/1
+# Uses settings.ratelimit_storage_uri:
+#   Development: memory:// (default)
+#   Production:  redis://... (set via RATELIMIT_STORAGE_URI env var)
 
 limiter = Limiter(
     key_func=_get_user_or_ip,
     default_limits=["200/minute"],
-    storage_uri="memory://",
+    storage_uri=settings.ratelimit_storage_uri,
 )

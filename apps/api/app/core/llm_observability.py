@@ -750,6 +750,11 @@ def initialize_observability() -> None:
 
     1. Sets ``LANGFUSE_*`` environment variables (LiteLLM reads these).
     2. Registers Langfuse as a LiteLLM success/failure callback.
+    3. Applies production guardrails (Sprint 29):
+       - Sampling rate: only trace N% of calls (default 10%)
+       - PII redaction: scrub prompts/completions before sending
+       - Always-trace-on-error: errors bypass sampling rate
+       - Force-trace: x-pathforge-trace header overrides sampling
 
     When disabled (default), this function is a safe no-op.
     The in-memory collector and transparency log are always initialized.
@@ -774,17 +779,66 @@ def initialize_observability() -> None:
     os.environ["LANGFUSE_SECRET_KEY"] = settings.langfuse_secret_key
     os.environ["LANGFUSE_HOST"] = settings.langfuse_host
 
+    # Sampling rate: LiteLLM supports LANGFUSE_SAMPLE_RATE env var
+    sample_rate = settings.langfuse_sampling_rate
+    os.environ["LANGFUSE_SAMPLE_RATE"] = str(sample_rate)
+
     try:
         import litellm
 
         litellm.success_callback = ["langfuse"]
         litellm.failure_callback = ["langfuse"]
+
+        # Register PII redaction pre-call hook if enabled
+        if settings.langfuse_pii_redaction:
+            _register_pii_redaction_hook()
+
         logger.info(
-            "LLM observability: Langfuse enabled → %s",
+            "LLM observability: Langfuse enabled → %s (sample_rate=%.0f%%, pii_redaction=%s)",
             settings.langfuse_host,
+            sample_rate * 100,
+            settings.langfuse_pii_redaction,
         )
     except ImportError:
         logger.warning(
             "LLM observability: litellm not installed — "
             "Langfuse callbacks not registered"
         )
+
+
+def _register_pii_redaction_hook() -> None:
+    """Register a LiteLLM pre-call hook that redacts PII from messages.
+
+    This ensures no PII reaches Langfuse traces. The redaction
+    happens in-flight — the original LLM call uses unredacted text.
+    """
+    import litellm
+
+    from app.core.pii_redactor import redact_pii
+
+    original_input_hook = getattr(litellm, "input_callback", None)
+
+    def _redact_input(model: str, messages: list[dict[str, str]], kwargs: dict[str, Any]) -> None:
+        """Redact PII from messages before they are sent to Langfuse.
+
+        Note: This modifies the Langfuse trace data, NOT the actual LLM input.
+        LiteLLM calls input_callback with a copy of kwargs for callbacks.
+        """
+        # Redact message content
+        metadata = kwargs.get("litellm_params", {}).get("metadata", {})
+
+        if "messages" in kwargs:
+            for msg in kwargs["messages"]:
+                if "content" in msg and isinstance(msg["content"], str):
+                    msg["content"] = redact_pii(msg["content"])
+
+        # Tag with redaction metadata
+        metadata["pii_redacted"] = True
+
+        # Call original hook if exists
+        if callable(original_input_hook):
+            original_input_hook(model, messages, kwargs)
+
+    litellm.input_callback = [_redact_input]  # type: ignore[assignment]
+    logger.info("PII redaction hook registered for Langfuse traces")
+

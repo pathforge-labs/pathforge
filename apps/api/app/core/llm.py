@@ -15,13 +15,16 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import collections
 import enum
 import json
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import litellm
+import redis.asyncio as aioredis
 
 from app.core.config import settings
 from app.core.llm_observability import (
@@ -61,10 +64,125 @@ _FALLBACK_CHAIN: dict[LLMTier, list[LLMTier]] = {
     LLMTier.FAST: [],
 }
 
+_TIER_RPM_MAP: dict[LLMTier, int] = {
+    LLMTier.PRIMARY: settings.llm_primary_rpm,
+    LLMTier.FAST: settings.llm_fast_rpm,
+    LLMTier.DEEP: settings.llm_deep_rpm,
+}
+
 
 def _resolve_model(tier: LLMTier) -> str:
     """Resolve a tier to its configured model name."""
     return _TIER_MODEL_MAP[tier]
+
+
+# ── Budget & Rate Limit Guards (Sprint 29) ─────────────────────
+
+
+class BudgetExceededError(Exception):
+    """Raised when monthly LLM budget is exhausted."""
+
+    def __init__(self, spent: float, budget: float) -> None:
+        self.spent = spent
+        self.budget = budget
+        super().__init__(
+            f"Monthly LLM budget exhausted: ${spent:.2f} / ${budget:.2f}"
+        )
+
+
+class RateLimitExceededError(Exception):
+    """Raised when per-tier RPM limit is exceeded."""
+
+    def __init__(self, tier: str, rpm: int) -> None:
+        self.tier = tier
+        self.rpm = rpm
+        super().__init__(f"Tier '{tier}' rate limit exceeded: {rpm} RPM")
+
+
+# Redis-backed monthly budget counter (audit C3)
+_budget_redis: aioredis.Redis | None = None
+
+
+async def _get_budget_redis() -> aioredis.Redis:
+    """Lazy Redis connection for budget tracking."""
+    global _budget_redis
+    if _budget_redis is None:
+        _budget_redis = aioredis.from_url(
+            settings.redis_url, decode_responses=True
+        )
+    return _budget_redis
+
+
+def _budget_key() -> str:
+    """Redis key for current month's LLM cost."""
+    month = datetime.now(UTC).strftime("%Y-%m")
+    return f"pathforge:llm_cost:{month}"
+
+
+async def _check_budget() -> float:
+    """Check if monthly LLM budget allows another call.
+
+    Returns:
+        Current month's spend in USD.
+
+    Raises:
+        BudgetExceededError: If budget is exhausted.
+    """
+    if settings.llm_monthly_budget_usd <= 0:
+        return 0.0  # Budget guard disabled
+
+    r = await _get_budget_redis()
+    spent_raw = await r.get(_budget_key())
+    spent = float(spent_raw) if spent_raw else 0.0
+
+    if spent >= settings.llm_monthly_budget_usd:
+        raise BudgetExceededError(spent, settings.llm_monthly_budget_usd)
+
+    return spent
+
+
+async def _record_cost(response_cost: float) -> None:
+    """Increment monthly spend in Redis after a successful LLM call."""
+    if response_cost <= 0:
+        return
+
+    r = await _get_budget_redis()
+    key = _budget_key()
+    await r.incrbyfloat(key, response_cost)
+    # TTL: 40 days — auto-cleanup after month rolls over
+    await r.expire(key, 40 * 86400)
+
+
+# In-memory sliding window RPM tracker
+_rpm_windows: dict[str, collections.deque[float]] = {}
+
+
+def _check_rpm(tier: LLMTier) -> None:
+    """Check if tier's RPM limit allows another call.
+
+    Uses a 60-second sliding window with in-memory timestamps.
+    Resets conservatively on restart (safe default).
+
+    Raises:
+        RateLimitExceededError: If RPM is exceeded.
+    """
+    rpm_limit = _TIER_RPM_MAP.get(tier, 60)
+    now = time.monotonic()
+    window_key = tier.value
+
+    if window_key not in _rpm_windows:
+        _rpm_windows[window_key] = collections.deque()
+
+    window = _rpm_windows[window_key]
+
+    # Evict timestamps older than 60 seconds
+    while window and (now - window[0]) > 60.0:
+        window.popleft()
+
+    if len(window) >= rpm_limit:
+        raise RateLimitExceededError(tier.value, rpm_limit)
+
+    window.append(now)
 
 
 # ── Core Completion Function ───────────────────────────────────
@@ -106,9 +224,15 @@ async def complete(
     tiers_to_try = [tier, *_FALLBACK_CHAIN.get(tier, [])]
     last_error: Exception | None = None
 
+    # Budget check (audit C3) — fail fast before attempting any call
+    await _check_budget()
+
     for attempt_tier in tiers_to_try:
         model = _resolve_model(attempt_tier)
         try:
+            # RPM check — per-tier sliding window
+            _check_rpm(attempt_tier)
+
             result = await _call_with_retry(
                 model=model,
                 tier=attempt_tier.value,
@@ -390,6 +514,20 @@ async def _call_with_retry(
                 success=True,
             )
 
+            # Record cost in Redis (audit C3)
+            response_cost = getattr(
+                getattr(response, "_hidden_params", None),
+                "response_cost", 0.0
+            )
+            if not response_cost:
+                # Fallback: estimate from litellm cost tracker
+                response_cost = getattr(response, "_response_cost", 0.0) or 0.0
+            if response_cost > 0:
+                try:
+                    await _record_cost(response_cost)
+                except Exception:
+                    logger.warning("Failed to record LLM cost in Redis")
+
             return content
 
         except Exception as exc:
@@ -420,7 +558,7 @@ async def _call_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-# ── Custom Exception ───────────────────────────────────────────
+# ── Custom Exceptions ──────────────────────────────────────────
 
 class LLMError(Exception):
     """Raised when LLM completion fails after all retries and fallbacks."""

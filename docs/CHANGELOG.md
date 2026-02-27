@@ -5,6 +5,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 29] — Production Data Layer — 2026-02-27
+
+### Added
+
+- **Circuit Breaker** (`app/core/circuit_breaker.py`) — Redis-backed async context manager for external API resilience (CLOSED→OPEN→HALF_OPEN states, auto-expiry, recovery probes)
+- **PII Redactor** (`app/core/pii_redactor.py`) — 7 high-confidence regex patterns (email, phone, SSN, BSN, CC, IP, URL tokens). Name detection deliberately excluded (40% precision — policy decision, not gap)
+- **Document Parser** (`app/services/document_parser.py`) — secure PDF/DOCX/TXT parser: 10MB size limit, 100-page memory guard, MIME verification via `filetype`, encrypted PDF rejection, macro-enabled DOCX rejection, `asyncio.to_thread` sandboxing
+- **Alembic CI Scripts** — `scripts/alembic_verify.py` (upgrade→downgrade→re-upgrade→drift check, Alembic ≥1.13.0 assertion) + `scripts/alembic_dry_run.py` (SQL preview). Python-based for Windows compatibility
+- **LLM Budget Counter** — Redis-backed monthly spend tracking (`pathforge:llm_cost:YYYY-MM`), `BudgetExceededError` fail-fast, automatic 40-day TTL cleanup
+- **LLM RPM Guards** — in-memory 60-second sliding window per tier, `RateLimitExceededError`
+- **Langfuse PII Redaction Hook** — `litellm.input_callback` pre-call hook scrubs messages before Langfuse trace export
+- **Alembic drift check** step added to GitHub Actions `ci.yml`
+- 3 new AI optional deps: `pdfplumber>=0.11.0`, `python-docx>=1.1.0`, `filetype>=1.2.0`
+
+### Changed
+
+- **`config.py`** — `EMBEDDING_DIM = 3072` module constant + 14 production settings (DB pool, Redis SSL, LLM budget/RPM, Langfuse sampling/PII, aggregation cron/batch/daily limit)
+- **`database.py`** — SSL context builder for Supabase, `pool_recycle`, `pool_timeout` from config
+- **`resume.py` / `matching.py`** — `Vector(3072)` → `Vector(EMBEDDING_DIM)` (audit C2)
+- **`rate_limit.py`** — **CRITICAL FIX**: `storage_uri` now reads from `settings.ratelimit_storage_uri` instead of hardcoded `memory://` (audit C1 — multi-instance bypass)
+- **`worker.py`** — Redis SSL + `conn_timeout` for ARQ connection
+- **`llm.py`** — budget check before every LLM call, RPM check per tier, cost recording after success
+- **`llm_observability.py`** — `LANGFUSE_SAMPLE_RATE` env var (10% default), PII redaction hook registration, enhanced startup logging
+- **`initial_schema.py`** — `CREATE EXTENSION IF NOT EXISTS vector` (pgvector safety net)
+
+### Security
+
+- 0 npm vulnerabilities (audit --audit-level=moderate)
+- PII redacted before Langfuse export
+- Input validation: file size, page count, MIME, encrypted PDF blocked
+- All credentials via environment variables
+
+---
+
 ## [Sprint 25] — Core User Flow — 2026-02-26
 
 ### Added

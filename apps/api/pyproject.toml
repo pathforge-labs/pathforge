@@ -43,6 +43,10 @@ ai = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=2.0.0",
     "voyageai>=0.3.0",
+    # Sprint 29: Document parsing
+    "pdfplumber>=0.11.0",
+    "python-docx>=1.1.0",
+    "filetype>=1.2.0",
 ]
 
 [build-system]

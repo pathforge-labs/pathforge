@@ -8,7 +8,14 @@ Import from here, never hardcode configuration values.
 
 Usage:
     from app.core.config import settings
+    from app.core.config import EMBEDDING_DIM
 """
+
+# ── Module Constants (compile-time, not runtime-configurable) ────────
+# Changing EMBEDDING_DIM requires re-embedding ALL vectors + index rebuild.
+# This is intentionally NOT a settings field — it must match the Voyage AI
+# model output dimension and the pgvector column definition.
+EMBEDDING_DIM: int = 3072
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,9 +45,15 @@ class Settings(BaseSettings):
     # ── Database ────────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/pathforge_dev"
     database_echo: bool = False
+    database_pool_recycle: int = 3600   # Prevent stale connections (seconds)
+    database_pool_timeout: int = 30     # Max wait for pool connection (seconds)
+    database_ssl: bool = False          # Enable for Supabase production
 
     # ── Redis ───────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+    redis_ssl: bool = False
+    redis_max_connections: int = 50
+    redis_socket_timeout: int = 5
 
     # ── JWT Authentication ──────────────────────────────────────
     jwt_secret: str = "change-me-in-production-use-a-real-secret"
@@ -75,6 +88,12 @@ class Settings(BaseSettings):
     llm_timeout: int = 60
     llm_max_retries: int = 3
 
+    # ── LLM Production Routing (Sprint 29) ────────────────────
+    llm_monthly_budget_usd: float = 200.0   # Redis-backed monthly budget guard
+    llm_primary_rpm: int = 60               # Requests per minute — Primary tier
+    llm_fast_rpm: int = 200                 # Requests per minute — Fast tier
+    llm_deep_rpm: int = 10                  # Requests per minute — Deep tier
+
     # ── LLM Observability (Langfuse) ────────────────────────
     # Disabled by default — zero overhead until explicitly enabled.
     # Self-hostable: set langfuse_host to your own instance.
@@ -82,6 +101,8 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_sampling_rate: float = 0.1     # 10% sampling in production
+    langfuse_pii_redaction: bool = True     # Redact PII before sending traces
 
     # ── Voyage AI Embeddings ─────────────────────────────────
     voyage_model: str = "voyage-3"
@@ -106,6 +127,9 @@ class Settings(BaseSettings):
     adzuna_app_id: str = ""
     adzuna_app_key: str = ""
     jooble_api_key: str = ""
+    aggregation_cron_hours: str = "{0, 6, 12, 18}"  # 4× daily cron schedule
+    aggregation_batch_size: int = 100
+    embedding_daily_limit: int = 1000               # Max jobs embedded per day (cost guard)
 
     # ── Email Delivery (Resend) ──────────────────────────────────
     resend_api_key: str = ""

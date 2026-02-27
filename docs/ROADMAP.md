@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-26 | **Current Phase**: F (Dashboard Experience) — Sprint 28 complete
+> **Last Updated**: 2026-02-27 | **Current Phase**: G (Data Pipeline) — Sprint 29 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -632,16 +632,19 @@
 
 ## Phase G: Data Pipeline
 
-### Sprint 29 — Production Data Layer
+### Sprint 29 — Production Data Layer (✅ Complete)
 
-- [ ] PostgreSQL + pgvector production setup (Supabase or Railway)
-- [ ] Alembic migration CI verification
-- [ ] Redis production configuration (rate limiting backing store)
-- [ ] Job aggregation scheduled worker (Adzuna/Jooble cron)
-- [ ] LiteLLM production model routing verification
-- [ ] Langfuse LLM observability activation
-- [ ] PDF/DOCX server-side parsing (`pdfplumber`/`python-docx`) — Sprint 25 audit R2
-- [ ] E2E tests for Career DNA & Threat Radar pages (Playwright) — Sprint 26 audit O1
+- [x] PostgreSQL + pgvector production setup (Supabase — EMBEDDING_DIM constant, SSL, pool hardening)
+- [x] Alembic migration CI verification (Python scripts, drift check in CI)
+- [x] Redis production configuration (rate limiter fix C1, worker SSL, config settings)
+- [x] Circuit breaker for external APIs (Redis-backed, CLOSED→OPEN→HALF_OPEN)
+- [x] LiteLLM production model routing (Redis budget counter, per-tier RPM guards)
+- [x] Langfuse LLM observability activation (10% sampling, PII redaction hook)
+- [x] PDF/DOCX server-side parsing (10MB limit, 100-page guard, MIME verification)
+- [-] E2E tests for Career DNA & Threat Radar pages — deferred to Sprint 30
+- [-] Job aggregation scheduled worker cron — deferred to Sprint 30
+
+> **Sprint 29 Deliverables**: 16 files (11 modified + 5 new). 6 Critical + 5 High audit findings remediated. Redis-backed LLM budget counter + RPM sliding window, circuit breaker, PII redactor, secure document parser, Alembic CI scripts. 1,016/1,016 backend + 232/232 frontend tests passing. Tier-1 audit: all 8 areas compliant ✅.
 
 ---
 
@@ -720,36 +723,36 @@
 
 ## Sprint Velocity
 
-| Sprint | Planned Tasks | Completed | Ad-Hoc Added | Sessions |
-| :----- | :------------ | :-------- | :----------- | :------- |
-| 1-2    | 12            | 12        | 0            | ~4       |
-| 3      | 5             | 5         | 0            | ~2       |
-| 4      | 8             | 8         | 0            | ~3       |
-| 5      | 6             | 6         | 2            | ~3       |
-| 6a     | 12            | 12        | 3            | ~3       |
-| 6a.1   | 6             | 6         | 0            | 1        |
-| 6b     | 3             | 3         | 2            | 1        |
-| 7      | 6             | 7         | 1            | 1        |
-| 8      | 3             | 9         | 1            | 2        |
-| 9      | 8             | 11        | 3            | 1        |
-| 10     | 4             | 10        | 1            | 2        |
-| 11     | 3             | 10        | 1            | 1        |
-| 12     | 3             | 11        | 0            | 1        |
-| 13     | 3             | 13        | 0            | 1        |
-| 14     | 3             | 12        | 1            | 1        |
-| 15     | 3             | 12        | 0            | 1        |
-| 16     | 3             | 11        | 0            | 1        |
-| 17     | 4             | 10        | 0            | 1        |
-| 18     | 3             | 3         | 0            | 1        |
-| 19     | 4             | 12        | 0            | 1        |
-| 20     | 7             | 7         | 0            | 2        |
-| 21     | 7             | 7         | 0            | 1        |
-| 22     | 6             | 6         | 1            | 3        |
-| 23     | 4             | 4         | 0            | 1        |
-| 24     | 6             | 15        | 0            | 3        |
-| 25     | 5             | 9         | 1            | 1        |
-| 26     | —             | —         | —            | —        |
-| 27     | —             | —         | —            | —        |
-| 28     | 6             | 8         | 0            | 1        |
-| 29     | —             | —         | —            | —        |
-| 30     | —             | —         | —            | —        |
+| Sprint | Planned Tasks | Completed  | Ad-Hoc Added | Sessions |
+| :----- | :------------ | :--------- | :----------- | :------- |
+| 1-2    | 12            | 12         | 0            | ~4       |
+| 3      | 5             | 5          | 0            | ~2       |
+| 4      | 8             | 8          | 0            | ~3       |
+| 5      | 6             | 6          | 2            | ~3       |
+| 6a     | 12            | 12         | 3            | ~3       |
+| 6a.1   | 6             | 6          | 0            | 1        |
+| 6b     | 3             | 3          | 2            | 1        |
+| 7      | 6             | 7          | 1            | 1        |
+| 8      | 3             | 9          | 1            | 2        |
+| 9      | 8             | 11         | 3            | 1        |
+| 10     | 4             | 10         | 1            | 2        |
+| 11     | 3             | 10         | 1            | 1        |
+| 12     | 3             | 11         | 0            | 1        |
+| 13     | 3             | 13         | 0            | 1        |
+| 14     | 3             | 12         | 1            | 1        |
+| 15     | 3             | 12         | 0            | 1        |
+| 16     | 3             | 11         | 0            | 1        |
+| 17     | 4             | 10         | 0            | 1        |
+| 18     | 3             | 3          | 0            | 1        |
+| 19     | 4             | 12         | 0            | 1        |
+| 20     | 7             | 7          | 0            | 2        |
+| 21     | 7             | 7          | 0            | 1        |
+| 22     | 6             | 6          | 1            | 3        |
+| 23     | 4             | 4          | 0            | 1        |
+| 24     | 6             | 15         | 0            | 3        |
+| 25     | 5             | 9          | 1            | 1        |
+| 26     | —             | —          | —            | —        |
+| 27     | —             | —          | —            | —        |
+| 28     | 6             | 8          | 0            | 1        |
+| 29     | 8             | 7 (+2 def) | 0            | 1        |
+| 30     | —             | —          | —            | —        |
