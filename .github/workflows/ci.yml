@@ -28,6 +28,7 @@ jobs:
     outputs:
       api: ${{ steps.filter.outputs.api }}
       web: ${{ steps.filter.outputs.web }}
+      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -44,6 +45,9 @@ jobs:
               - 'docker/Dockerfile.web'
               - 'package.json'
               - 'pnpm-lock.yaml'
+            mobile:
+              - 'apps/mobile/**'
+              - 'packages/shared/**'
 
   # ── API Quality Gate ─────────────────────────────────────
   api-quality:
@@ -138,3 +142,37 @@ jobs:
       - name: Security audit (pnpm audit)
         continue-on-error: true # Non-blocking: initial baseline
         run: pnpm audit --prod --no-optional
+
+  # ── Mobile Quality Gate ───────────────────────────────────
+  mobile-quality:
+    name: Mobile — Lint & Typecheck
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: apps/mobile
+        run: pnpm lint
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: pnpm typecheck
+
+      - name: Test
+        working-directory: apps/mobile
+        run: pnpm test

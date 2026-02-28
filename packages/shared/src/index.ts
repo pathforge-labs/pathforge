@@ -2,6 +2,7 @@
  * PathForge — Shared Types Package
  * ==================================
  * Central export point for all shared TypeScript types.
+ * Domain-specific API types are exported via `./types/api`.
  */
 
 export type {
@@ -21,9 +22,15 @@ export type {
   MatchResult,
 } from "./types/job";
 
+// Generic API wrappers (formerly in types/api.ts, now in types/api/common.ts)
 export type {
   ApiResponse,
-  ApiError,
+  ApiErrorResponse,
   PaginatedResponse,
-  HealthResponse,
-} from "./types/api";
+  PaginationParams,
+  MessageResponse,
+  CountResponse,
+} from "./types/api/common";
+
+// Full API type re-exports
+export type * from "./types/api";

@@ -11,8 +11,9 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "dev:web": "pnpm --filter pathforge-web dev",
-    "build:web": "pnpm --filter pathforge-web build",
+    "dev:web": "pnpm --filter web dev",
+    "dev:mobile": "pnpm --filter pathforge-mobile start",
+    "build:web": "pnpm --filter web build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
   },

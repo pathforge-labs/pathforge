@@ -2,10 +2,6 @@
  * PathForge — API Types Index
  * =============================
  * Re-exports all domain-specific API types.
- *
- * These types are also available in @pathforge/shared/types/api
- * for cross-platform consumers (mobile, shared packages).
- * Web components continue to import from "@/types/api" via this barrel.
  */
 
 export type * from "./common";

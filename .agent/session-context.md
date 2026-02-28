@@ -1,46 +1,46 @@
 # Session Context — PathForge
 
-> Last Updated: 2026-02-27
+> Last Updated: 2026-02-28
 
 ## Current Session
 
-| Field       | Value                                                          |
-| :---------- | :------------------------------------------------------------- |
-| Date        | 2026-02-27                                                     |
-| Focus       | Sprint 30 — Reliability & Observability (production hardening) |
-| Branch      | main                                                           |
-| Last Commit | 241aae9 (Sprint 30 Reliability & Observability)                |
-
-|
+| Field       | Value                                           |
+| :---------- | :---------------------------------------------- |
+| Date        | 2026-02-28                                      |
+| Focus       | Sprint 31 — Mobile Platform Foundation          |
+| Branch      | main                                            |
+| Last Commit | 241aae9 (Sprint 30 — awaiting Sprint 31 commit) |
 
 ## Work Done
 
-- **WS-4** — Structured Logging: `logging_config.py` (correlation ID, service metadata, PII redaction, OTel naming), `middleware.py` (request duration, `X-Correlation-ID`), `config.py` (log_level setting), `worker.py` (structlog init)
-- **WS-6** — Rate Limiting: `rate_limit.py` (Redis failover with memory:// fallback, degraded tracking), `auth.py` (per-endpoint limits), `main.py` (custom 429 handler)
-- **WS-7** — Deferred Items: `worker.py` (job aggregation cron, ARQ dead letter queue, pool sizing)
-- **WS-1** — Sentry: `sentry.py` (EventScrubber, LLM fingerprinting, sampling ramp), `error_handlers.py` (capture_exception), `config.py` (Sentry settings), `pyproject.toml` (sentry-sdk dependency)
-- **WS-2** — CD Pipeline: `deploy.yml` (Railway deploy + health check), `ci.yml` (pip-audit + pnpm audit), `railway.toml` (preDeployCommand, /health/ready)
-- **WS-5** — Health + Perf: `health.py` (Redis ping, 503 on failure, cold_start, uptime), `perf-baseline.sh`, `docs/baselines/sprint-30-baselines.md`
-- **WS-3** — E2E Tests: 8 Playwright specs (auth, navigation, career-dna, threat-radar, command-center, actions, dashboard, intelligence-hub), `playwright.config.ts`
-- **WS-8** — CSS Polish: Confirmed consistent via shadcn/ui design system (scope enforced M3)
-- **Gap Closure** — `sentry-sdk[fastapi]` added to `pyproject.toml`, 6 additional E2E specs, baselines doc, lint fix (auth.spec.ts unused var)
-- **Audit** — Tier-1 retrospective: all areas compliant ✅
+- **Shared Types** — 22 web type files → `packages/shared/src/types/api/`, web barrel backward-compatible
+- **CI Pipeline** — `mobile-quality` job in `ci.yml` (tsc + jest), root `dev:mobile` script
+- **Expo Scaffold** — `apps/mobile/` with `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `.env.example`
+- **Token Manager** — SecureStore async hydration + in-memory cache, listener pattern with unsubscribe
+- **HTTP Client** — 15s timeouts, AbortController, transparent 401 refresh, `NetworkError`/`ApiError` class separation
+- **Auth Flow** — `auth-provider.tsx` 4-state machine, `query-provider.tsx` TanStack Query v5, splash screen hold
+- **Icon System** — `@expo/vector-icons` Ionicons registry (25+ semantic pairs), `TabBarIcon` wrapper, type-safe `IconName`
+- **Tab Layout** — Rewritten with Ionicons, platform-adaptive styling, zero emoji/require anti-patterns
+- **UI Components** — 8 components (Button, Input, Card, ScoreBar, Skeleton, Toast, Badge, Icon) + barrel export
+- **Hooks** — `useTheme` (structural ThemeColors interface), `useResumeUpload` (XHR progress, cancel)
+- **Screens** — Upload/Login/Register refactored to shared components + hooks
+- **Unit Tests** — 45/45 passing: token-manager (13), http (14), theme+config (18)
+- **Jest Config** — `transformIgnorePatterns: []` for pnpm monorepo compatibility
+- **Audit** — Tier-1 retrospective: 9.2/10, all mobile domains compliant ✅
 
 ## Quality Gates
 
-| Gate          | Status                            |
-| :------------ | :-------------------------------- |
-| Backend Lint  | ✅ 0 errors (ruff)                |
-| Frontend Lint | ✅ 0 errors, 0 warnings (ESLint)  |
-| Types         | ✅ 0 errors (tsc --noEmit)        |
-| Backend Tests | ✅ 1,016/1,016 passed             |
-| Security      | ✅ 0 vulnerabilities (pnpm audit) |
-| Build         | ✅ Production build passes        |
+| Gate          | Status                                 |
+| :------------ | :------------------------------------- |
+| Web Lint      | ✅ 0 errors (ESLint)                   |
+| Mobile Types  | ✅ 0 errors (tsc --noEmit)             |
+| Mobile Tests  | ✅ 45/45 passed (Jest)                 |
+| Backend Tests | ✅ 1,016/1,016 passed (pytest)         |
+| Security      | ✅ 0 vulnerabilities (npm audit)       |
+| Web Build     | ⚠️ Pre-existing pricing-cards TS error |
 
 ## Handoff Notes
 
-- Sprint 30 production hardening complete — 24 files (18 modified + 6 new)
-- 8 workstreams delivered, 11 audit findings resolved
-- Deferred to Phase I: `@sentry/nextjs` frontend integration, visual regression baseline capture
-- Manual setup completed: Sentry DSN in Railway, RAILWAY_SERVICE_ID + API_BASE_URL in GitHub
-- Next step: Commit Sprint 30, deploy to production, capture performance baselines
+- Sprint 31 mobile foundation complete — 40+ new files
+- Deferred: web `pricing-cards` DynamicOptions type fix (pre-existing, not caused by Sprint 31)
+- Next step: Commit Sprint 31, begin Sprint 32 (Career DNA mobile view, push notifications)

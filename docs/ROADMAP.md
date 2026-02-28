@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-27 | **Current Phase**: H (Production Hardening) — Sprint 30 complete
+> **Last Updated**: 2026-02-28 | **Current Phase**: I (Mobile) — Sprint 31 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -668,16 +668,41 @@
 
 ---
 
-## Post-Launch (Phases I–J)
+## Phase I: Mobile Platform
 
-> Detailed task breakdowns will be created when these phases begin.
+### Sprint 31 — Mobile Foundation + Upload (✅ Complete)
 
-### Phase I — Mobile (Sprints 31–32)
+- [x] Expo SDK 52 scaffold (Expo Router v4, TypeScript strict, pnpm monorepo integration)
+- [x] Shared type extraction (22 web types → `packages/shared/src/types/api/`)
+- [x] CI: `mobile-quality` job (tsc + jest)
+- [x] Mobile token manager (SecureStore, async hydration, in-memory cache, listener pattern)
+- [x] HTTP client (15s timeouts, AbortController, transparent 401 refresh, NetworkError/ApiError)
+- [x] Single-flight refresh queue (`lib/refresh-queue.ts`)
+- [x] Network connectivity monitoring (`lib/network.ts`)
+- [x] 5 API client modules (auth, career-dna, resume, notifications, health)
+- [x] Auth flow: 4-state machine + AppState foreground check + session restore
+- [x] Tab navigation with Ionicons icon system (25+ semantic pairs, TabBarIcon wrapper)
+- [x] 8 UI components (Button, Input, Card, ScoreBar, Skeleton, Toast, Badge, Icon) + barrel export
+- [x] `useTheme` hook (structural ThemeColors interface, memoized LIGHT/DARK)
+- [x] `useResumeUpload` hook (file picking, validation, XHR progress, cancel)
+- [x] Resume upload screen (camera/gallery/files + progress + cancel)
+- [x] Login/Register screens with shared Input/Button, inline validation, keyboard navigation
+- [x] Error boundary + offline banner components
+- [x] Mobile `.gitignore`
+- [x] 45 unit tests (token-manager 13, http 14, theme+config 18)
+- [x] Tier-1 retrospective audit — 9.2/10, all mobile domains compliant ✅
 
-- [ ] Expo Router setup, auth flow, API client
-- [ ] Resume upload from mobile (camera + file picker)
-- [ ] Career DNA view + intelligence summaries
-- [ ] Push notifications (Expo Notifications)
+> **Sprint 31 Deliverables**: 40+ new files. Expo SDK 52, TypeScript 5.9 strict, TanStack Query v5. 8 UI components, centralized Ionicons registry, extracted business-logic hooks. `tsc --noEmit` 0 errors, 45/45 mobile tests, 1016/1016 backend tests, 0 npm vulnerabilities. Architecture reference: `docs/architecture/sprint-31-32-mobile-platform.md`.
+
+### Sprint 32 — Intelligence + Notifications (⏳ Upcoming)
+
+- [ ] Career DNA mobile view (summary + expandable blocks)
+- [ ] Threat summary component
+- [ ] Push notification opt-in + deep linking
+- [ ] Backend push endpoints (PushToken model + migration)
+- [ ] Mobile tests Sprint 32 (~20 tests)
+- [ ] Backend push tests (~8 tests)
+- [ ] Tier-1 retrospective audit
 
 ### Phase J — Growth & Monetization (Sprints 33–34)
 
@@ -763,3 +788,4 @@
 | 28     | 6             | 8           | 0            | 1        |
 | 29     | 8             | 7 (+2 def)  | 0            | 1        |
 | 30     | 8             | 10 (+1 def) | 1            | 2        |
+| 31     | 17            | 19          | 0            | 1        |
