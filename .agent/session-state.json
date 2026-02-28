@@ -3,7 +3,7 @@
   "sprint": "Sprint 31",
   "phase": "I — Mobile Platform",
   "focus": "Mobile Foundation + Upload (Expo SDK 52, auth, navigation, UI components, icon system)",
-  "last_commit": "241aae9",
+  "last_commit": "e5ba121",
   "last_session": "2026-02-28T22:56:00+01:00",
   "tracking": {
     "backend_tests": 1016,
