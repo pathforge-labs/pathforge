@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-02-28 | **Current Phase**: I (Mobile) — Sprint 31 complete
+> **Last Updated**: 2026-03-01 | **Current Phase**: I (Mobile) — Sprint 32 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -694,17 +694,26 @@
 
 > **Sprint 31 Deliverables**: 40+ new files. Expo SDK 52, TypeScript 5.9 strict, TanStack Query v5. 8 UI components, centralized Ionicons registry, extracted business-logic hooks. `tsc --noEmit` 0 errors, 45/45 mobile tests, 1016/1016 backend tests, 0 npm vulnerabilities. Architecture reference: `docs/architecture/sprint-31-32-mobile-platform.md`.
 
-### Sprint 32 — Intelligence + Notifications (⏳ Upcoming)
+### Sprint 32 — Intelligence + Notifications (✅ Complete)
 
-- [ ] Career DNA mobile view (summary + expandable blocks)
-- [ ] Threat summary component
-- [ ] Push notification opt-in + deep linking
-- [ ] Backend push endpoints (PushToken model + migration)
-- [ ] Mobile tests Sprint 32 (~20 tests)
-- [ ] Backend push tests (~8 tests)
+- [x] Backend push infrastructure (PushToken model, push_service.py, 3 API endpoints)
+- [x] Career DNA mobile view (stack navigator, IntelligenceBlock, live home screen, 6-dimension detail)
+- [x] Threat summary component (API client, hook, risk badge + skills shield)
+- [x] Push notification client (use-push-notifications hook, settings UI, deep linking, logout deregister)
+- [x] Shared types (PushTokenRegisterRequest, PushTokenStatusResponse)
+- [-] Mobile tests Sprint 32 (~20 tests) — deferred R1
+- [-] Alembic migration for PushToken — deferred R2
+- [x] Tier-1 retrospective audit — 7/9 areas compliant, 2 partially compliant (testing, web build)
+
+> **Sprint 32 Deliverables**: 21 files (10 modified + 11 new). 5 phases: backend push infrastructure, mobile Career DNA view, Threat Summary, push notification client, shared types. Backend: 53/53 core tests, 35/35 notification tests. Mobile: tsc 0 errors. Shared: tsc 0 errors. npm audit: 0 vulnerabilities. 6 audit findings resolved (#1, #4, #8, #12, #15, #17). 2 high-priority items deferred to Sprint 33 (Alembic migration, mobile tests).
+
+### Sprint 33 — Testing + Migrations (⏳ Upcoming)
+
+- [ ] Alembic migration for PushToken + push_notifications column (R2)
+- [ ] Mobile unit tests for Sprint 32 components (~20 tests) (R1)
+- [ ] Web build @types/react v19 fix (R3)
+- [ ] Deep link handler → router.push() (R4)
 - [ ] Tier-1 retrospective audit
-
-### Phase J — Growth & Monetization (Sprints 33–34)
 
 - [ ] Stripe billing (subscription tiers, feature gating, usage metering)
 - [ ] Admin dashboard (user management, system health)
@@ -789,3 +798,4 @@
 | 29     | 8             | 7 (+2 def)  | 0            | 1        |
 | 30     | 8             | 10 (+1 def) | 1            | 2        |
 | 31     | 17            | 19          | 0            | 1        |
+| 32     | 7             | 5 (+2 def)  | 0            | 2        |
