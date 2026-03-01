@@ -22,6 +22,7 @@ import { AppState } from "react-native";
 import type { UserResponse } from "@pathforge/shared/types/api/auth";
 
 import * as authApi from "../lib/api-client/auth";
+import * as notificationsApi from "../lib/api-client/notifications";
 import {
   clearTokens,
   hasTokens,
@@ -220,6 +221,12 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
       await authApi.logout();
     } catch {
       // Logout API call is best-effort
+    }
+    // Deregister push token on logout (Audit Fix #8, best-effort)
+    try {
+      await notificationsApi.deregisterPushToken();
+    } catch {
+      // Push deregister is best-effort — do not block logout
     }
     await clearTokens();
     dispatch({ type: "LOGOUT" });

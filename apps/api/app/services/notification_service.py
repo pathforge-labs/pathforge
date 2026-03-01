@@ -17,6 +17,7 @@ Digest flow:
     4. Send digest email (if configured)
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -113,6 +114,12 @@ class NotificationService:
         )
         db.add(notification)
         await db.flush()
+
+        # Trigger push delivery (fire-and-forget, Audit Fix #15)
+        from app.services import push_service
+        _push_task = asyncio.create_task(  # noqa: RUF006
+            push_service.dispatch(db, notification=notification),
+        )
 
         return notification
 

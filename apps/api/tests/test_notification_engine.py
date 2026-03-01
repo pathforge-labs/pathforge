@@ -229,6 +229,7 @@ class TestSchemaValidation:
             "quiet_hours_end": None,
             "in_app_notifications": True,
             "email_notifications": True,
+            "push_notifications": False,
             "created_at": now,
             "updated_at": now,
         }

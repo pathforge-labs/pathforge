@@ -92,6 +92,7 @@ class NotificationPreferenceResponse(BaseModel):
     quiet_hours_end: time | None = None
     in_app_notifications: bool
     email_notifications: bool
+    push_notifications: bool
     created_at: datetime
     updated_at: datetime
 
@@ -177,3 +178,4 @@ class NotificationPreferenceUpdate(BaseModel):
     quiet_hours_end: time | None = None
     in_app_notifications: bool | None = None
     email_notifications: bool | None = None
+    push_notifications: bool | None = None

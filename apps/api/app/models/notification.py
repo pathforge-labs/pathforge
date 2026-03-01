@@ -204,6 +204,9 @@ class NotificationPreference(Base, UUIDMixin, TimestampMixin):
     email_notifications: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False,
     )
+    push_notifications: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False,
+    )
 
     # ── Relationships ──
     user: Mapped[User] = relationship("User")

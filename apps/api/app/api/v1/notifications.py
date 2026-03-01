@@ -12,6 +12,9 @@ Endpoints:
     POST   /digests/generate    — Generate a new digest
     GET    /preferences         — Get notification preferences
     PUT    /preferences         — Update notification preferences
+    POST   /push-token          — Register device push token
+    DELETE /push-token          — Deregister device push token
+    GET    /push-status         — Get push registration status
 """
 
 from __future__ import annotations
@@ -37,6 +40,12 @@ from app.schemas.notification import (
     NotificationPreferenceResponse,
     NotificationPreferenceUpdate,
 )
+from app.schemas.push_token import (
+    PushTokenDeregister,
+    PushTokenRegister,
+    PushTokenStatusResponse,
+)
+from app.services import push_service
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -292,3 +301,78 @@ async def update_preferences(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+# ── Push Token Management ────────────────────────────────────
+
+
+@router.post(
+    "/push-token",
+    response_model=PushTokenStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register device push token",
+    description="Register or reactivate a device push token (idempotent).",
+)
+@limiter.limit(settings.rate_limit_embed)
+async def register_push_token(
+    request: Request,
+    body: PushTokenRegister,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> PushTokenStatusResponse:
+    """Register a device push token."""
+    token = await push_service.register_token(
+        database,
+        user_id=current_user.id,
+        device_token=body.token,
+        platform=body.platform,
+    )
+    return PushTokenStatusResponse(
+        registered=True,
+        token=token.device_token,
+        platform=token.platform,
+    )
+
+
+@router.delete(
+    "/push-token",
+    summary="Deregister device push token",
+    description="Deactivate the current device push token.",
+    status_code=status.HTTP_200_OK,
+)
+@limiter.limit(settings.rate_limit_embed)
+async def deregister_push_token(
+    request: Request,
+    body: PushTokenDeregister,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    """Deregister a device push token."""
+    deactivated = await push_service.deregister_token(
+        database, device_token=body.token,
+    )
+    if not deactivated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Push token not found.",
+        )
+    return {"deregistered": True}
+
+
+@router.get(
+    "/push-status",
+    response_model=PushTokenStatusResponse,
+    summary="Get push registration status",
+    description="Check whether the current user has an active push token.",
+)
+@limiter.limit(settings.rate_limit_parse)
+async def get_push_status(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> PushTokenStatusResponse:
+    """Check push registration status."""
+    data = await push_service.get_status(
+        database, user_id=current_user.id,
+    )
+    return PushTokenStatusResponse(**data)

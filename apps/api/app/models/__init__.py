@@ -78,6 +78,7 @@ from app.models.predictive_career import (
     PredictiveCareerPreference,
 )
 from app.models.preference import BlacklistEntry, Preference
+from app.models.push_token import PushToken
 from app.models.recommendation_intelligence import (
     CrossEngineRecommendation,
     RecommendationBatch,
@@ -180,6 +181,7 @@ __all__ = [
     "PlanRecommendation",
     "PredictiveCareerPreference",
     "Preference",
+    "PushToken",
     "RecommendationBatch",
     "RecommendationCorrelation",
     "RecommendationPreference",

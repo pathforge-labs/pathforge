@@ -67,3 +67,16 @@ export interface NotificationPreferenceUpdateRequest {
   quiet_hours_end?: string | null;
   muted_engines?: string[];
 }
+
+// ── Push Token Types ────────────────────────────────────────
+
+export interface PushTokenRegisterRequest {
+  token: string;
+  platform: "ios" | "android";
+}
+
+export interface PushTokenStatusResponse {
+  registered: boolean;
+  token: string | null;
+  platform: string | null;
+}

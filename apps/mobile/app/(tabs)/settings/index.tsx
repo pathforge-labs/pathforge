@@ -26,6 +26,7 @@ import {
   SHADOW,
   SPACING,
 } from "../../../constants/theme";
+import { usePushNotifications } from "../../../hooks/use-push-notifications";
 
 export default function SettingsScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
@@ -33,6 +34,11 @@ export default function SettingsScreen(): React.JSX.Element {
   const theme = colorScheme === "dark" ? DARK : LIGHT;
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const pushState = usePushNotifications();
+
+  const handleEnablePush = useCallback(async (): Promise<void> => {
+    await pushState.requestPermission();
+  }, [pushState]);
 
   const handleLogout = useCallback(async (): Promise<void> => {
     Alert.alert(
@@ -87,7 +93,7 @@ export default function SettingsScreen(): React.JSX.Element {
         </View>
       </View>
 
-      {/* Notification Preferences — Sprint 32 */}
+      {/* Notification Preferences */}
       <View
         style={[
           styles.card,
@@ -95,21 +101,42 @@ export default function SettingsScreen(): React.JSX.Element {
           SHADOW.sm,
         ]}
       >
-        <View style={styles.cardHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Notifications
-          </Text>
-          <View
-            style={[styles.badge, { backgroundColor: BRAND.primary + "20" }]}
-          >
-            <Text style={[styles.badgeText, { color: BRAND.primary }]}>
-              Sprint 32
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.comingSoon, { color: theme.textTertiary }]}>
-          Push notification preferences will be available in Sprint 32.
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          Notifications
         </Text>
+        <View style={styles.infoRow}>
+          <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+            Push Notifications
+          </Text>
+          {pushState.permissionGranted ? (
+            <View
+              style={[styles.badge, { backgroundColor: "#10B981" + "20" }]}
+            >
+              <Text style={[styles.badgeText, { color: "#10B981" }]}>
+                Enabled
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handleEnablePush}
+              style={[styles.badge, { backgroundColor: BRAND.primary + "20" }]}
+              accessibilityRole="button"
+              accessibilityLabel="Enable push notifications"
+            >
+              <Text style={[styles.badgeText, { color: BRAND.primary }]}>
+                Enable
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        {pushState.expoPushToken ? (
+          <Text
+            style={[styles.tokenText, { color: theme.textTertiary }]}
+            numberOfLines={1}
+          >
+            Token: {pushState.expoPushToken.slice(0, 20)}…
+          </Text>
+        ) : null}
       </View>
 
       {/* Account Actions */}
@@ -199,6 +226,10 @@ const styles = StyleSheet.create({
   },
   comingSoon: {
     fontSize: FONT_SIZE.sm,
+  },
+  tokenText: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs,
   },
   actions: {
     gap: SPACING.md,
