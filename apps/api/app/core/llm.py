@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import litellm
 import redis.asyncio as aioredis
@@ -107,8 +107,9 @@ async def _get_budget_redis() -> aioredis.Redis:
     """Lazy Redis connection for budget tracking."""
     global _budget_redis
     if _budget_redis is None:
-        _budget_redis = aioredis.from_url(
-            settings.redis_url, decode_responses=True
+        _budget_redis = cast(
+            aioredis.Redis,
+            aioredis.from_url(settings.redis_url, decode_responses=True),  # type: ignore[no-untyped-call]
         )
     return _budget_redis
 

@@ -10,6 +10,8 @@ uptime tracking, and HTTP 503 on dependency failure (Audit C1).
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable
+from typing import cast
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -72,7 +74,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
             from app.core.token_blacklist import token_blacklist
 
             if token_blacklist._redis is not None:
-                await token_blacklist._redis.ping()
+                await cast("Awaitable[bool]", token_blacklist._redis.ping())
                 redis_status = "connected"
             else:
                 redis_status = "not_initialized"

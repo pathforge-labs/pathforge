@@ -839,6 +839,6 @@ def _register_pii_redaction_hook() -> None:
         if callable(original_input_hook):
             original_input_hook(model, messages, kwargs)
 
-    litellm.input_callback = [_redact_input]  # type: ignore[assignment]
+    litellm.input_callback = [_redact_input]
     logger.info("PII redaction hook registered for Langfuse traces")
 

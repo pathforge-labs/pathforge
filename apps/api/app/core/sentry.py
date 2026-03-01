@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 def _before_send(
-    event: dict[str, Any],
+    event: Any,
     hint: dict[str, Any],
-) -> dict[str, Any] | None:
+) -> Any:
     """
     Event filter applied before sending to Sentry.
 

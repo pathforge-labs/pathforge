@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 
@@ -75,13 +76,18 @@ class CircuitBreaker:
     async def _get_redis(self) -> aioredis.Redis:
         """Lazy Redis connection."""
         if self._redis is None:
-            self._redis = aioredis.from_url(self._redis_url, decode_responses=True)
+            self._redis = cast(
+                aioredis.Redis,
+                aioredis.from_url(self._redis_url, decode_responses=True),  # type: ignore[no-untyped-call]
+            )
         return self._redis
 
     async def _get_state(self) -> dict[str, Any]:
         """Read circuit state from Redis."""
         r = await self._get_redis()
-        data = await r.hgetall(self._key_prefix)
+        data: dict[Any, Any] = await cast(
+            "Awaitable[dict[Any, Any]]", r.hgetall(self._key_prefix)
+        )
         return {
             "state": data.get("state", self.STATE_CLOSED),
             "failures": int(data.get("failures", 0)),
@@ -93,14 +99,14 @@ class CircuitBreaker:
     ) -> None:
         """Persist circuit state to Redis."""
         r = await self._get_redis()
-        await r.hset(
+        await cast("Awaitable[int]", r.hset(
             self._key_prefix,
             mapping={
                 "state": state,
                 "failures": str(failures),
                 "opened_at": str(opened_at),
             },
-        )
+        ))
         # Auto-expire after 1 hour to prevent stale state if worker crashes
         await r.expire(self._key_prefix, 3600)
 
