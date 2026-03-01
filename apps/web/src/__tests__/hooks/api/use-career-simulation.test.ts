@@ -118,7 +118,7 @@ describe("Career Simulation Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useSimulateRole(), { wrapper });
       result.current.mutate({ target_role: "Data Engineer" });
@@ -152,7 +152,7 @@ describe("Career Simulation Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useDeleteSimulation(), { wrapper });
       result.current.mutate("sim1");

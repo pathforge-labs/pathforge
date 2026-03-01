@@ -138,7 +138,7 @@ describe("Salary Intelligence Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useTriggerSalaryScan(), { wrapper });
       result.current.mutate();
@@ -156,7 +156,7 @@ describe("Salary Intelligence Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useRunSalaryScenario(), { wrapper });
       result.current.mutate({ scenario_type: "skill_change", scenario_label: "Learn Rust", scenario_input: { skill_name: "Rust" } });

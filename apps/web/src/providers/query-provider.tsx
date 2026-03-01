@@ -21,7 +21,7 @@ export function QueryProvider({ children }: QueryProviderProps): React.JSX.Eleme
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      {children as React.ReactNode}
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );

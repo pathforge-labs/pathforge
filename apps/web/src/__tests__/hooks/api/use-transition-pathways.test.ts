@@ -140,7 +140,7 @@ describe("Transition Pathways Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useExploreTransition(), { wrapper });
       result.current.mutate({ target_role: "Data Engineer" });
@@ -156,7 +156,7 @@ describe("Transition Pathways Hooks", () => {
       const queryClient = createTestQueryClient();
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useDeleteTransition(), { wrapper });
       result.current.mutate("t1");

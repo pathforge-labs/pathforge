@@ -186,7 +186,7 @@ describe("Skill Decay Hooks", () => {
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useTriggerDecayScan(), { wrapper });
 
@@ -225,7 +225,7 @@ describe("Skill Decay Hooks", () => {
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
       const wrapper = ({ children }: { children: ReactNode }) =>
-        React.createElement(QueryClientProvider, { client: queryClient }, children);
+        React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
 
       const { result } = renderHook(() => useUpdateSkillDecayPreferences(), { wrapper });
 

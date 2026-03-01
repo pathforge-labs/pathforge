@@ -72,7 +72,7 @@ function createTestQueryClient(): QueryClient {
 function createWrapper(): ({ children }: { children: ReactNode }) => React.JSX.Element {
   const queryClient = createTestQueryClient();
   return function TestWrapper({ children }: { children: ReactNode }): React.JSX.Element {
-    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+    return React.createElement(QueryClientProvider, { client: queryClient }, children as React.ReactNode);
   };
 }
 

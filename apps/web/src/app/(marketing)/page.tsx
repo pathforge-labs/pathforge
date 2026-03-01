@@ -8,27 +8,22 @@ import { CountUp } from "@/components/count-up";
 import { AnimatedBar } from "@/components/animated-bar";
 
 /* ── Below-fold code splitting ─────────────────────── */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const TestimonialsMarquee = dynamic(
   () =>
-    import("@/components/testimonials-marquee").then((m) => ({
-      default: m.TestimonialsMarquee,
-    })),
+    import("@/components/testimonials-marquee").then((m) => m.TestimonialsMarquee) as any,
   { ssr: true }
-);
+) as React.ComponentType<{ speed?: string; children?: React.ReactNode }>;
 const FaqAccordion = dynamic(
   () =>
-    import("@/components/faq-accordion").then((m) => ({
-      default: m.FaqAccordion,
-    })),
+    import("@/components/faq-accordion").then((m) => m.FaqAccordion) as any,
   { ssr: true }
-);
+) as React.ComponentType<{ items: Array<{ q: string; a: string }> }>;
 const PricingCards = dynamic(
   () =>
-    import("@/components/pricing-cards").then((m) => ({
-      default: m.PricingCards,
-    })),
+    import("@/components/pricing-cards").then((m) => m.PricingCards) as any,
   { ssr: true }
-);
+) as React.ComponentType<Record<string, never>>;
 import { OrganizationJsonLd, WebSiteJsonLd, FAQPageJsonLd } from "@/components/json-ld";
 import { APP_NAME } from "@/config/brand";
 import {
