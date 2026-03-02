@@ -751,8 +751,19 @@
 - [x] Admin CLI — `promote_admin` and `list_admins` commands (F18)
 - [x] mypy configuration — `[[tool.mypy.overrides]]` for slowapi/stripe + route module decorator typing
 - [x] SSE audit — 6 findings fixed (indentation, DRY admin auth, webhook error safety, B904 compliance)
+- [-] Frontend Stripe Checkout UI (pricing page, payment form, customer portal redirect) — deferred to Sprint 35
 
 > **Sprint 34 Deliverables**: 20 files (3 modified + 17 new). Backend-only sprint. Models: 6 new (Subscription, UsageRecord, BillingEvent, AdminAuditLog, WaitlistEntry, PublicProfile). Services: 4 new (billing, admin, waitlist, public_profile). Routes: 4 new (billing 7ep, admin 8ep, waitlist 5ep, profiles 6ep). Schemas: 4 new (subscription, admin, waitlist, public_profile). Quality gates: Ruff ✅ 0 errors, mypy ✅ 93 files, ESLint ✅ 0 errors, TSC ✅ 0 errors, Security ✅ 0 vulnerabilities, Build ✅ 36 routes. 3 audit passes (36 findings → 0). TSC pnpm type resolution fix applied post-sprint.
+
+### Sprint 35 — Frontend Billing & Growth UI (⏳ Upcoming)
+
+> Sprint 35: Frontend Stripe Checkout UI deferred from Sprint 34 (approved). Connects the backend billing infrastructure to the web experience.
+
+- [ ] Pricing page — tier comparison (Free / Pro / Premium), feature gating matrix
+- [ ] Stripe Checkout integration — client-side session creation, redirect flow
+- [ ] Customer portal redirect — subscription management, invoices, cancellation
+- [ ] Billing status UI — current plan display, usage tracking, upgrade CTAs
+- [ ] Sprint 34 backend test coverage — billing, admin, waitlist, public profile unit tests
 
 ---
 

@@ -41,4 +41,5 @@
 - Sprint 34 fully committed with TSC Tier-1 compliance achieved
 - All quality gates green — no partially compliant items remain
 - Alembic migration ready but not applied (needs Docker/DB)
-- Next step: Sprint 35 planning
+- **Deferred to Sprint 35**: Frontend Stripe Checkout UI (pricing page, payment form, customer portal redirect)
+- Next step: Sprint 35 planning — Frontend Billing & Growth UI
