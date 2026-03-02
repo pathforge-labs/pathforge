@@ -4,42 +4,47 @@
 
 ## Current Session
 
-| Field       | Value                                            |
-| :---------- | :----------------------------------------------- |
-| Date        | 2026-03-02                                       |
-| Focus       | TSC Tier-1 Compliance — pnpm type resolution fix |
-| Branch      | main                                             |
-| Last Commit | 84a0cd0 (Sprint 34 + TSC Tier-1 fix)             |
+| Field       | Value                                                         |
+| :---------- | :------------------------------------------------------------ |
+| Date        | 2026-03-02                                                    |
+| Focus       | Sprint 35 — Frontend Billing & Growth UI + Sentry Integration |
+| Branch      | main                                                          |
+| Last Commit | pending (Sprint 35 completion)                                |
 
 ## Work Done
 
-- **TSC Error Resolution** (12 errors → 0):
-  - Root cause: dual `@types/react` resolution in pnpm monorepo (symlink vs `.pnpm` store paths)
-  - Fix: `tsconfig.json` `paths` aliases (`"react"`, `"@types/react"`) force single type identity
-  - 5 approaches tested: `PropsWithChildren`, `ComponentType`, explicit `{children}`, `typeRoots`, `preserveSymlinks`
-  - `preserveSymlinks` fixed React errors but introduced 139 new errors — reverted
-  - `paths` aliases: zero errors, zero side effects
-  - Updated wrapper types in 7 test files for consistency
-- **Sprint 34** (backend-only, from prior session):
-  - Stripe billing, admin RBAC, waitlist management, public career profiles
-  - 20 files (3 modified + 17 new), 26 API endpoints
+- **Sprint 35 — Frontend Billing & Growth UI** (10 tasks → 10 complete):
+  - Pricing page: 3-tier comparison, monthly/annual toggle, savings callout
+  - Billing status page: current plan, usage progress, renewal date, upgrade banner
+  - Data layer: billing types, API client, React Query hooks, query-key factory
+  - Backend hardening: rate limiting (S1), URL domain validation (S2), portal return_url (R1)
+  - Backend test coverage: 41 test cases across 5 test files
+  - Frontend Sentry integration: 6 config files, global error boundary, CSP hardening
+  - Visual regression baselines: Playwright specs for pricing/billing pages
+  - Frontend unit tests: billing hooks with vi.mock + createWrapper pattern
+- **Test fixes during verification**:
+  - Corrected field name (`scans_limit` → `scan_limit`) in usage test
+  - Fixed waitlist route path (`/waitlist` → `/waitlist/join`)
+  - Fixed webhook path (`/billing/webhook` → `/webhooks/stripe`)
+  - Installed stripe SDK (was in pyproject.toml but missing from venv)
+  - Removed unused `formatPrice` import
 
 ## Quality Gates
 
 | Gate          | Status               |
 | :------------ | :------------------- |
 | Ruff Lint     | ✅ 0 errors          |
-| MyPy Types    | ✅ 93 files, 0 err   |
 | ESLint (Web)  | ✅ 0 errors          |
 | TSC (Web)     | ✅ 0 errors          |
-| Security Scan | ✅ 0 vulnerabilities |
-| Build         | ✅ 36 routes         |
-| Vitest (Web)  | ✅ 232/232 passed    |
+| Backend Tests | ✅ 1,079 passed      |
+| npm audit     | ✅ 0 vulnerabilities |
+| Build         | ✅ 37 routes         |
 
 ## Handoff Notes
 
-- Sprint 34 fully committed with TSC Tier-1 compliance achieved
-- All quality gates green — no partially compliant items remain
-- Alembic migration ready but not applied (needs Docker/DB)
-- **Deferred to Sprint 35**: Frontend Stripe Checkout UI (pricing page, payment form, customer portal redirect)
-- Next step: Sprint 35 planning — Frontend Billing & Growth UI
+- Sprint 35 fully complete — all 10 planned tasks delivered
+- All quality gates green — 1,079 backend tests, 0 lint/tsc errors, 0 vulnerabilities
+- Sentry integration ready — requires `.env.local` with `NEXT_PUBLIC_SENTRY_DSN` for production
+- Alembic migrations from Sprint 34 still pending — need Docker/DB for application
+- New dependencies: `@sentry/nextjs`, `sonner` (toast notifications)
+- Stripe SDK v14.4.0 installed in API venv

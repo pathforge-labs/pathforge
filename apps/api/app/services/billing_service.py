@@ -382,6 +382,7 @@ class BillingService:
 
         session = stripe.billing_portal.Session.create(
             customer=subscription.stripe_customer_id,
+            return_url=f"{settings.frontend_url}/dashboard/settings/billing",  # R1/ADR-035-08
         )
 
         return session.url

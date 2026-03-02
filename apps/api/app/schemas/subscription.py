@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ── Subscription ───────────────────────────────────────────────
 
@@ -60,6 +60,31 @@ class CreateCheckoutSessionRequest(BaseModel):
     annual: bool = Field(default=False, description="Annual billing")
     success_url: str = Field(min_length=1, max_length=2048)
     cancel_url: str = Field(min_length=1, max_length=2048)
+
+    @field_validator("success_url", "cancel_url")
+    @classmethod
+    def validate_url_domain(cls, value: str) -> str:
+        """S2/ADR-035-07: Restrict checkout URLs to our frontend domain.
+
+        Prevents open-redirect attacks by ensuring success/cancel URLs
+        point to the PathForge frontend, not arbitrary external domains.
+        """
+        from urllib.parse import urlparse
+
+        from app.core.config import settings
+
+        parsed = urlparse(value)
+        allowed = urlparse(settings.frontend_url)
+
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"URL must use http or https scheme, got: {parsed.scheme}")
+
+        if parsed.netloc != allowed.netloc:
+            raise ValueError(
+                f"URL domain must match {allowed.netloc}, got: {parsed.netloc}"
+            )
+
+        return value
 
 
 class CreateCheckoutSessionResponse(BaseModel):

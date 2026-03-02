@@ -264,3 +264,92 @@ async def auth_client(
     token = create_access_token(str(authenticated_user.id))
     client.headers["Authorization"] = f"Bearer {token}"
     return client
+
+
+# ── Sprint 35: Stripe Mock Fixtures (TI1) ───────────────────
+
+
+@pytest.fixture
+def mock_stripe(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Mock Stripe SDK to prevent real API calls during testing.
+
+    Returns a dict of mock objects keyed by Stripe resource type,
+    allowing assertions on calls made to the Stripe API.
+    """
+    from unittest.mock import MagicMock
+
+    mock_customer = MagicMock()
+    mock_customer.id = "cus_test123"
+    mock_customer.email = "test@pathforge.eu"
+
+    mock_checkout_session = MagicMock()
+    mock_checkout_session.url = "https://checkout.stripe.com/test-session"
+    mock_checkout_session.id = "cs_test123"
+
+    mock_portal_session = MagicMock()
+    mock_portal_session.url = "https://billing.stripe.com/portal/test-session"
+
+    mock_subscription = MagicMock()
+    mock_subscription.id = "sub_test123"
+    mock_subscription.status = "active"
+    mock_subscription.current_period_start = 1700000000
+    mock_subscription.current_period_end = 1702592000
+
+    # Patch stripe module
+    import stripe
+
+    monkeypatch.setattr(stripe, "api_key", "sk_test_fake")
+    monkeypatch.setattr(
+        stripe.checkout.Session,
+        "create",
+        MagicMock(return_value=mock_checkout_session),
+    )
+    monkeypatch.setattr(
+        stripe.billing_portal.Session,
+        "create",
+        MagicMock(return_value=mock_portal_session),
+    )
+    monkeypatch.setattr(
+        stripe.Customer,
+        "create",
+        MagicMock(return_value=mock_customer),
+    )
+    monkeypatch.setattr(
+        stripe.Webhook,
+        "construct_event",
+        MagicMock(side_effect=stripe.error.SignatureVerificationError(  # type: ignore[attr-defined]
+            "Invalid signature", "sig_header",
+        )),
+    )
+
+    return {
+        "customer": mock_customer,
+        "checkout_session": mock_checkout_session,
+        "portal_session": mock_portal_session,
+        "subscription": mock_subscription,
+    }
+
+
+@pytest.fixture
+async def billing_test_user(
+    db_session: AsyncSession,
+    authenticated_user: User,
+) -> User:
+    """Create a test user with a pre-existing subscription for billing tests.
+
+    Reuses the authenticated_user fixture and adds a subscription record,
+    providing a ready-made user for billing endpoint testing (AC5).
+    """
+    from app.models.subscription import Subscription
+
+    subscription = Subscription(
+        user_id=authenticated_user.id,
+        tier="free",
+        status="active",
+        stripe_customer_id="cus_test123",
+    )
+    db_session.add(subscription)
+    await db_session.flush()
+    await db_session.refresh(authenticated_user)
+    return authenticated_user
+

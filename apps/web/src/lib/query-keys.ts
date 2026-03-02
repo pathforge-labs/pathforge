@@ -197,4 +197,12 @@ export const queryKeys = {
     executions: (workflowId: string) => ["workflows", "executions", workflowId] as const,
     preferences: () => ["workflows", "preferences"] as const,
   },
+
+  // ── Sprint 35: Billing & Monetization ──────────────────
+  billing: {
+    all: ["billing"] as const,
+    subscription: () => ["billing", "subscription"] as const,
+    usage: () => ["billing", "usage"] as const,
+    features: () => ["billing", "features"] as const,
+  },
 } as const;

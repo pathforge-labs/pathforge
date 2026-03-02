@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-02 | **Current Phase**: I (Mobile) — Sprint 34 complete
+> **Last Updated**: 2026-03-02 | **Current Phase**: I (Mobile) — Sprint 35 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -760,15 +760,22 @@
 
 > **Sprint 34 Deliverables**: 20 files (3 modified + 17 new). Backend-only sprint. Models: 6 new (Subscription, UsageRecord, BillingEvent, AdminAuditLog, WaitlistEntry, PublicProfile). Services: 4 new (billing, admin, waitlist, public_profile). Routes: 4 new (billing 7ep, admin 8ep, waitlist 5ep, profiles 6ep). Schemas: 4 new (subscription, admin, waitlist, public_profile). Quality gates: Ruff ✅ 0 errors, mypy ✅ 93 files, ESLint ✅ 0 errors, TSC ✅ 0 errors, Security ✅ 0 vulnerabilities, Build ✅ 36 routes. 3 audit passes (36 findings → 0). TSC pnpm type resolution fix applied post-sprint.
 
-### Sprint 35 — Frontend Billing & Growth UI (⏳ Upcoming)
+### Sprint 35 — Frontend Billing & Growth UI (✅ Complete)
 
-> Sprint 35: Frontend Stripe Checkout UI deferred from Sprint 34 (approved). Connects the backend billing infrastructure to the web experience.
+> Sprint 35: Frontend Stripe Checkout UI deferred from Sprint 34 (approved). Connects the backend billing infrastructure to the web experience. Includes Sentry error monitoring and visual regression baselines.
 
-- [ ] Pricing page — tier comparison (Free / Pro / Premium), feature gating matrix
-- [ ] Stripe Checkout integration — client-side session creation, redirect flow
-- [ ] Customer portal redirect — subscription management, invoices, cancellation
-- [ ] Billing status UI — current plan display, usage tracking, upgrade CTAs
-- [ ] Sprint 34 backend test coverage — billing, admin, waitlist, public profile unit tests
+- [x] Pricing page — 3-tier comparison (Free / Pro / Premium), monthly/annual toggle, savings callout
+- [x] Stripe Checkout integration — client-side session creation, redirect flow, billing-disabled graceful degradation
+- [x] Customer portal redirect — subscription management via Stripe-hosted portal
+- [x] Billing status UI — current plan display, usage progress bar, renewal date, cancel notice, upgrade banner
+- [x] Data layer — billing types, API client methods, React Query hooks, query-key factory
+- [x] Backend hardening — rate limiting (S1), URL domain validation (S2), portal return_url (R1), config-driven settings
+- [x] Backend test coverage — 41 test cases: billing (17), feature gate (18), admin (6), waitlist (3), public profile (2)
+- [x] Frontend Sentry integration — client/server/edge configs, global error boundary, instrumentation hook, CSP hardening
+- [x] Visual regression baselines — Playwright specs for pricing and billing pages
+- [x] Frontend unit tests — billing hooks (useSubscription, useUsage, useFeatures, useCheckout, usePortal)
+
+> **Sprint 35 Deliverables**: 30+ files (8 modified + 22+ new). Frontend: pricing page (PricingCard, PricingGrid), billing status page (BillingStatusCard, UpgradeBanner), billing data layer (types, API client, hooks, query keys), Sentry integration (6 config files), global error boundary, Playwright visual regression specs. Backend: rate limiting, URL validation, portal return_url, stripe fixture, 5 test files (41 cases). Quality gates: Lint ✅ 0 errors, TSC ✅ 0 errors, Tests ✅ 1,079 passed, npm audit ✅ 0 vulnerabilities, Build ✅ 37 routes. Dependencies: `@sentry/nextjs`, `sonner`.
 
 ---
 
@@ -852,3 +859,4 @@
 | 32     | 7             | 5 (+2 def)  | 0            | 2        |
 | 33     | 8             | 8           | 0            | 1        |
 | 34     | 16            | 16          | 0            | 1        |
+| 35     | 10            | 10          | 0            | 2        |

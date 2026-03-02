@@ -33,3 +33,6 @@ export type * from "./career-passport";
 export type * from "./interview-intelligence";
 export type * from "./recommendation-intelligence";
 export type * from "./workflow-automation";
+
+// ── Sprint 35: Billing & Monetization ──────────────────────
+export type * from "./billing";

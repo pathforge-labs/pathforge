@@ -90,7 +90,12 @@ async def get_features(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """Return which engines and scan limits are available for the user."""
+    """Return which engines and scan limits are available for the user.
+
+    Note (S4): This endpoint does NOT check billing_enabled because feature
+    access must work regardless of billing state — free-tier users always
+    get their default engines even when billing is disabled.
+    """
     from app.core.feature_gate import TIER_ENGINES, TIER_SCAN_LIMITS, get_user_tier
 
     tier = get_user_tier(current_user)
@@ -117,7 +122,9 @@ async def get_features(
     summary="Create Stripe Checkout session",
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(settings.rate_limit_billing)  # S1: prevent checkout brute-force
 async def create_checkout(
+    request: Request,  # Required by slowapi rate limiter
     request_body: CreateCheckoutSessionRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -149,7 +156,9 @@ async def create_checkout(
     summary="Create customer portal session",
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit(settings.rate_limit_billing)  # S1: prevent portal abuse
 async def create_portal(
+    request: Request,  # Required by slowapi rate limiter
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:

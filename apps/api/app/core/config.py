@@ -172,6 +172,7 @@ class Settings(BaseSettings):
     rate_limit_admin: str = "30/minute"       # F8: admin endpoint rate limit
     rate_limit_waitlist: str = "5/minute"
     rate_limit_public_profile: str = "30/minute"
+    rate_limit_billing: str = "10/minute"     # S35/AC4: billing mutation rate limit
 
     @property
     def is_production(self) -> bool:
@@ -183,6 +184,17 @@ class Settings(BaseSettings):
         if self.is_production:
             return self.cors_origins_production
         return self.cors_origins
+
+    @property
+    def frontend_url(self) -> str:
+        """Primary frontend origin for URL validation (S2) and redirects (R1).
+
+        Derived from cors_origins_production to avoid config duplication.
+        ADR-035-09: single source of truth.
+        """
+        if self.cors_origins_production:
+            return self.cors_origins_production[0]
+        return "http://localhost:3000"
 
 
 settings = Settings()

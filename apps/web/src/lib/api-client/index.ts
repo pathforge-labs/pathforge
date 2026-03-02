@@ -36,3 +36,6 @@ export { careerPassportApi } from "./career-passport";
 export { interviewIntelligenceApi } from "./interview-intelligence";
 export { recommendationApi } from "./recommendation-intelligence";
 export { workflowApi } from "./workflow-automation";
+
+// ── Sprint 35: Billing & Monetization ──────────────────────
+export { billingApi } from "./billing";
