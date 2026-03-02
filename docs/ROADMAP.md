@@ -611,7 +611,8 @@
 - [x] Career Simulation "what-if" interface (5 scenario types)
 - [x] Transition Pathways explorer with success probability
 - [x] Shared intelligence card component system (IntelligenceCard 5-slot + HeadlineInsight)
-- [-] Career Resilience Score™ historical trend line — Sprint 26 audit O2 → deferred O3
+- [-] Career Resilience Score™ historical trend line — Sprint 26 audit O2 → deferred to future web sprint (requires charting library decision)
+- [-] Target role form (editable target role input) — Sprint 27 O4, deferred to future web sprint
 
 > **Sprint 27 Deliverables**: 25 new files + 4 modified. 50 TypeScript interfaces, 41 API methods, 26 query keys, 32 hooks, 8 components, 4 dashboard pages, sidebar navigation updated. 53 new tests (total: 204/204 frontend, 1016/1016 backend). Tier-1 audit: all 8 areas compliant ✅.
 
@@ -625,6 +626,7 @@
 - [x] Recommendation feed with priority-weighted sorting
 - [x] Sidebar restructured with section headers (CAREER/INTELLIGENCE/COMMAND/OPERATIONS)
 - [x] Actions page (merged recommendations + workflows, intelligence→action model)
+- [-] Workflow drill-down modal (Actions page detail view) — Sprint 28 R3, deferred to future web sprint
 
 > **Sprint 28 Deliverables**: 26 new files + 6 modified. 5 TypeScript type files (~77 interfaces), 5 API clients (~51 methods), 30 query keys, 7 hook files (50+ hooks), 6 dashboard pages, sidebar section headers. 27 new signal-prioritized tests (total: 232/232 frontend). Tier-1 audit: all areas compliant ✅.
 
@@ -662,7 +664,8 @@
 - [x] Redis failover for rate limiting (fail-open with degraded tracking)
 - [x] Deferred Sprint 29 items (job aggregation cron, ARQ dead letter queue, worker pool sizing)
 - [x] CI security scanning (pip-audit + pnpm audit)
-- [-] Frontend Sentry (`@sentry/nextjs`) — deferred to Phase I (Senior Staff decision)
+- [-] Frontend Sentry (`@sentry/nextjs`) — deferred to future web sprint (not mobile-related; mobile uses `sentry-expo`)
+- [-] Visual regression baseline capture — deferred to future web sprint
 
 > **Sprint 30 Deliverables**: 24 files (18 modified + 6 new). 8 workstreams, 11 audit findings resolved. `sentry-sdk[fastapi]` added to dependencies, `deploy.yml` CD pipeline, 8 Playwright E2E spec files (~28 tests), `perf-baseline.sh`, `docs/baselines/sprint-30-baselines.md`. Backend: 1,016/1,016 tests, 0 lint errors. Frontend: 0 lint warnings, 0 tsc errors, 0 vulnerabilities, build passes. Tier-1 audit: all areas compliant ✅.
 
@@ -688,6 +691,8 @@
 - [x] Resume upload screen (camera/gallery/files + progress + cancel)
 - [x] Login/Register screens with shared Input/Button, inline validation, keyboard navigation
 - [x] Error boundary + offline banner components
+- [-] `sentry-expo` mobile crash reporting — planned but not yet integrated
+- [-] Image-to-document OCR (camera capture → server-side OCR) — future enhancement
 - [x] Mobile `.gitignore`
 - [x] 45 unit tests (token-manager 13, http 14, theme+config 18)
 - [x] Tier-1 retrospective audit — 9.2/10, all mobile domains compliant ✅
