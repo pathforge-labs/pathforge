@@ -2,24 +2,25 @@
   "version": "1.0.0",
   "sprint": "Sprint 33",
   "phase": "I — Mobile Platform",
-  "focus": "Sprint 33 — Testing + Migrations + Security Hardening",
-  "last_commit": "eb73f71",
-  "last_session": "2026-03-02T02:30:00+01:00",
+  "focus": "Sprint 33 Session 2 — F4/F6/F7 Remediation + Dependabot Security",
+  "last_commit": "adf6de1",
+  "last_session": "2026-03-02T03:32:00+01:00",
   "tracking": {
-    "backend_tests": 1016,
+    "backend_tests": 1030,
     "frontend_tests": 232,
     "mobile_tests": 69,
     "e2e_specs": 8,
-    "test_suites": 31,
+    "test_suites": 32,
     "tsc_errors": 0,
     "npm_audit_vulnerabilities": 0,
+    "pip_audit_vulnerabilities": 0,
     "mobile_ui_components": 10,
     "mobile_hooks": 6,
     "mobile_screens": 8,
     "tier1_audit_score": 9.5,
-    "files_changed": 14,
+    "files_changed": 10,
     "web_build_status": "SUCCESS",
-    "audit_findings_resolved": 2,
-    "audit_items_deferred": 3
+    "audit_findings_resolved": 12,
+    "dependabot_alerts_resolved": 7
   }
 }

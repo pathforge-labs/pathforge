@@ -720,6 +720,17 @@
 
 > **Sprint 33 Deliverables**: 14 files (8 modified + 6 new). 2 Critical security fixes (F2 ownership, F3 contract), Alembic merge migration, deep link router, 4 code extractions, 24 new mobile tests (69/69 total). Backend: 1,016/1,016 tests, 0 lint/type errors. Mobile: 69/69 tests (7 suites). Web: 232/232 tests, build ✅ (36/36 pages). Tier-1 audit: all areas compliant ✅.
 
+#### Sprint 33 Session 2 — F4/F6/F7 Remediation + Dependabot Security
+
+- [x] F4: Rate limit redesign — dispatch-based counter on `NotificationPreference` (`daily_push_count`, `last_push_date`)
+- [x] F6: PII masking — `mask_token()` applied in `get_status()` and `register_push_token()`
+- [x] F7: Connection pooling — httpx `AsyncClient` singleton with lifespan shutdown
+- [x] Alembic migration `a1b2c3d4e5f6` — push rate tracking columns
+- [x] 14 new backend tests (`test_push_service.py`) — 1,030/1,030 total
+- [x] `rate_limit_push` config setting (10/min) on 3 push endpoints
+- [x] 7 Dependabot alerts resolved (tar, serialize-javascript, minimatch via pnpm overrides)
+- [x] `pnpm audit`: 0 known vulnerabilities
+
 - [ ] Stripe billing (subscription tiers, feature gating, usage metering)
 - [ ] Admin dashboard (user management, system health)
 - [ ] Waitlist → onboarding conversion flow

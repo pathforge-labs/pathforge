@@ -31,6 +31,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **F2 (Critical)**: Ownership verification on push token deregistration — prevents any user from deregistering another user's token
 - **F3 (High)**: Client-server contract mismatch fixed — mobile now sends token in request body as expected by server
+- **F6 (Medium)**: PII masking — `mask_token()` hides all but last 4 chars of device tokens in API responses (`get_status`, `register_push_token`)
+- **7 Dependabot alerts resolved** — pnpm overrides for `tar@>=7.5.8` (CVE-2026-26960, -24842, -23950, -23745), `serialize-javascript@>=7.0.3` (GHSA-5c6j), `minimatch@>=10.2.3` (CVE-2026-27903, -27904)
+- `pnpm audit`: **0 known vulnerabilities**
+
+### Added (Session 2)
+
+- **F4: Rate limit redesign** — dispatch-based counter (`daily_push_count`, `last_push_date` columns on `NotificationPreference`), `_get_daily_push_count()` pure function, `_increment_dispatch_count()` helper, `rate_limit_push` config (10/min)
+- **F7: Connection pooling** — shared `httpx.AsyncClient` singleton (`get_http_client()`, `close_http_client()`), configured with `max_connections=10`, `max_keepalive=5`, lifespan shutdown hook
+- **Alembic migration** `a1b2c3d4e5f6` — `daily_push_count` (Integer, default 0) + `last_push_date` (Date, nullable) on `notif_preferences`
+- **14 new backend tests** (`test_push_service.py`) — F4 counter logic (5), F6 masking (6), F7 client lifecycle (3)
 
 ---
 
