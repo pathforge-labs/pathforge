@@ -4,7 +4,7 @@
  * CRUD, dimension, and hidden skill endpoints.
  */
 
-import { del, get, patch, post } from "@/lib/http";
+import { del, get, patch, post, put } from "@/lib/http";
 import type {
   CareerDnaGenerateRequest,
   CareerDnaProfileResponse,
@@ -19,6 +19,11 @@ import type {
 } from "@/types/api";
 
 const BASE = "/api/v1/career-dna";
+
+/** Target role update payload (Sprint 36 WS-6) */
+export interface TargetRoleUpdatePayload {
+  readonly target_role: string;
+}
 
 export const careerDnaApi = {
   // ── Profile ─────────────────────────────────────────────
@@ -53,4 +58,8 @@ export const careerDnaApi = {
   // ── Hidden Skills ───────────────────────────────────────
   confirmHiddenSkill: (skillId: string, data: HiddenSkillConfirmRequest): Promise<HiddenSkillResponse> =>
     patch<HiddenSkillResponse>(`${BASE}/hidden-skills/${skillId}`, data),
+
+  // ── Target Role (Sprint 36 WS-6) ────────────────────────
+  updateTargetRole: (data: TargetRoleUpdatePayload): Promise<GrowthVectorResponse> =>
+    put<GrowthVectorResponse>(`${BASE}/growth/target-role`, data),
 };

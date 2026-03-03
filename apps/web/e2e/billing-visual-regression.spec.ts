@@ -58,15 +58,7 @@ test.describe("Pricing Page — Visual Regression", () => {
     await expect(faqSection).toBeVisible();
   });
 
-  test("pricing page screenshot baseline", async ({ page }) => {
-    await page.waitForSelector(".pricing-grid__cards", { timeout: 10_000 });
-    // Wait for fonts and images to load
-    await page.waitForLoadState("networkidle");
-    await expect(page).toHaveScreenshot("pricing-page.png", {
-      fullPage: true,
-      maxDiffPixelRatio: 0.01,
-    });
-  });
+  // Screenshot test moved to visual-regression.spec.ts (Sprint 36 WS-7 consolidation)
 });
 
 test.describe("Billing Settings Page — Visual Regression", () => {

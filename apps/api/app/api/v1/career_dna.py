@@ -223,6 +223,79 @@ async def get_growth_vector(
     return GrowthVectorResponse.model_validate(career_dna.growth_vector)
 
 
+# ── Sprint 36 WS-6: Target Role Update ────────────────────────
+
+
+@router.put(
+    "/growth/target-role",
+    response_model=GrowthVectorResponse,
+    summary="Update target career role",
+)
+@limiter.limit("10/minute")
+async def update_target_role(
+    request: Request,
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GrowthVectorResponse:
+    """
+    Set or update the user's target career role.
+
+    Triggers async recalculation of growth trajectory.
+    Logs the change to UserActivityLog (not AdminAuditLog — Audit F24).
+    """
+    import re
+
+    from app.models.user_activity import UserActivityLog
+
+    # Validate + sanitize input
+    raw_target_role = payload.get("target_role", "")
+    if not isinstance(raw_target_role, str):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="target_role must be a string.",
+        )
+
+    # Sprint 36 Audit F29: sanitize user text — strip HTML tags
+    sanitized_role = re.sub(r"<[^>]+>", "", raw_target_role).strip()
+
+    if not sanitized_role or len(sanitized_role) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="target_role must be 1-255 characters after sanitization.",
+        )
+
+    # Load growth vector
+    career_dna = await CareerDNAService.get_full_profile(
+        db, user_id=current_user.id,
+    )
+    if career_dna is None or career_dna.growth_vector is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Growth vector not found. Generate Career DNA first.",
+        )
+
+    previous_role = career_dna.growth_vector.target_role
+    career_dna.growth_vector.target_role = sanitized_role
+
+    # Log activity (Audit F24: UserActivityLog, not AdminAuditLog)
+    activity = UserActivityLog(
+        user_id=current_user.id,
+        action="target_role_update",
+        entity_type="growth_vector",
+        entity_id=career_dna.growth_vector.id,
+        details={
+            "previous": previous_role,
+            "new": sanitized_role,
+        },
+    )
+    db.add(activity)
+
+    await db.commit()
+
+    return GrowthVectorResponse.model_validate(career_dna.growth_vector)
+
+
 @router.get(
     "/values",
     response_model=ValuesProfileResponse,

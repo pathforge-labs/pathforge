@@ -2,6 +2,7 @@
  * PathForge Mobile — Root Layout
  * =================================
  * App entry point with:
+ * - Sentry crash reporting (Sprint 36 WS-1)
  * - Splash screen hold during SecureStore token hydration
  * - Auth guard routing (login vs tabs)
  * - Provider wrappers (Auth + Query)
@@ -17,6 +18,10 @@ import { useColorScheme, View, StyleSheet, ActivityIndicator } from "react-nativ
 import { AuthProvider, useAuth } from "../providers/auth-provider";
 import { QueryProvider } from "../providers/query-provider";
 import { BRAND, DARK, LIGHT } from "../constants/theme";
+import { initSentry, wrapWithSentry } from "../lib/sentry";
+
+// Initialize Sentry before any rendering (no-op in __DEV__)
+initSentry();
 
 // Hold splash screen until auth state resolves
 SplashScreen.preventAutoHideAsync();
@@ -61,7 +66,7 @@ function AuthGate(): React.JSX.Element {
 
 // ── Root Layout ─────────────────────────────────────────────
 
-export default function RootLayout(): React.JSX.Element {
+function RootLayout(): React.JSX.Element {
   const colorScheme = useColorScheme();
 
   return (
@@ -73,6 +78,9 @@ export default function RootLayout(): React.JSX.Element {
     </QueryProvider>
   );
 }
+
+// Wrap root with Sentry for automatic crash capture
+export default wrapWithSentry(RootLayout);
 
 const styles = StyleSheet.create({
   loading: {

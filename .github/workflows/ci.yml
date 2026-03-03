@@ -87,12 +87,11 @@ jobs:
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
 
-      - name: Alembic drift check
+      - name: Migration SQL validation (Sprint 36 WS-2)
         working-directory: apps/api
-        run: python -m alembic check
+        run: python scripts/alembic_verify.py --sql-only
         env:
           ENVIRONMENT: testing
-          DATABASE_URL: "sqlite+aiosqlite:///./test_alembic.db"
 
       # Sprint 30 Audit H3: Dependency vulnerability scan
       - name: Security audit (pip-audit)
@@ -176,3 +175,67 @@ jobs:
       - name: Test
         working-directory: apps/mobile
         run: pnpm test
+
+  # ── Visual Regression (Sprint 36 WS-7) ─────────────────────
+  visual-regression:
+    name: Visual Regression & Performance Baselines
+    needs: [changes, web-quality]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # webServer: pnpm start auto-started by playwright.config.ts
+      - name: Run visual regression tests
+        id: visual-tests
+        working-directory: apps/web
+        run: npx playwright test e2e/visual-regression.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "false"
+
+      - name: Run performance & accessibility baselines
+        id: perf-tests
+        working-directory: apps/web
+        run: npx playwright test e2e/performance-baseline.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "false"
+
+      - name: Upload visual diff results
+        if: always() && (steps.visual-tests.outcome == 'failure' || steps.perf-tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-report
+          path: apps/web/test-results/
+          retention-days: 14
+
+      - name: Fail on visual regression
+        if: steps.visual-tests.outcome == 'failure'
+        run: |
+          echo "::error::Visual regression tests failed. Review diff artifacts."
+          echo "To update baselines, trigger the 'Update Visual Regression Baselines' workflow manually."
+          exit 1

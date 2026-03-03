@@ -1,0 +1,131 @@
+# ─────────────────────────────────────────────────────────────
+# PathForge — Visual Regression Baseline Update
+# ─────────────────────────────────────────────────────────────
+# Manual workflow to bootstrap or update visual regression baselines.
+#
+# Usage:
+#   1. Go to Actions → "Update Visual Regression Baselines"
+#   2. Click "Run workflow"
+#   3. Select the target branch (default: main)
+#   4. Click "Run workflow"
+#
+# What it does:
+#   - Builds the web app (production bundle)
+#   - Runs visual regression tests with UPDATE_SNAPSHOTS=true
+#   - Commits updated baseline screenshots back to the branch
+#   - Uploads baselines as downloadable artifacts
+#
+# When to use:
+#   - First-time baseline creation (bootstrap)
+#   - After intentional UI changes that affect screenshots
+#   - Never to suppress flaky diffs (investigate root cause instead)
+#
+# @see docs/visual-regression-policy.md
+
+name: Update Visual Regression Baselines
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to update baselines on"
+        required: false
+        default: "main"
+      commit_baselines:
+        description: "Auto-commit baselines back to the branch"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: visual-baselines-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-baselines:
+    name: Capture Visual Baselines
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # Playwright webServer config auto-starts `pnpm start` on :3000
+      - name: Capture visual regression baselines
+        working-directory: apps/web
+        run: npx playwright test e2e/visual-regression.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "true"
+
+      - name: Capture performance baselines
+        working-directory: apps/web
+        run: npx playwright test e2e/performance-baseline.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "true"
+
+      - name: Upload baseline screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: apps/web/e2e/__screenshots__/
+          retention-days: 90
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-test-results
+          path: apps/web/test-results/
+          retention-days: 14
+
+      - name: Commit baselines to branch
+        if: ${{ inputs.commit_baselines }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only the baseline screenshots
+          git add apps/web/e2e/__screenshots__/ || true
+
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No baseline changes to commit."
+          else
+            BASELINE_COUNT=$(git diff --cached --name-only | wc -l)
+            git commit -m "chore(e2e): update visual regression baselines [${BASELINE_COUNT} files]
+
+            Baselines captured in CI (Ubuntu, Chromium).
+            Triggered via manual workflow dispatch.
+            Runner: ${{ runner.os }} / ${{ runner.arch }}"
+            git push
+            echo "✅ Committed ${BASELINE_COUNT} baseline files."
+          fi

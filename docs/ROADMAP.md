@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-02 | **Current Phase**: I (Mobile) — Sprint 35 complete
+> **Last Updated**: 2026-03-03 | **Current Phase**: J (Production Maturity) — Sprint 36 upcoming
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -779,6 +779,23 @@
 
 ---
 
+## Phase J: Production Maturity & Polish
+
+### Sprint 36 — Production Hardening & UX Completeness (📋 Current)
+
+> Sprint 36: Addresses all remaining deferred implementation tasks from Sprints 26–34. Covers observability gaps (Sentry mobile + web), infrastructure migrations (Alembic), and UX completeness (Actions page, Intelligence Hub, trend visualizations). ROADMAP tracking gaps (G1-G2, M1-M5) were resolved pre-sprint in commit `0177bb5`.
+
+- [ ] `sentry-expo` mobile crash reporting — production observability gap (deferred Sprint 31)
+- [ ] Alembic migration application — Docker/DB environment setup + apply pending migrations (deferred Sprint 34)
+- [ ] Frontend Sentry production activation — configure `NEXT_PUBLIC_SENTRY_DSN` in production (deferred Sprint 30/35)
+- [ ] Workflow drill-down modal — Actions page detail view with step-by-step guidance (deferred Sprint 28)
+- [ ] Career Resilience Score™ historical trend line — charting library decision + SVG/Recharts implementation (deferred Sprint 26/27)
+- [ ] Target role form — editable target role input in Intelligence Hub (deferred Sprint 27)
+- [ ] Visual regression baseline capture — Playwright screenshot baselines for all dashboard pages (deferred Sprint 30)
+- [ ] Image-to-document OCR — camera capture → server-side OCR pipeline (deferred Sprint 31)
+
+---
+
 ## Ad-Hoc Work Log
 
 > Unplanned tasks that emerged during development. These are logged here and attributed to the sprint during which they occurred.
@@ -860,3 +877,4 @@
 | 33     | 8             | 8           | 0            | 1        |
 | 34     | 16            | 16          | 0            | 1        |
 | 35     | 10            | 10          | 0            | 2        |
+| 36     | 8             | —           | —            | —        |

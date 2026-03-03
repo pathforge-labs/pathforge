@@ -81,7 +81,7 @@ export default analyze(
   withSentryConfig(nextConfig, {
     // Suppress noisy Sentry build logs
     silent: true,
-    // Control source map behavior
+    // Prevent source maps from being exposed to clients (v8 API)
     sourcemaps: {
       disable: true,
     },

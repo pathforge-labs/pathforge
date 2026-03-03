@@ -20,6 +20,18 @@ import type {
 
 const BASE = "/api/v1/threat-radar";
 
+/** Resilience trend data point (Sprint 36 WS-5) */
+export interface ResilienceDataPoint {
+  readonly date: string;
+  readonly score: number;
+  readonly delta: number;
+}
+
+export interface ResilienceHistoryResponse {
+  readonly data: readonly ResilienceDataPoint[];
+  readonly period_days: number;
+}
+
 export const threatRadarApi = {
   // ── Overview ────────────────────────────────────────────
   getOverview: (): Promise<ThreatRadarOverviewResponse> =>
@@ -61,4 +73,8 @@ export const threatRadarApi = {
 
   updatePreferences: (data: AlertPreferenceUpdateRequest): Promise<AlertPreferenceResponse> =>
     put<AlertPreferenceResponse>(`${BASE}/preferences`, data),
+
+  // ── Resilience History (Sprint 36 WS-5) ──────────────────
+  getResilienceHistory: (days: number = 90): Promise<ResilienceHistoryResponse> =>
+    get<ResilienceHistoryResponse>(`${BASE}/resilience/history?days=${days}`),
 };

@@ -219,6 +219,68 @@ async def get_resilience_score(
     return _resilience_response(snapshot) if snapshot else None
 
 
+# ── Resilience History (Sprint 36 WS-5) ────────────────────────
+
+
+@router.get(
+    "/resilience/history",
+    summary="Get Career Resilience Score™ historical data",
+)
+@limiter.limit("20/minute")
+async def get_resilience_history(
+    request: Request,
+    days: int = Query(90, ge=7, le=365, description="History period in days"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Historical resilience scores for trend visualization."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.models.career_dna import CareerDNA
+    from app.models.threat_radar import CareerResilienceSnapshot
+
+    # Get user's Career DNA
+    career_dna_stmt = select(CareerDNA.id).where(
+        CareerDNA.user_id == current_user.id,
+    )
+    career_dna_result = await db.execute(career_dna_stmt)
+    career_dna_id = career_dna_result.scalar_one_or_none()
+
+    if career_dna_id is None:
+        return {"data": [], "period_days": days}
+
+    # Query historical snapshots
+    cutoff = datetime.now(tz=UTC) - timedelta(days=days)
+    history_stmt = (
+        select(CareerResilienceSnapshot)
+        .where(
+            CareerResilienceSnapshot.career_dna_id == career_dna_id,
+            CareerResilienceSnapshot.computed_at >= cutoff,
+        )
+        .order_by(CareerResilienceSnapshot.computed_at.asc())
+    )
+    history_result = await db.execute(history_stmt)
+    snapshots = history_result.scalars().all()
+
+    # Build data points with delta
+    data_points: list[dict] = []
+    previous_score: float | None = None
+
+    for snapshot in snapshots:
+        score = float(snapshot.overall_score)
+        delta = round(score - previous_score, 1) if previous_score is not None else 0.0
+        data_points.append({
+            "date": snapshot.computed_at.isoformat(),
+            "score": round(score, 1),
+            "delta": delta,
+        })
+        previous_score = score
+
+    return {"data": data_points, "period_days": days}
+
+
 # ── Alerts ─────────────────────────────────────────────────────
 
 

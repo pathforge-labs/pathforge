@@ -660,6 +660,10 @@ class GrowthVector(UUIDMixin, TimestampMixin, Base):
     skill_velocity: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     growth_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
     analysis_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Sprint 36 WS-6 / Audit F25: User-editable target role
+    target_role: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, doc="User-set career target role"
+    )
 
     # Relationships
     career_dna: Mapped[CareerDNA] = relationship(

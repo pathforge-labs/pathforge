@@ -92,6 +92,30 @@ async def run_matching_pipeline(
         raise
 
 
+# ── Sprint 36 WS-6: Intelligence Recalculation ───────────────
+
+
+async def recalculate_intelligence(
+    ctx: dict[str, Any], user_id: str
+) -> dict[str, Any]:
+    """Recalculate career intelligence after target role change."""
+    logger.info("Recalculating intelligence for user %s", user_id)
+
+    try:
+        from app.services.career_dna_service import CareerDNAService
+
+        result = await CareerDNAService.recalculate_growth_vector(user_id)
+        logger.info(
+            "Intelligence recalculation completed for user %s", user_id
+        )
+        return {"status": "completed", "user_id": user_id, "result": result}
+    except Exception:
+        logger.exception(
+            "Intelligence recalculation failed for user %s", user_id
+        )
+        raise
+
+
 # ── Health Check + Job Aggregation (Cron) ─────────────────────
 
 
@@ -207,6 +231,7 @@ class WorkerSettings:
         generate_embeddings,
         process_resume,
         run_matching_pipeline,
+        recalculate_intelligence,  # Sprint 36 WS-6
     ]
     cron_jobs: ClassVar[list[Any]] = [
         cron(worker_health_check, minute={0, 15, 30, 45}),

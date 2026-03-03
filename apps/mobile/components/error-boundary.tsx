@@ -14,6 +14,7 @@ import {
   RADIUS,
   SPACING,
 } from "../constants/theme";
+import { captureException } from "../lib/sentry";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -41,9 +42,9 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // TODO: Integrate sentry-expo when Sentry DSN is configured
-    // Sentry.Native.captureException(error, { extra: errorInfo });
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    captureException(error, {
+      componentStack: errorInfo.componentStack ?? undefined,
+    });
   }
 
   private handleRetry = (): void => {

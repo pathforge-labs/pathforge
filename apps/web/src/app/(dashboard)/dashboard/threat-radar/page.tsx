@@ -19,6 +19,7 @@ import { ScoreGauge } from "@/components/dashboard/score-gauge";
 import { SkillsShieldMatrix } from "@/components/dashboard/skills-shield-matrix";
 import { AlertCard } from "@/components/dashboard/alert-card";
 import type { AlertStatus } from "@/types/api/threat-radar";
+import { ResilienceTrend } from "@/components/dashboard/resilience-trend";
 import {
   useThreatRadarOverview,
   useThreatRadarResilience,
@@ -233,6 +234,9 @@ export default function ThreatRadarPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Row 2.5: Resilience Score Trend (Sprint 36 WS-5) */}
+      <ResilienceTrend />
 
       {/* Row 3: Skills Shield Matrix */}
       <SkillsShieldMatrix

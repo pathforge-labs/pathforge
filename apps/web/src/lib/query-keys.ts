@@ -42,6 +42,8 @@ export const queryKeys = {
     automationRisk: () => ["threat-radar", "automation-risk"] as const,
     skillsShield: () => ["threat-radar", "skills-shield"] as const,
     resilience: () => ["threat-radar", "resilience"] as const,
+    resilienceHistory: (days: number) =>
+      ["threat-radar", "resilience-history", { days }] as const,
     alerts: (page?: number, status?: string) =>
       ["threat-radar", "alerts", { page, status }] as const,
     preferences: () => ["threat-radar", "preferences"] as const,

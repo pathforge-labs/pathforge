@@ -8,6 +8,8 @@
 
 "use client";
 
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +19,9 @@ import {
 } from "@/hooks/api/use-recommendations";
 import {
   useWorkflowDashboard,
+  useWorkflowDetail,
 } from "@/hooks/api/use-workflows";
+import { WorkflowModal } from "@/components/dashboard/workflow-modal";
 
 /* ── Page Component ───────────────────────────────────────── */
 
@@ -25,10 +29,13 @@ export default function RecommendationsPage(): React.JSX.Element {
   const { data: recDashboard, isLoading: recLoading } = useRecommendationDashboard();
   const { data: workflowDashboard, isLoading: wfLoading } = useWorkflowDashboard();
   const generateRecs = useGenerateRecommendations();
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const { data: selectedWorkflow } = useWorkflowDetail(selectedWorkflowId ?? "");
 
   const isLoading = recLoading || wfLoading;
 
   return (
+    <>
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -177,6 +184,13 @@ export default function RecommendationsPage(): React.JSX.Element {
                       />
                     </div>
                     <span className="text-xs text-muted-foreground">{workflow.workflow_status}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedWorkflowId(workflow.id)}
+                    >
+                      View Details
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -194,5 +208,13 @@ export default function RecommendationsPage(): React.JSX.Element {
         <p className="text-xs text-muted-foreground text-center">{recDashboard.disclaimer}</p>
       )}
     </div>
+
+      {/* Workflow Detail Modal (Sprint 36 WS-4) */}
+      <WorkflowModal
+        workflow={selectedWorkflow ?? null}
+        isOpen={selectedWorkflowId !== null}
+        onClose={() => setSelectedWorkflowId(null)}
+      />
+    </>
   );
 }
