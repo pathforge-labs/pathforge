@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────
+# Gemini Code Assist — Repository Configuration
+# ─────────────────────────────────────────────────────────────
+# Docs: https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
+
+# Professional tone (no poems in PR summaries)
+have_fun: false
+
+# Persistent memory for improved responses across PRs
+memory_config:
+  disabled: false
+
+# Code review settings
+code_review:
+  disable: false
+
+  # Skip Low-severity noise — only Medium, High, Critical comments
+  comment_severity_threshold: MEDIUM
+
+  # No cap on review comments
+  max_review_comments: -1
+
+  # Auto-review behavior when a PR is opened
+  pull_request_opened:
+    # Don't post help instructions on every PR
+    help: false
+
+    # Auto-generate PR summary
+    summary: true
+
+    # Auto-run code review
+    code_review: true
+
+    # Skip draft PRs — we iterate frequently on drafts
+    include_drafts: false
+
+# Files and directories to exclude from review
+ignore_patterns:
+  # Lockfiles & dependency artifacts
+  - "pnpm-lock.yaml"
+  - "package-lock.json"
+  - "*.lock"
+
+  # Visual regression baselines (binary screenshots)
+  - "apps/web/e2e/__screenshots__/**"
+  - "apps/web/test-results/**"
+
+  # Build outputs
+  - "apps/web/.next/**"
+  - "apps/web/out/**"
+  - "apps/api/**/*.pyc"
+  - "**/__pycache__/**"
+  - "**/node_modules/**"
+  - "dist/**"
+  - ".turbo/**"
+
+  # Generated & config artifacts
+  - "*.min.js"
+  - "*.min.css"
+  - "*.map"
+  - ".env*"
+
+  # Agent & session tracking (not production code)
+  - ".agent/**"
+  - "docs/baselines/**"
