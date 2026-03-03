@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 36 CI Fixes] — Mypy & CI Pipeline Remediation — 2026-03-03
+
+### Fixed
+
+- **Mypy `type-arg` errors** — `dict` → `dict[str, Any]` in `user_activity.py` (details field), `threat_radar.py` (return type + data_points), `career_dna.py` (payload parameter)
+- **Worker `attr-defined` error** — stubbed `CareerDNAService.recalculate_growth_vector` (not yet implemented) with warning log in `worker.py`
+- **CI migration path** — removed incorrect `working-directory: apps/api` from migration SQL validation step in `ci.yml` (script at repo root uses internal `API_DIR`)
+
+### Production Audit Findings (Sprint 37 Backlog)
+
+- **C1**: Pricing page missing BEM CSS (`pricing-card__*` classes have zero matching styles)
+- **C2**: Visual regression auth mismatch (`/api/v1/auth/me` not mocked → dashboard never renders)
+- **M1**: Pricing page title duplication (`"Pricing | PathForge | PathForge"`)
+- **M2**: CSP `connect-src` missing `localhost:8000` for dev
+
+---
+
 ## [Sprint 33] — Testing + Migrations + Security Hardening — 2026-03-02
 
 ### Added

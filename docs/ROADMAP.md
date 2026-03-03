@@ -796,6 +796,19 @@
 
 > **Sprint 36 Deliverables**: 47 files (24 modified + 23 new). 7 workstreams completed. WS-7 standalone: 4 new e2e files, 1 new CI workflow, 3 modified configs, 1 policy doc. Quality gates: Ruff ✅ 0 errors, ESLint ✅ 0 errors (1 pre-existing warning), TSC ✅ 0 errors, Build ✅ 38 routes. New dependencies: `@sentry/react-native`, `@axe-core/playwright`. Tier-1 retrospective audit: all areas compliant ✅.
 
+### Sprint 37 — Production Audit Remediation & CI Green (🔜 Next)
+
+> Sprint 37: Resolves all critical findings from the Tier-1 production audit (2026-03-03). Focuses on broken pricing page CSS, visual regression test architecture, CI pipeline fixes, and minor polish items. Goal: full CI green across all jobs.
+
+- [ ] WS-1: Pricing page CSS restoration — add complete BEM stylesheet for Sprint 35 `PricingCard`/`PricingGrid`/`PricingPageClient` components (`pricing-card__*`, `pricing-page__*` classes in `globals.css`), dark mode variants, responsive breakpoints
+- [ ] WS-2: Visual regression auth fix — add `/api/v1/auth/me` mock to `mock-api-data.ts`, verify `useAuth()` hook receives valid user object during visual tests, ensure dashboard pages render `h1` within timeout
+- [ ] WS-3: Visual regression CI resilience — increase `navigateAndWait` timeout to 30s, add `waitUntil: 'domcontentloaded'` to `page.goto()`, verify 14/14 tests pass in CI
+- [ ] WS-4: CSP `connect-src` dev fix — add `localhost:8000` to Content Security Policy in development mode, prevent console errors during local API development
+- [ ] WS-5: Pricing page title fix — fix `pageTitle()` helper or `Pricing` page metadata to eliminate duplicate "PathForge" in title (`"Pricing | PathForge | PathForge"` → `"Pricing | PathForge"`)
+- [ ] WS-6: `CareerDNAService.recalculate_growth_vector` implementation — implement the deferred growth vector recalculation pipeline (currently stubbed in `worker.py`)
+- [ ] WS-7: CI baseline bootstrap — trigger `Update Visual Regression Baselines` workflow, verify all 14 baseline images committed, confirm CI enforcement mode (`updateSnapshots: 'none'`) passes
+- [ ] WS-8: Full CI green verification — all jobs passing: `api-quality`, `web-quality`, `visual-regression`, `migration-check`
+
 ---
 
 ## Ad-Hoc Work Log

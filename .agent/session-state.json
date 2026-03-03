@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
-  "sprint": "Sprint 36",
+  "sprint": "Sprint 37 (Planning)",
   "phase": "J — Production Maturity & Polish",
-  "focus": "Sprint 36 — Production Hardening & UX Completeness + Visual Regression",
-  "last_commit": "0578189",
-  "last_session": "2026-03-03T03:56:00+01:00",
+  "focus": "Sprint 37 — Production Audit Remediation & CI Green",
+  "last_commit": "6b6bcc6",
+  "last_session": "2026-03-03T05:38:00+01:00",
   "tracking": {
     "backend_tests": 1079,
     "frontend_tests": 232,
@@ -17,19 +17,19 @@
     "mobile_ui_components": 10,
     "mobile_hooks": 6,
     "mobile_screens": 8,
-    "tier1_audit_score": 9.5,
-    "files_changed": 47,
+    "tier1_audit_score": 7.5,
+    "files_changed": 5,
     "web_build_status": "SUCCESS",
     "web_build_routes": 38,
-    "api_endpoints_added": 2,
-    "new_components": 6,
-    "new_hooks": 3,
-    "new_test_files": 3,
-    "sentry_integration": true,
-    "sentry_mobile_integration": true,
     "visual_regression_tests": 14,
     "performance_baseline_tests": 4,
     "ci_workflows": 3,
-    "dependencies_added": ["@sentry/react-native", "@axe-core/playwright"]
+    "audit_findings": {
+      "critical": 2,
+      "high": 0,
+      "medium": 2,
+      "resolved_this_session": 5
+    },
+    "sprint_37_workstreams": 8
   }
 }
