@@ -10,9 +10,8 @@ Revises: b2c3d4e5f6g7
 
 from __future__ import annotations
 
-from typing import Any
-
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers

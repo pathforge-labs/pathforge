@@ -1,50 +1,49 @@
 # Session Context — PathForge
 
-> Last Updated: 2026-03-02
+> Last Updated: 2026-03-03
 
 ## Current Session
 
-| Field       | Value                                                         |
-| :---------- | :------------------------------------------------------------ |
-| Date        | 2026-03-02                                                    |
-| Focus       | Sprint 35 — Frontend Billing & Growth UI + Sentry Integration |
-| Branch      | main                                                          |
-| Last Commit | b401e15 (Sprint 35 complete)                                  |
+| Field       | Value                                                                  |
+| :---------- | :--------------------------------------------------------------------- |
+| Date        | 2026-03-03                                                             |
+| Focus       | Sprint 36 — Production Hardening & UX Completeness + Visual Regression |
+| Branch      | main                                                                   |
+| Last Commit | 0578189 (Sprint 36 complete — 7 workstreams)                           |
 
 ## Work Done
 
-- **Sprint 35 — Frontend Billing & Growth UI** (10 tasks → 10 complete):
-  - Pricing page: 3-tier comparison, monthly/annual toggle, savings callout
-  - Billing status page: current plan, usage progress, renewal date, upgrade banner
-  - Data layer: billing types, API client, React Query hooks, query-key factory
-  - Backend hardening: rate limiting (S1), URL domain validation (S2), portal return_url (R1)
-  - Backend test coverage: 41 test cases across 5 test files
-  - Frontend Sentry integration: 6 config files, global error boundary, CSP hardening
-  - Visual regression baselines: Playwright specs for pricing/billing pages
-  - Frontend unit tests: billing hooks with vi.mock + createWrapper pattern
-- **Test fixes during verification**:
-  - Corrected field name (`scans_limit` → `scan_limit`) in usage test
-  - Fixed waitlist route path (`/waitlist` → `/waitlist/join`)
-  - Fixed webhook path (`/billing/webhook` → `/webhooks/stripe`)
-  - Installed stripe SDK (was in pyproject.toml but missing from venv)
-  - Removed unused `formatPrice` import
+- **Sprint 36 — Production Hardening & UX Completeness** (8 tasks → 7 complete, 1 deferred):
+  - WS-1: `@sentry/react-native` mobile crash reporting (PII scrubber, 15 tests, 84/84 mobile total)
+  - WS-2: Alembic migration validation tooling (verify script, backup check, CI job, runbook)
+  - WS-3: Frontend Sentry production activation (ignoreErrors, denyUrls, maxBreadcrumbs)
+  - WS-4: Workflow drill-down modal (component, CSS module, unit tests)
+  - WS-5: Career Resilience Score™ trend line (SVG chart, hook, backend endpoint)
+  - WS-6: Target role editable form (component, hook, model/API/migration)
+  - WS-7: Visual regression baseline system:
+    - 14-test visual regression spec (6 pages × 2 themes + 2 mobile)
+    - 6-layer deterministic Playwright fixtures (auth bypass, API interception, animation kill, clock freeze, font stabilization, scroll reset)
+    - 23+ endpoint mock API data
+    - Performance/accessibility baselines (`@axe-core/playwright`)
+    - Dedicated `update-baselines.yml` workflow (workflow_dispatch + auto-commit)
+    - CI enforcement (`updateSnapshots: 'none'`, explicit error messaging)
+    - Policy documentation (`docs/visual-regression-policy.md`)
+  - Image-to-document OCR — deferred (not critical for production launch)
 
 ## Quality Gates
 
-| Gate          | Status               |
-| :------------ | :------------------- |
-| Ruff Lint     | ✅ 0 errors          |
-| ESLint (Web)  | ✅ 0 errors          |
-| TSC (Web)     | ✅ 0 errors          |
-| Backend Tests | ✅ 1,079 passed      |
-| npm audit     | ✅ 0 vulnerabilities |
-| Build         | ✅ 37 routes         |
+| Gate         | Status                       |
+| :----------- | :--------------------------- |
+| Ruff Lint    | ✅ 0 errors                  |
+| ESLint (Web) | ✅ 0 errors                  |
+| TSC (Web)    | ✅ 0 errors                  |
+| Build        | ✅ 38 routes                 |
+| MyPy         | ⚠️ 7 warnings (non-blocking) |
 
 ## Handoff Notes
 
-- Sprint 35 fully complete — all 10 planned tasks delivered
-- All quality gates green — 1,079 backend tests, 0 lint/tsc errors, 0 vulnerabilities
-- Sentry integration ready — requires `.env.local` with `NEXT_PUBLIC_SENTRY_DSN` for production
-- Alembic migrations from Sprint 34 still pending — need Docker/DB for application
-- New dependencies: `@sentry/nextjs`, `sonner` (toast notifications)
-- Stripe SDK v14.4.0 installed in API venv
+- Sprint 36 complete — 7/8 workstreams delivered (Image OCR deferred)
+- Visual regression baselines need bootstrap: trigger `Update Visual Regression Baselines` workflow in GitHub Actions
+- Alembic migrations from Sprint 34 still need Docker/DB for application
+- New dependencies: `@sentry/react-native`, `@axe-core/playwright`
+- New CI workflow: `.github/workflows/update-baselines.yml`

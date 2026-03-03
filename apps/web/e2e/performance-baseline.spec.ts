@@ -57,7 +57,7 @@ const PERF_PAGES: readonly PagePerformanceConfig[] = [
 /* ── Performance Metric Collection ───────────────────────── */
 
 async function collectPerformanceMetrics(
-  page: Awaited<ReturnType<typeof test["info"]>>["_"] extends never ? never : import("@playwright/test").Page,
+  page: import("@playwright/test").Page,
 ): Promise<PerformanceMetrics> {
   return page.evaluate(() => {
     const paintEntries = performance.getEntriesByType("paint");
