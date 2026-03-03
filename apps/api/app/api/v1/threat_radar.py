@@ -16,7 +16,7 @@ REST endpoints for the Career Threat Radar™ system.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -232,7 +232,7 @@ async def get_resilience_history(
     days: int = Query(90, ge=7, le=365, description="History period in days"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Historical resilience scores for trend visualization."""
     from datetime import UTC, datetime, timedelta
 
@@ -265,7 +265,7 @@ async def get_resilience_history(
     snapshots = history_result.scalars().all()
 
     # Build data points with delta
-    data_points: list[dict] = []
+    data_points: list[dict[str, Any]] = []
     previous_score: float | None = None
 
     for snapshot in snapshots:

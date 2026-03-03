@@ -12,7 +12,7 @@ REST endpoints for Career DNA™ profile management.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -234,7 +234,7 @@ async def get_growth_vector(
 @limiter.limit("10/minute")
 async def update_target_role(
     request: Request,
-    payload: dict,
+    payload: dict[str, Any],
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> GrowthVectorResponse:

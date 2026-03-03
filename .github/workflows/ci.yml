@@ -88,7 +88,6 @@ jobs:
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
 
       - name: Migration SQL validation (Sprint 36 WS-2)
-        working-directory: apps/api
         run: python scripts/alembic_verify.py --sql-only
         env:
           ENVIRONMENT: testing

@@ -102,9 +102,14 @@ async def recalculate_intelligence(
     logger.info("Recalculating intelligence for user %s", user_id)
 
     try:
-        from app.services.career_dna_service import CareerDNAService
-
-        result = await CareerDNAService.recalculate_growth_vector(user_id)
+        # NOTE: CareerDNAService.recalculate_growth_vector is not yet
+        # implemented.  Log a placeholder until Sprint 37 delivers the
+        # full recalculation pipeline.
+        logger.warning(
+            "recalculate_growth_vector not yet implemented — skipping",
+            user_id=user_id,
+        )
+        result: dict[str, Any] = {"status": "skipped", "reason": "not_implemented"}
         logger.info(
             "Intelligence recalculation completed for user %s", user_id
         )

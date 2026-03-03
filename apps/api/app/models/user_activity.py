@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -46,7 +47,7 @@ class UserActivityLog(Base):
         nullable=True,
         doc="Optional ID of the affected entity",
     )
-    details: Mapped[dict | None] = mapped_column(
+    details: Mapped[dict[str, Any] | None] = mapped_column(
         JSON,
         nullable=True,
         doc="Additional context (e.g., previous/new values)",
