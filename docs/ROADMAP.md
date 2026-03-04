@@ -872,6 +872,9 @@
 | 2026-03-04 | MyPy 17→0 + stale ignore cleanup      | 37            | ✅ Done | 10 files, 183 source files clean             |
 | 2026-03-04 | Skeleton.tsx ESLint warning fix       | 37            | ✅ Done | Unused `ref` from React 19 migration         |
 | 2026-03-04 | Pre-push hook MyPy optimization       | Post-37       | ✅ Done | 212s→15s push, MyPy CI-only, Tier-1 audit ✅ |
+| 2026-03-04 | CI job timeouts + pytest-timeout      | Post-37       | ✅ Done | All 5 CI jobs, 120s per-test timeout         |
+| 2026-03-04 | uv migration for API CI job           | Post-37       | ✅ Done | 10-100x faster dep install, caching          |
+| 2026-03-04 | Migration chain + deprecation fixes   | Post-37       | ✅ Done | Alembic chain, utcnow, HTTP_422, bcrypt opt  |
 
 ---
 

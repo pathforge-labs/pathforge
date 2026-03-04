@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Post-Sprint 37] — CI Stability, Migration Chain & Deprecation Fixes — 2026-03-04
+
+### Fixed
+
+- **Alembic migration chain** — `4d5e6f7g8h9i` `down_revision` pointed to non-existent `6a7b8c9d0e1f`, corrected to `3c4d5e6f7g8h` (interview intelligence tables)
+- **`datetime.utcnow()` deprecation** (3 models) — `interview_intelligence.py`, `hidden_job_market.py`, `career_simulation.py` updated to `datetime.now(tz=UTC)` with `UTC` imports
+- **`HTTP_422_UNPROCESSABLE_ENTITY` deprecation** (9 instances across 4 files) — replaced with `HTTP_422_UNPROCESSABLE_CONTENT` in `error_handlers.py`, `public_profiles.py`, `career_dna.py`, `career_action_planner.py`
+
+### Changed
+
+- **bcrypt test optimization** — 4 rounds in testing mode (`ENVIRONMENT=testing`) vs 12 in production (~60x faster hashing per call)
+- **pytest warning filters** — `slowapi` and `pytest-asyncio` deprecation warnings suppressed via `filterwarnings` in `pyproject.toml`
+- **`timeout_method = "thread"`** — explicit Windows-compatible timeout method for `pytest-timeout`
+- **CI job timeouts** — all 5 CI jobs now have `timeout-minutes` set
+- **`pytest-timeout`** — per-test 120s timeout added to `pyproject.toml`
+- **uv migration** — API quality job uses `astral-sh/setup-uv@v7` for 10-100x faster dependency installation
+
+### Verified
+
+- 1,087 passed, **0 warnings** in 575.29s
+- Ruff: 0 errors
+- 4 commits: `402d67d`, `da580f6`, `5a54c73`, `385ca01`
+
+---
+
 ## [Sprint 36 CI Fixes] — Mypy & CI Pipeline Remediation — 2026-03-03
 
 ### Fixed
