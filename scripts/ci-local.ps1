@@ -4,19 +4,19 @@
 
 .DESCRIPTION
     Runs quality gates locally before pushing.
-    -Fast mode: Lint + type checks only (~12s) — used by pre-push hook.
-    Full mode: Lint + types + tests + build — mirrors ci.yml exactly.
+    -Fast mode: Lint only (~15s) -- used by pre-push hook. MyPy runs in CI.
+    Full mode: Lint + types + tests + build -- mirrors ci.yml exactly.
 
 .PARAMETER Scope
     Which gates to run: 'all' (default), 'api', or 'web'.
 
 .PARAMETER Fast
-    Skip tests and builds. Only run lint + type checks (~12s).
+    Skip tests and builds. Only run lint checks (~15s). MyPy deferred to CI.
     Used by default in pre-push hook. Full tests run in GitHub Actions CI.
 
 .EXAMPLE
     .\scripts\ci-local.ps1                # Full gates (lint + types + tests + build)
-    .\scripts\ci-local.ps1 -Fast          # Fast mode (lint + types only)
+    .\scripts\ci-local.ps1 -Fast          # Fast mode (lint only)
     .\scripts\ci-local.ps1 -Scope api     # API gates only
     .\scripts\ci-local.ps1 -Fast -Scope api  # Fast API gates only
 #>
@@ -126,8 +126,9 @@ Write-Host ""
 Write-Host "==========================================" -ForegroundColor White
 Write-Host "  PathForge - Local CI Gate" -ForegroundColor White
 if ($Fast) {
-    Write-Host "  Mode: FAST (lint + types only)" -ForegroundColor Magenta
-} else {
+    Write-Host "  Mode: FAST (lint only)" -ForegroundColor Magenta
+}
+else {
     Write-Host "  Mirrors: .github/workflows/ci.yml" -ForegroundColor DarkGray
 }
 Write-Host "==========================================" -ForegroundColor White
@@ -154,61 +155,25 @@ if ($Scope -eq "all" -or $Scope -eq "api") {
         Write-Host "  Tip: Run '.venv\Scripts\python.exe -m ruff check app/ tests/ --fix' to auto-fix" -ForegroundColor Yellow
     }
 
-    # Gate 2: MyPy type check (WARNING only — does not block push)
-    # Note: MyPy has pre-existing strict-mode issues. Ruff + Pytest are the blocking gates.
-    if (-not $script:failed) {
-        # Check if mypy is installed
-        $null = & $VENV_PYTHON -m mypy --version 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host ""
-            Write-Host ">> MyPy Type Check" -ForegroundColor Cyan
-            Write-Host "  [SKIP] " -ForegroundColor Yellow -NoNewline
-            Write-Host "MyPy not installed (install with: pip install mypy)" -ForegroundColor DarkGray
-            $script:results += [PSCustomObject]@{
-                Name     = "MyPy Type Check"
-                Status   = "SKIP"
-                Duration = "0.0s"
-                Detail   = "not installed"
-            }
-        }
-        else {
-            Write-Host ""
-            Write-Host ">> MyPy Type Check (warning only)" -ForegroundColor Cyan
-            $mypyStart = Get-Date
-            Push-Location $API_DIR
-            $mypyOutput = & $VENV_PYTHON -m mypy app/ --ignore-missing-imports 2>&1 | Out-String
-            $mypyExit = $LASTEXITCODE
-            Pop-Location
-            $mypyDuration = "{0:N1}s" -f ((Get-Date) - $mypyStart).TotalSeconds
-
-            if ($mypyExit -ne 0) {
-                # Extract error count
-                $mypyDetail = "errors (non-blocking)"
-                if ($mypyOutput -match "Found (\d+) errors?") {
-                    $mypyDetail = "$($Matches[1]) errors (non-blocking)"
-                }
-                Write-Host "  [WARN] " -ForegroundColor Yellow -NoNewline
-                Write-Host "MyPy Type Check " -NoNewline
-                Write-Host "($mypyDuration)" -ForegroundColor DarkGray -NoNewline
-                Write-Host " - $mypyDetail" -ForegroundColor DarkGray
-                $script:results += [PSCustomObject]@{
-                    Name     = "MyPy Type Check"
-                    Status   = "WARN"
-                    Duration = $mypyDuration
-                    Detail   = $mypyDetail
-                }
-            }
-            else {
-                Write-Host "  [PASS] " -ForegroundColor Green -NoNewline
-                Write-Host "MyPy Type Check " -NoNewline
-                Write-Host "($mypyDuration)" -ForegroundColor DarkGray
-                $script:results += [PSCustomObject]@{
-                    Name     = "MyPy Type Check"
-                    Status   = "PASS"
-                    Duration = $mypyDuration
-                    Detail   = "0 errors"
-                }
-            }
+    # Gate 2: MyPy type check -- blocking in full mode, skipped in fast mode.
+    # MyPy runs as a blocking gate in CI (ci.yml). Skipped in fast mode
+    # to keep pre-push hook fast (~15s vs ~200s with strict mode).
+    if (-not $script:failed -and -not $Fast) {
+        Invoke-Gate -Name "MyPy Type Check" -WorkDir $API_DIR `
+            -Command $VENV_PYTHON `
+            -Arguments @("-m", "mypy", "app/", "--ignore-missing-imports") | Out-Null
+    }
+    elseif ($Fast) {
+        Write-Host ""
+        Write-Host ">> MyPy Type Check" -ForegroundColor Cyan
+        Write-Host "  [SKIP] " -ForegroundColor Yellow -NoNewline
+        Write-Host "MyPy Type Check " -NoNewline
+        Write-Host "(CI-only -- runs in GitHub Actions)" -ForegroundColor DarkGray
+        $script:results += [PSCustomObject]@{
+            Name     = "MyPy Type Check"
+            Status   = "SKIP"
+            Duration = "0.0s"
+            Detail   = "CI-only"
         }
     }
 
@@ -227,7 +192,8 @@ if ($Scope -eq "all" -or $Scope -eq "api") {
         Remove-Item Env:\ENVIRONMENT -ErrorAction SilentlyContinue
         Remove-Item Env:\JWT_SECRET -ErrorAction SilentlyContinue
         Remove-Item Env:\JWT_REFRESH_SECRET -ErrorAction SilentlyContinue
-    } elseif ($Fast -and -not $script:failed) {
+    }
+    elseif ($Fast -and -not $script:failed) {
         Write-Host ""
         Write-Host ">> Pytest" -ForegroundColor Cyan
         Write-Host "  [SKIP] " -ForegroundColor Yellow -NoNewline
@@ -264,7 +230,8 @@ if ($Scope -eq "all" -or $Scope -eq "web") {
             -Arguments @("build") | Out-Null
 
         Remove-Item Env:\NEXT_TELEMETRY_DISABLED -ErrorAction SilentlyContinue
-    } elseif ($Fast -and -not $script:failed) {
+    }
+    elseif ($Fast -and -not $script:failed) {
         Write-Host ""
         Write-Host ">> Next.js Build" -ForegroundColor Cyan
         Write-Host "  [SKIP] " -ForegroundColor Yellow -NoNewline

@@ -856,6 +856,7 @@
 | 2026-03-02 | TSC pnpm type resolution fix          | Post-34       | ✅ Done | `paths` alias in tsconfig, 12 errors → 0     |
 | 2026-03-04 | MyPy 17→0 + stale ignore cleanup      | 37            | ✅ Done | 10 files, 183 source files clean             |
 | 2026-03-04 | Skeleton.tsx ESLint warning fix       | 37            | ✅ Done | Unused `ref` from React 19 migration         |
+| 2026-03-04 | Pre-push hook MyPy optimization       | Post-37       | ✅ Done | 212s→15s push, MyPy CI-only, Tier-1 audit ✅ |
 
 ---
 
