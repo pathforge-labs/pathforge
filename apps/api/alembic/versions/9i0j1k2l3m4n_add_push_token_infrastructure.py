@@ -1,7 +1,7 @@
 """add push token infrastructure
 
 Revision ID: 9i0j1k2l3m4n
-Revises: 3c4d5e6f7g8h, 8h9i0j1k2l3m, 0a1b2c3d4e5g, 0c2d3e4f5g6h
+Revises: 4d5e6f7g8h9i, 8h9i0j1k2l3m, 0a1b2c3d4e5g, 0c2d3e4f5g6h
 Create Date: 2026-03-02 01:50:00.000000+01:00
 
 Sprint 33 — Reliability & Integrity Hardening
@@ -19,7 +19,7 @@ from alembic import op
 # revision identifiers
 revision: str = "9i0j1k2l3m4n"
 down_revision: str | Sequence[str] | None = (
-    "3c4d5e6f7g8h",  # Sprint 14 — Interview Intelligence
+    "4d5e6f7g8h9i",  # Sprint 15 — Hidden Job Market (child of 3c4d5e6f7g8h)
     "8h9i0j1k2l3m",  # Sprint 20 — AI Transparency
     "0a1b2c3d4e5g",  # Sprint 21 — Career Action Planner
     "0c2d3e4f5g6h",  # Sprint 23 — Delivery Layer
