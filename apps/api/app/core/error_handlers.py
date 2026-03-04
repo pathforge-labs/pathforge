@@ -77,7 +77,7 @@ async def value_error_handler(_request: Request, exc: ValueError) -> JSONRespons
         str(exc)[:200],
     )
     return _error_response(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=str(exc),
         error_type="validation_error",
     )

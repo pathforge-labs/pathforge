@@ -9,7 +9,7 @@ Sprint 15: 5 new tables for the Hidden Job Market Detector.
     - hidden_job_market_preference
 
 Revision ID: 4d5e6f7g8h9i
-Revises: 6a7b8c9d0e1f
+Revises: 3c4d5e6f7g8h
 Create Date: 2026-02-21
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "4d5e6f7g8h9i"
-down_revision: str | None = "6a7b8c9d0e1f"
+down_revision: str | None = "3c4d5e6f7g8h"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

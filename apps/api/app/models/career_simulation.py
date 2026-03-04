@@ -26,7 +26,7 @@ Proprietary Innovations:
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
@@ -167,7 +167,7 @@ class CareerSimulation(Base, UUIDMixin, TimestampMixin):
     # ── Computed timestamp ──
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=lambda: datetime.now(tz=UTC),
         server_default="now()",
         nullable=False,
     )

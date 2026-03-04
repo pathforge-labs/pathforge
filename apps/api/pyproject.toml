@@ -110,3 +110,8 @@ disallow_untyped_decorators = false
 asyncio_mode = "auto"
 testpaths = ["tests"]
 timeout = 120
+timeout_method = "thread"
+filterwarnings = [
+    "ignore:.*HTTP_422_UNPROCESSABLE_ENTITY.*:DeprecationWarning:slowapi",
+    "ignore::DeprecationWarning:pytest_asyncio.plugin",
+]

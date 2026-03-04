@@ -252,7 +252,7 @@ async def update_target_role(
     raw_target_role = payload.get("target_role", "")
     if not isinstance(raw_target_role, str):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="target_role must be a string.",
         )
 
@@ -261,7 +261,7 @@ async def update_target_role(
 
     if not sanitized_role or len(sanitized_role) > 255:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="target_role must be 1-255 characters after sanitization.",
         )
 

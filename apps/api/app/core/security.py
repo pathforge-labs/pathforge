@@ -31,9 +31,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def hash_password(password: str) -> str:
-    """Hash a plain-text password using bcrypt."""
+    """Hash a plain-text password using bcrypt.
+
+    Uses 4 rounds in testing mode for performance (~60x faster).
+    Production uses bcrypt default (12 rounds).
+    """
+    import os
+
     password_bytes = password.encode("utf-8")
-    salt = bcrypt.gensalt()
+    rounds = 4 if os.environ.get("ENVIRONMENT") == "testing" else 12
+    salt = bcrypt.gensalt(rounds=rounds)
     return str(bcrypt.hashpw(password_bytes, salt).decode("utf-8"))
 
 
