@@ -34,6 +34,7 @@ dependencies = [
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "mypy>=1.14.0",
@@ -108,3 +109,4 @@ disallow_untyped_decorators = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+timeout = 120
