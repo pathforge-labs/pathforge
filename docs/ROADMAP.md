@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-04 | **Current Phase**: J (Production Maturity) — Sprint 37 complete
+> **Last Updated**: 2026-03-04 | **Current Phase**: J (Production Maturity) — Sprint 38 in progress
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -814,6 +814,21 @@
 
 > **Sprint 37 Deliverables**: 22 files (21 modified + 1 new). 9 workstreams completed, 1 deferred (WS-8 requires post-push VR baseline bootstrap). Quality gates: Ruff ✅ 0 errors, ESLint ✅ 0 errors / 0 warnings, TSC ✅ 0 errors, MyPy ✅ 0 errors (183 files), Build ✅ 38 routes, Tests ✅ 1,087 passed, pnpm audit ✅ 0 vulnerabilities. Tier-1 retrospective audit: all areas compliant ✅.
 
+### Sprint 38 — Tier-1 Production-Grade Audit (📋 In Progress)
+
+> Sprint 38: Comprehensive Tier-1 production-readiness audit across all PathForge systems. Senior Staff Engineer–level architectural review covering 10 audit domains. Produces structured audit report with Go/No-Go production recommendation and prioritized remediation plan.
+
+- [ ] A1: ROADMAP.md full analysis — verify all features reflected in product, detect scope drift, flag misalignment
+- [ ] A2: End-to-end user journey validation — registration → profile → intelligence → upgrade → Stripe checkout → webhook → billing → premium access
+- [ ] A3: Premium & billing system audit — Stripe checkout integrity, webhook idempotency, subscription state consistency, downgrade/cancellation handling, feature gating enforcement, billing UI accuracy, portal redirect, invoice access, error states
+- [ ] A4: Landing page production audit — accuracy vs feature set, pricing consistency, no outdated claims, premium features reflected, value differentiation, Lighthouse readiness, accessibility compliance
+- [ ] A5: Observability & monitoring — web Sentry active, mobile crash reporting, no PII leakage in logs, alert routing, release tagging, error grouping
+- [ ] A6: Infrastructure & deployment — Alembic migrations deterministic, CI/CD integrity, no unsafe auto-migrations, env var hygiene, secrets management, rollback capability
+- [ ] A7: Security & risk assessment — API auth coverage, authorization enforcement, rate limiting, Stripe webhook signature validation, admin surface protection, injection risk, data exposure
+- [ ] A8: Visual & performance stability — visual regression enforcement, baseline determinism, Lighthouse baseline, no layout shift regressions, bundle growth control
+- [ ] A9: Structured audit report — executive summary, critical blockers, high-risk findings, medium improvements, roadmap misalignment, monetization integrity, UX gaps, security gaps, observability gaps, landing page corrections, deployment readiness verdict
+- [ ] A10: Go/No-Go production recommendation — remediation plan if not ready, hardening checklist if ready
+
 ---
 
 ## Ad-Hoc Work Log
@@ -902,3 +917,4 @@
 | 35     | 10            | 10          | 0            | 2        |
 | 36     | 8             | 7 (+1 def)  | 0            | 1        |
 | 37     | 10            | 9 (+1 def)  | 2            | 1        |
+| 38     | 10            | —           | 0            | —        |
