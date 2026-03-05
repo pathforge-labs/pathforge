@@ -2,9 +2,9 @@
 
 ## Current Sprint
 
-- **Sprint**: 38 (Tier-1 Production-Grade Audit) — C4/C6 remediated, retrospective audit ✅
+- **Sprint**: 38 (Tier-1 Production-Grade Audit) — **fully complete**
 - **Branch**: `main`
-- **Focus**: Sprint 38 handoff remediation — complete
+- **Focus**: All deferred items resolved
 
 ## Work Done This Session
 
@@ -12,21 +12,20 @@
    - `_handle_invoice_payment_succeeded()`: billing_reason discrimination, period update
    - `_handle_invoice_payment_failed()`: log-only handler, uniform signature
 2. **C6 Checkout Webhook Handler** — `billing_service.py`
-   - `_handle_checkout_completed()`: subscription activation, tier overwrite safety, last_event_timestamp
+   - `_handle_checkout_completed()`: subscription activation, tier overwrite safety
    - `create_checkout_session()` metadata enriched with `requested_tier`
 3. **10 New Tests** — `test_billing_integration.py`
-   - 5 C4 tests + 5 C6 tests, all passing
-4. **13-Finding Tier-1 Audit** — 3 passes resolving architectural gaps
-5. **Retrospective Audit** — Code review, ruff, bandit, full test suite: GO ✅
+4. **H1 VR Baselines** — Manual dispatch, commit `5f8c968`
+5. **Tier-1 Retrospective Audit** — All gates: GO ✅
 
 ## Quality Gates
 
-- **Ruff**: ✅ 0 violations (full app/ and tests/)
+- **Ruff**: ✅ 0 violations
 - **Bandit**: ✅ 0 security findings
 - **Tests**: ✅ 30/30 passed (10.23s)
-- **Code Review**: ✅ All 13 findings implemented correctly
+- **Code Review**: ✅ 13 audit findings verified
 
 ## Handoff Notes
 
-- **H1 VR Baselines**: Pending — manual `update-baselines.yml` dispatch needed
-- Commit: `b8138a6` — 5 files, 546 ins, 79 del
+- Sprint 38 fully closed — 0 deferred items remain
+- Next: Sprint 39 planning
