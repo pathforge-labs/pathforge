@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-05 | **Current Phase**: J (Production Maturity) — Sprint 38 fully complete
+> **Last Updated**: 2026-03-05 | **Current Phase**: J (Production Maturity) — Sprint 38 complete
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -829,9 +829,9 @@
 - [-] A4–A5, A8: Landing page, observability, VR — deferred to Sprint 39+ (no code changes required this sprint)
 - [x] C4: Invoice webhook handlers — billing_reason discrimination, period update (remediated 2026-03-05)
 - [x] C6: Checkout session completed — subscription activation, tier safety (remediated 2026-03-05)
-- [x] H1: VR baselines — manual workflow dispatched, commit 5f8c968 (2026-03-05)
+- [-] H1: VR baselines — deferred to Sprint 39 (Playwright `waitForSelector("h1")` timeout in CI; test infrastructure issue, not code)
 
-> **Sprint 38 Deliverables**: 19 files (18 modified + 1 new). 10 findings remediated (C1–C6, H2–H3 + warning fix). 16 new tests (6 + 10 C4/C6). VR baselines committed. Quality gates: Ruff ✅, Tests ✅ 30/30, Bandit ✅ 0 findings. Tier-1 retrospective audit: GO ✅. **All deferred items resolved.**
+> **Sprint 38 Deliverables**: 19 files (18 modified + 1 new). 10 findings remediated (C1–C6, H2–H3 + warning fix). 16 new tests (6 + 10 C4/C6). Quality gates: Ruff ✅, Tests ✅ 30/30, Bandit ✅ 0 findings. Tier-1 retrospective audit: GO ✅.
 
 ---
 
@@ -924,4 +924,4 @@
 | 35     | 10            | 10          | 0            | 2        |
 | 36     | 8             | 7 (+1 def)  | 0            | 1        |
 | 37     | 10            | 9 (+1 def)  | 2            | 1        |
-| 38     | 10            | 11          | 1            | 3        |
+| 38     | 10            | 10 (+1 def) | 1            | 3        |
