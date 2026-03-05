@@ -73,7 +73,7 @@ export const PRICING_TIERS: ReadonlyArray<PricingTier> = [
     id: "pro",
     name: "Pro",
     monthlyPrice: 19,
-    annualPrice: 190,
+    annualPrice: 149,
     scanLimit: 30,
     engines: [
       "career_dna",
@@ -104,8 +104,8 @@ export const PRICING_TIERS: ReadonlyArray<PricingTier> = [
   {
     id: "premium",
     name: "Premium",
-    monthlyPrice: 49,
-    annualPrice: 490,
+    monthlyPrice: 39,
+    annualPrice: 299,
     scanLimit: null,
     engines: [
       "career_dna",
