@@ -2,28 +2,42 @@
 
 ## Current Sprint
 
-- **Sprint**: 38 (Tier-1 Production-Grade Audit) — complete
+- **Sprint**: 39 (Auth Hardening & Email Service) — planning complete
 - **Branch**: `main`
+- **Phase**: K (Production Launch)
 
 ## Work Done This Session
 
-1. **C4 Invoice Webhook Handlers** — `billing_service.py`
-   - `_handle_invoice_payment_succeeded()`: billing_reason discrimination, period update
-   - `_handle_invoice_payment_failed()`: log-only handler, uniform signature
-2. **C6 Checkout Webhook Handler** — `billing_service.py`
-   - `_handle_checkout_completed()`: subscription activation, tier safety, last_event_timestamp
-   - `create_checkout_session()` metadata enriched with `requested_tier`
-3. **10 New Tests** — `test_billing_integration.py` (5 C4 + 5 C6)
-4. **Tier-1 Retrospective Audit** — Ruff, Bandit, 30/30 tests, code review: GO ✅
+1. **FAANG/Tier-1 Production Readiness Audit** — 4-pass audit across 12 domains
+   - Global readiness score: 49/100 (NO-GO)
+   - 20 gaps identified: 8 P0, 6 P1, 4 P2, 2 P3
+2. **Sprint 38 Verdict Corrected** — GO → NO-GO (code quality GO, operational readiness NO-GO)
+3. **Pricing SSOT Fix** — `pricing.ts` consolidated (Premium €39/mo, Pro annual €149) — commit `36d02ea`
+4. **Sprint 39-44 Roadmap** — 6 sprints added to ROADMAP.md (Phase K: Production Launch)
+   - Sprint 39: Auth hardening + email + OAuth (6-7 sessions)
+   - Sprint 40: Stripe + LLM keys (1-2 sessions)
+   - Sprint 41: Infrastructure hardening (2 sessions)
+   - Sprint 42: Monitoring + token security (1 session)
+   - Sprint 43: Stripe live mode (1 session)
+   - Sprint 44: Post-launch polish (1 session)
+5. **Sprint Orchestrator Report** — 10-step FAANG-grade orchestration
 
-## Quality Gates
+## Key Audit Findings (8 P0 Blockers)
 
-- **Ruff**: ✅ 0 violations
-- **Bandit**: ✅ 0 security findings
-- **Tests**: ✅ 30/30 passed (10.23s)
+| #    | Gap                   | Sprint |
+| :--- | :-------------------- | :----- |
+| P0-1 | No password reset     | 39C    |
+| P0-2 | No email verification | 39D    |
+| P0-3 | No email service code | 39B    |
+| P0-4 | JWT default bypass    | 39A    |
+| P0-5 | Stripe not configured | 40     |
+| P0-6 | LLM keys empty        | 40     |
+| P0-7 | Pricing SSOT bozuk    | 39A    |
+| P0-8 | No OAuth social login | 39E    |
 
 ## Handoff Notes
 
-- **H1 VR Baselines**: Deferred to Sprint 39 — Playwright `waitForSelector("h1")` timeout in CI (test infrastructure issue, not code)
-- Sprint 38 C4/C6 webhook remediation: complete
-- Next: Sprint 39 planning
+- **H1**: Sprint 39 starts tomorrow — Phase A (quick fixes) first
+- **H2**: Manual tasks needed before Phase E: Google OAuth client + Microsoft OAuth app
+- **H3**: VR baselines still deferred (Sprint 44)
+- **H4**: Velocity warning — Sprint 39 is 2.3x larger than historical avg, consider splitting 39a/39b

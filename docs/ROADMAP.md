@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-05 | **Current Phase**: J (Production Maturity) — Sprint 38 complete
+> **Last Updated**: 2026-03-05 | **Current Phase**: K (Production Launch) — Sprint 39 planned
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -823,7 +823,7 @@
 - [x] A6: Infrastructure — H2 CI/CD pip→uv migration, H3 JWT secret production validator
 - [x] A7: Security — JWT minimum key length enforcement (RFC 7518 §3.2), billing service scan limit 403 response
 - [x] A9: Structured audit report — findings matrix, remediation evidence, test results, Go/No-Go verdict
-- [x] A10: Go/No-Go recommendation — ✅ GO issued
+- [x] A10: Go/No-Go recommendation — ⚠️ Code quality GO, operational readiness NO-GO (8 P0 blockers identified in post-sprint production readiness audit)
 - [x] Warning remediation — 68→0 InsecureKeyLengthWarning (config.py, conftest.py, pyproject.toml)
 - [x] 6 new billing integration tests (test_billing_integration.py)
 - [-] A4–A5, A8: Landing page, observability, VR — deferred to Sprint 39+ (no code changes required this sprint)
@@ -831,7 +831,185 @@
 - [x] C6: Checkout session completed — subscription activation, tier safety (remediated 2026-03-05)
 - [-] H1: VR baselines — deferred to Sprint 39 (Playwright `waitForSelector("h1")` timeout in CI; test infrastructure issue, not code)
 
-> **Sprint 38 Deliverables**: 19 files (18 modified + 1 new). 10 findings remediated (C1–C6, H2–H3 + warning fix). 16 new tests (6 + 10 C4/C6). Quality gates: Ruff ✅, Tests ✅ 30/30, Bandit ✅ 0 findings. Tier-1 retrospective audit: GO ✅.
+> **Sprint 38 Deliverables**: 19 files (18 modified + 1 new). 10 findings remediated (C1–C6, H2–H3 + warning fix). 16 new tests (6 + 10 C4/C6). Quality gates: Ruff ✅, Tests ✅ 30/30, Bandit ✅ 0 findings. Post-sprint FAANG-grade production readiness audit: **8 P0 blockers** identified — code quality GO, operational readiness NO-GO. Production launch roadmap (Sprint 39–44) created.
+
+---
+
+## Phase K: Production Launch
+
+> Post-audit roadmap: 8 P0, 6 P1, 4 P2, 2 P3 = 20 gaps identified across 4-pass FAANG/Tier-1 production readiness audit. Global readiness score: 49/100 (NO-GO). Sprints 39–44 address all gaps in dependency order.
+
+### Sprint 39 — Auth Hardening & Email Service (⏳ Upcoming)
+
+> Sprint 39: Complete auth lifecycle — email verification, password recovery, OAuth social login, security hardening. Critical path: email service → password reset → email verification → OAuth. Pricing SSOT consolidation. Phase A-D are code implementation; Phase E requires manual Google/Microsoft OAuth setup first.
+
+**Phase A — Quick Fixes (1 session)**
+
+- [ ] P0-4: Add `"pathforge-dev-secret-change-in-production"` to `_INSECURE_JWT_DEFAULTS` frozenset (security bug — JWT guard bypass)
+- [ ] P0-7: Consolidate pricing SSOT — `landing-data.ts` must import prices from `pricing.ts` (eliminate dual source)
+- [ ] P1-4: Strengthen password policy — require uppercase, digit, special character (currently 8 chars min only)
+- [ ] P1-6: Change landing page CTAs from "Join Waitlist" → "Get Started" / "Sign Up" across all 3 pricing tiers
+
+**Phase B — Email Service (1-2 sessions)**
+
+- [ ] P0-3: Create `apps/api/app/services/email_service.py` — Resend Python SDK wrapper
+- [ ] P0-3: Email methods — `send_verification_email()`, `send_password_reset_email()`, `send_welcome_email()`
+- [ ] P0-3: HTML email templates with PathForge branding
+- [ ] P0-3: Graceful degradation when `resend_api_key` is empty (log-only dev mode)
+- [ ] P0-3: Config additions — `email_verification_enabled`, `password_reset_token_expire_minutes`
+- [ ] 🔧 MANUAL: Generate Resend API key (resend.com → API Keys → Create) → set `RESEND_API_KEY` in Railway
+
+**Phase C — Password Reset (1 session)**
+
+- [ ] P0-1: `POST /auth/forgot-password` — accept email, generate token, send reset email (rate limit 3/min)
+- [ ] P0-1: `POST /auth/reset-password` — validate token, update password hash
+- [ ] P0-1: Frontend `apps/web/src/app/(auth)/forgot-password/page.tsx`
+- [ ] P0-1: Frontend `apps/web/src/app/(auth)/reset-password/page.tsx`
+- [ ] Unit + integration tests for both endpoints
+
+**Phase D — Email Verification + CAPTCHA (1 session)**
+
+- [ ] P0-2: `POST /auth/verify-email` — validate token, set `email_verified = true`
+- [ ] P0-2: `POST /auth/resend-verification` — rate-limited re-send (3/min)
+- [ ] P0-2: User model columns — `email_verified: bool`, `verification_token: str | None`, `verification_sent_at: datetime | None`
+- [ ] P0-2: Alembic migration for email verification columns
+- [ ] P0-2: Registration endpoint → send verification email on success
+- [ ] P1-3: Add Turnstile CAPTCHA token validation to `POST /auth/register` (backend verification)
+- [ ] Unit + integration tests for verification flow + CAPTCHA
+
+**Phase E — OAuth / Social Login (2 sessions)**
+
+- [ ] 🔧 MANUAL: Create Google OAuth client (Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID)
+  - Authorized origins: `https://pathforge.eu`
+  - Authorized redirect: `https://pathforge.eu/auth/callback/google`
+  - Set `GOOGLE_OAUTH_CLIENT_ID` in Railway + `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in Vercel
+- [ ] 🔧 MANUAL: Create Microsoft OAuth app (Azure AD → App registrations → New)
+  - Redirect URI: `https://pathforge.eu/auth/callback/microsoft`
+  - Set `MICROSOFT_OAUTH_CLIENT_ID` + `MICROSOFT_OAUTH_CLIENT_SECRET` in Railway
+- [ ] P0-8: Config additions — `google_oauth_client_id`, `microsoft_oauth_client_id`, `microsoft_oauth_client_secret`
+- [ ] P0-8: User model — add `auth_provider: str = "email"` column (enum: email/google/microsoft)
+- [ ] P0-8: Alembic migration for `auth_provider` column
+- [ ] P0-8: `POST /auth/oauth/google` — exchange Google ID token for PathForge JWT
+- [ ] P0-8: `POST /auth/oauth/microsoft` — exchange Microsoft ID token for PathForge JWT
+- [ ] P0-8: Account linking — if email exists with different provider, link accounts
+- [ ] P0-8: Password optional for OAuth users
+- [ ] P0-8: Frontend — "Continue with Google" + "Continue with Microsoft" buttons on login/register pages
+- [ ] P0-8: Google Identity Services SDK integration
+- [ ] P0-8: MSAL.js integration for Microsoft
+- [ ] Unit + integration tests for OAuth flows
+
+> **Sprint 39 Verification Gates**: Password reset E2E works · Email verification flow works · JWT default in blocklist · Pricing SSOT verified · Turnstile on registration · Google OAuth login → dashboard · Microsoft OAuth login → dashboard
+
+---
+
+### Sprint 40 — Stripe & LLM Operational Setup (⏳ Upcoming)
+
+> Sprint 40: Configure external services for payments and AI features. Primarily manual/browser work with env var configuration. LLM keys enable Career DNA, Threat Radar, Salary Intelligence, and all AI-powered features.
+
+**Stripe Account Setup (P0-5)**
+
+- [ ] 🔧 MANUAL: Create Stripe account at stripe.com
+- [ ] 🔧 MANUAL: Complete business verification — KVK number, tax ID, NL address
+- [ ] 🔧 MANUAL: Connect IBAN bank account (Stripe Dashboard → Payouts)
+- [ ] 🔧 MANUAL: Create 4 Products + Prices: Pro €19/mo, €149/yr · Premium €39/mo, €299/yr
+- [ ] 🔧 MANUAL: Set webhook endpoint: `https://api.pathforge.eu/api/v1/webhooks/stripe`
+- [ ] 🔧 MANUAL: Select 6 webhook events: `checkout.session.completed`, `customer.subscription.*` (3), `invoice.*` (2)
+- [ ] 🔧 MANUAL: Set Railway env vars — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4× `STRIPE_PRICE_ID_*`, `BILLING_ENABLED=true`
+- [ ] 🔧 MANUAL: Set Vercel env var — `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- [ ] Test checkout with `4242 4242 4242 4242` → verify webhook → subscription activates
+
+**LLM API Keys (P0-6)**
+
+- [ ] 🔧 MANUAL: Create Anthropic API key (console.anthropic.com) → set `ANTHROPIC_API_KEY` in Railway
+- [ ] 🔧 MANUAL: Create Google AI API key (aistudio.google.com) → set `GOOGLE_AI_API_KEY` in Railway
+- [ ] 🔧 MANUAL: Create Voyage AI API key (dash.voyageai.com) → set `VOYAGE_API_KEY` in Railway
+- [ ] 🔧 MANUAL: Set `LLM_MONTHLY_BUDGET_USD=200` in Railway
+- [ ] Verify Career DNA scan succeeds with real LLM call
+
+> **Sprint 40 Verification Gates**: Stripe test checkout fires webhook → subscription activates · Career DNA scan completes with real LLM · All AI features return real results
+
+---
+
+### Sprint 41 — Production Infrastructure Hardening (⏳ Upcoming)
+
+> Sprint 41: Production environment secure and stable. Redis for rate limiting, database SSL, full env var audit, Sentry activation, Alembic verification, and first full smoke test.
+
+**Rate Limiting → Redis (P1-1)**
+
+- [ ] 🔧 MANUAL: Provision Redis (Railway plugin or Upstash free tier)
+- [ ] 🔧 MANUAL: Set `RATELIMIT_STORAGE_URI=redis://...` and `REDIS_URL` in Railway
+- [ ] Verify rate limiting persists across deploys
+
+**Database SSL (P1-2)**
+
+- [ ] 🔧 MANUAL: Set `DATABASE_SSL=true` in Railway
+- [ ] Verify API connects to Supabase with SSL
+
+**Full Env Var Audit (P1-5)**
+
+- [ ] 🔧 MANUAL: Audit Railway: `ENVIRONMENT`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `CORS_ORIGINS`, `INITIAL_ADMIN_EMAIL`
+- [ ] 🔧 MANUAL: Audit Vercel: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SENTRY_DSN`
+
+**Sentry Activation (P2-2)**
+
+- [ ] 🔧 MANUAL: Create Sentry project → copy DSN
+- [ ] 🔧 MANUAL: Set `SENTRY_DSN` in Railway + `NEXT_PUBLIC_SENTRY_DSN` in Vercel
+
+**Alembic Verification (P2-3)**
+
+- [ ] Verify `alembic current` on production DB
+- [ ] Run `alembic upgrade head` if behind
+
+**Deploy + Smoke Test**
+
+- [ ] Deploy `main` → `production`
+- [ ] Health check: `curl https://api.pathforge.eu/api/v1/health/ready` → 200
+- [ ] Full user journey: Register → Verify → Login → Upload CV → Career DNA → Checkout → Subscription → Portal
+
+> **Sprint 41 Verification Gates**: Health check 200 · All env vars set · Rate limiting persists after redeploy · DB uses SSL · Full smoke test passes
+
+---
+
+### Sprint 42 — Monitoring, Token Security & Polish (⏳ Upcoming)
+
+> Sprint 42: Production observable, tokens secure, welcome emails working.
+
+- [ ] P2-1: Implement refresh token rotation — revoke old refresh token on reissue
+- [ ] Send welcome email on successful email verification
+- [ ] Verify Sentry captures errors with synthetic test
+- [ ] Add `--cov` to pytest CI step + coverage threshold (≥80%)
+- [ ] Review error response formats for consistency
+
+> **Sprint 42 Verification Gates**: Token rotation works · Sentry captures error · Welcome email delivered · Coverage ≥80%
+
+---
+
+### Sprint 43 — Stripe Live Mode Cutover (⏳ Upcoming)
+
+> Sprint 43: Switch from Stripe test mode to live mode. Real money flows.
+
+- [ ] 🔧 MANUAL: Create live-mode Products + Prices (mirror test-mode)
+- [ ] 🔧 MANUAL: Create live-mode webhook endpoint + signing secret
+- [ ] 🔧 MANUAL: Switch Railway: `sk_test_` → `sk_live_`, webhook secret, 4× Price IDs
+- [ ] 🔧 MANUAL: Switch Vercel: `pk_test_` → `pk_live_`
+- [ ] Process one real €19 Pro Monthly transaction
+- [ ] Verify payout in Stripe balance → bank account
+
+> **Sprint 43 Verification Gates**: Real €19 payment → Stripe balance · Webhook fires → subscription active · Customer portal works
+
+---
+
+### Sprint 44 — Post-Launch Polish & Monitoring (⏳ Upcoming)
+
+> Sprint 44: Post-launch stability, VR baselines, uptime monitoring, mobile planning.
+
+- [ ] P3-1: Resolve Playwright h1 timeout → generate VR baselines → commit to `e2e/__screenshots__/`
+- [ ] P3-2: Set up uptime monitoring (UptimeRobot/BetterStack) for API + web
+- [ ] P2-4: Mobile app launch planning — scope, timeline, dependencies
+- [ ] Stripe webhook failure alerting (Dashboard → Webhooks → Alert settings)
+- [ ] CI: Make `pip-audit` and `pnpm audit` blocking (remove `continue-on-error`)
+
+> **Sprint 44 Verification Gates**: VR baselines committed · CI VR job passes · Uptime monitor active · Security scans blocking
 
 ---
 
