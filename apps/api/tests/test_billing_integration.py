@@ -196,3 +196,299 @@ class TestRecordUsage:
         assert usage.period_end is not None
         assert usage.user_id == billing_test_user.id
         assert usage.subscription_id is not None
+
+
+# ── Webhook Handler Tests (Sprint 38 C4/C6) ────────────────
+
+
+def _make_invoice_event(
+    *,
+    billing_reason: str = "subscription_cycle",
+    customer: str = "cus_test123",
+    subscription: str = "sub_test456",
+    period_start: int = 1700000000,
+    period_end: int = 1702592000,
+    attempt_count: int = 1,
+    event_type: str = "invoice.payment_succeeded",
+) -> dict[str, object]:
+    """Build a minimal Stripe invoice event for testing."""
+    return {
+        "id": f"evt_test_{billing_reason}",
+        "type": event_type,
+        "created": 1700000100,
+        "data": {
+            "object": {
+                "customer": customer,
+                "subscription": subscription,
+                "billing_reason": billing_reason,
+                "attempt_count": attempt_count,
+                "lines": {
+                    "data": [
+                        {
+                            "period": {
+                                "start": period_start,
+                                "end": period_end,
+                            },
+                        },
+                    ],
+                },
+            },
+        },
+    }
+
+
+def _make_checkout_event(
+    *,
+    customer: str = "cus_test123",
+    subscription: str = "sub_checkout_789",
+    pathforge_user_id: str | None = None,
+    requested_tier: str | None = "pro",
+) -> dict[str, object]:
+    """Build a minimal Stripe checkout.session.completed event."""
+    metadata: dict[str, str] = {}
+    if pathforge_user_id is not None:
+        metadata["pathforge_user_id"] = pathforge_user_id
+    if requested_tier is not None:
+        metadata["requested_tier"] = requested_tier
+
+    return {
+        "id": "evt_test_checkout",
+        "type": "checkout.session.completed",
+        "created": 1700000200,
+        "data": {
+            "object": {
+                "customer": customer,
+                "subscription": subscription,
+                "metadata": metadata,
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+class TestWebhookHandlers:
+    """Sprint 38 C4/C6: Webhook handler unit tests.
+
+    Tests handler methods directly to avoid pg_insert/SQLite
+    incompatibility in _log_billing_event (F6).
+    """
+
+    # ── C4: Invoice Payment Succeeded ──────────────────────
+
+    async def test_invoice_succeeded_renewal_updates_period(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """subscription_cycle → period dates updated on subscription."""
+        event = _make_invoice_event(billing_reason="subscription_cycle")
+        result = await BillingService._handle_invoice_payment_succeeded(
+            db_session, event,
+        )
+
+        assert result is True
+
+        # Verify period was updated on subscription
+        from app.models.subscription import Subscription
+
+        sub_result = await db_session.execute(
+            __import__("sqlalchemy").select(Subscription).where(
+                Subscription.stripe_customer_id == "cus_test123",
+            ),
+        )
+        subscription = sub_result.scalar_one()
+        assert subscription.current_period_start is not None
+        assert subscription.current_period_end is not None
+
+    async def test_invoice_succeeded_initial_sets_period(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """subscription_create → period initialized, returns True."""
+        event = _make_invoice_event(billing_reason="subscription_create")
+        result = await BillingService._handle_invoice_payment_succeeded(
+            db_session, event,
+        )
+
+        assert result is True
+
+    async def test_invoice_succeeded_unknown_customer(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        """Unknown stripe_customer_id → False, no crash."""
+        event = _make_invoice_event(customer="cus_unknown_999")
+        result = await BillingService._handle_invoice_payment_succeeded(
+            db_session, event,
+        )
+
+        assert result is False
+
+    # ── C4: Invoice Payment Failed ─────────────────────────
+
+    async def test_invoice_failed_returns_true_no_mutation(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """Log-only handler returns True without DB mutation."""
+        from app.models.subscription import Subscription
+
+        # Capture current state
+        sub_result = await db_session.execute(
+            __import__("sqlalchemy").select(Subscription).where(
+                Subscription.stripe_customer_id == "cus_test123",
+            ),
+        )
+        subscription_before = sub_result.scalar_one()
+        status_before = subscription_before.status
+
+        event = _make_invoice_event(
+            event_type="invoice.payment_failed",
+            attempt_count=2,
+        )
+        result = await BillingService._handle_invoice_payment_failed(
+            db_session, event,
+        )
+
+        assert result is True
+
+        # Refresh and verify status unchanged
+        await db_session.refresh(subscription_before)
+        assert subscription_before.status == status_before
+
+    async def test_invoice_failed_minimal_payload_safe(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        """Minimal payload with missing fields → still returns True."""
+        event: dict[str, object] = {
+            "id": "evt_minimal",
+            "type": "invoice.payment_failed",
+            "created": 1700000000,
+            "data": {"object": {}},
+        }
+        result = await BillingService._handle_invoice_payment_failed(
+            db_session, event,
+        )
+
+        assert result is True
+
+    # ── C6: Checkout Session Completed ─────────────────────
+
+    async def test_checkout_sets_subscription_id_and_tier(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """Sets stripe_subscription_id and upgrades tier from metadata."""
+        event = _make_checkout_event(
+            pathforge_user_id=str(billing_test_user.id),
+            requested_tier="pro",
+        )
+        result = await BillingService._handle_checkout_completed(
+            db_session, event,
+        )
+
+        assert result is True
+
+        # Verify subscription was updated
+        from app.models.subscription import Subscription
+
+        sub_result = await db_session.execute(
+            __import__("sqlalchemy").select(Subscription).where(
+                Subscription.stripe_customer_id == "cus_test123",
+            ),
+        )
+        subscription = sub_result.scalar_one()
+        assert subscription.stripe_subscription_id == "sub_checkout_789"
+        assert subscription.tier == "pro"
+
+    async def test_checkout_activates_incomplete_status(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """incomplete → active transition on checkout completion."""
+        from app.models.subscription import Subscription
+
+        # Set subscription to incomplete
+        sub_result = await db_session.execute(
+            __import__("sqlalchemy").select(Subscription).where(
+                Subscription.stripe_customer_id == "cus_test123",
+            ),
+        )
+        subscription = sub_result.scalar_one()
+        subscription.status = "incomplete"
+        await db_session.flush()
+
+        event = _make_checkout_event(
+            pathforge_user_id=str(billing_test_user.id),
+            requested_tier="pro",
+        )
+        result = await BillingService._handle_checkout_completed(
+            db_session, event,
+        )
+
+        assert result is True
+        await db_session.refresh(subscription)
+        assert subscription.status == "active"
+
+    async def test_checkout_no_tier_downgrade(
+        self,
+        db_session: AsyncSession,
+        billing_test_user: MagicMock,
+    ) -> None:
+        """F10: If tier is already 'pro', requested_tier='free' keeps 'pro'."""
+        from app.models.subscription import Subscription
+
+        # Set subscription to pro
+        sub_result = await db_session.execute(
+            __import__("sqlalchemy").select(Subscription).where(
+                Subscription.stripe_customer_id == "cus_test123",
+            ),
+        )
+        subscription = sub_result.scalar_one()
+        subscription.tier = "pro"
+        await db_session.flush()
+
+        event = _make_checkout_event(
+            pathforge_user_id=str(billing_test_user.id),
+            requested_tier="free",
+        )
+        result = await BillingService._handle_checkout_completed(
+            db_session, event,
+        )
+
+        assert result is True
+        await db_session.refresh(subscription)
+        assert subscription.tier == "pro"  # NOT downgraded
+
+    async def test_checkout_missing_metadata_returns_false(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        """Missing pathforge_user_id in metadata → False."""
+        event = _make_checkout_event(pathforge_user_id=None)
+        result = await BillingService._handle_checkout_completed(
+            db_session, event,
+        )
+
+        assert result is False
+
+    async def test_checkout_user_not_found_returns_false(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        """Invalid user ID + unknown customer → False."""
+        event = _make_checkout_event(
+            customer="cus_nonexistent",
+            pathforge_user_id="00000000-0000-0000-0000-000000000000",
+        )
+        result = await BillingService._handle_checkout_completed(
+            db_session, event,
+        )
+
+        assert result is False
+

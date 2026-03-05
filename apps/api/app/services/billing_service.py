@@ -2,6 +2,7 @@
 PathForge — Billing Service
 ==============================
 Sprint 34: Stripe billing business logic.
+Sprint 38: C4/C6 webhook handler remediation.
 
 Audit findings implemented:
     F1  — Graceful degradation (kill switch)
@@ -15,6 +16,8 @@ Audit findings implemented:
     F25 — SELECT FOR UPDATE on concurrent webhooks
     F28 — Sentry context tagging
     F35 — Raw body reading for webhook signature
+    C4  — Invoice webhook handlers (billing_reason discrimination)
+    C6  — Checkout session completed (subscription activation)
 """
 
 from __future__ import annotations
@@ -104,9 +107,20 @@ class BillingService:
                 db, event, event_created
             )
 
-        if event_type in ("invoice.payment_succeeded", "invoice.payment_failed"):
-            logger.info("Invoice event received: %s %s", event_type, event_id)
-            return True
+        if event_type == "invoice.payment_succeeded":
+            return await BillingService._handle_invoice_payment_succeeded(
+                db, event,
+            )
+
+        if event_type == "invoice.payment_failed":
+            return await BillingService._handle_invoice_payment_failed(
+                db, event,
+            )
+
+        if event_type == "checkout.session.completed":
+            return await BillingService._handle_checkout_completed(
+                db, event,
+            )
 
         logger.info("Unhandled webhook event type: %s", event_type)
         return True
@@ -395,7 +409,7 @@ class BillingService:
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={"pathforge_user_id": str(user.id)},
+            metadata={"pathforge_user_id": str(user.id), "requested_tier": tier},
         )
 
         return session.url or ""
@@ -438,6 +452,185 @@ class BillingService:
         if not price_id:
             raise ValueError(f"Invalid tier/interval: {tier}/{annual}")
         return price_id
+
+    # ── C4: Invoice Webhook Handlers ───────────────────────────
+
+    @staticmethod
+    async def _handle_invoice_payment_succeeded(
+        db: AsyncSession,
+        event: dict[str, Any],
+    ) -> bool:
+        """Handle successful invoice payment.
+
+        C4: Updates subscription period dates from invoice.
+        Usage auto-resets via F4 lazy-reset in record_usage().
+
+        billing_reason discrimination:
+            - subscription_cycle: renewal — period dates updated
+            - subscription_create: initial — period dates initialized
+        """
+        data_object = event.get("data", {}).get("object", {})
+        billing_reason = data_object.get("billing_reason", "unknown")
+        stripe_customer_id = data_object.get("customer", "")
+        stripe_subscription_id = data_object.get("subscription", "")
+
+        # Extract period from first line item
+        lines = data_object.get("lines", {}).get("data", [])
+        period = lines[0].get("period", {}) if lines else {}
+        period_start = period.get("start")
+        period_end = period.get("end")
+
+        # Look up subscription (no FOR UPDATE — period update is idempotent)
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.stripe_customer_id == stripe_customer_id,
+            ),
+        )
+        subscription = result.scalar_one_or_none()
+
+        if subscription is None:
+            logger.warning(
+                "Invoice event for unknown customer: %s", stripe_customer_id,
+            )
+            return False
+
+        # Update period dates from invoice
+        if period_start:
+            subscription.current_period_start = datetime.fromtimestamp(
+                period_start, tz=UTC,
+            )
+        if period_end:
+            subscription.current_period_end = datetime.fromtimestamp(
+                period_end, tz=UTC,
+            )
+
+        await db.flush()
+        logger.info(
+            "Invoice payment succeeded: reason=%s customer=%s subscription=%s",
+            billing_reason,
+            stripe_customer_id,
+            stripe_subscription_id,
+        )
+        return True
+
+    @staticmethod
+    async def _handle_invoice_payment_failed(
+        db: AsyncSession,
+        event: dict[str, Any],
+    ) -> bool:
+        """Handle failed invoice payment.
+
+        C4: Log-only handler — no status transition.
+        Status change is handled by customer.subscription.updated via
+        _sync_subscription_from_event with full state machine validation.
+
+        F12: Uniform (db, event) signature for handler consistency.
+        """
+        data_object = event.get("data", {}).get("object", {})
+        logger.warning(
+            "Invoice payment failed: customer=%s subscription=%s attempt=%s",
+            data_object.get("customer", ""),
+            data_object.get("subscription", ""),
+            data_object.get("attempt_count", 0),
+        )
+        return True
+
+    # ── C6: Checkout Webhook Handler ──────────────────────────
+
+    @staticmethod
+    async def _handle_checkout_completed(
+        db: AsyncSession,
+        event: dict[str, Any],
+    ) -> bool:
+        """Handle completed checkout session.
+
+        C6: Links stripe_subscription_id and activates subscription.
+        stripe_customer_id is already set via F9 lazy creation in
+        create_checkout_session().
+
+        Safety:
+            F10 — Tier overwrite: only upgrade, never downgrade
+            F11 — Updates last_event_timestamp for cross-event ordering
+            F13 — Backward-compatible: skips tier if metadata absent
+        """
+        data_object = event.get("data", {}).get("object", {})
+        stripe_customer_id = data_object.get("customer", "")
+        stripe_subscription_id = data_object.get("subscription", "")
+        metadata = data_object.get("metadata", {})
+        event_created = event.get("created", 0)
+
+        # Validate metadata
+        pathforge_user_id = metadata.get("pathforge_user_id")
+        if not pathforge_user_id:
+            logger.warning(
+                "Checkout session missing pathforge_user_id metadata: %s",
+                event.get("id", ""),
+            )
+            return False
+
+        requested_tier = metadata.get("requested_tier")
+
+        # Look up subscription: primary by customer ID, fallback by user ID
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.stripe_customer_id == stripe_customer_id,
+            ),
+        )
+        subscription = result.scalar_one_or_none()
+
+        if subscription is None:
+            # Fallback: look up by user_id from metadata
+            try:
+                from uuid import UUID as UUID_TYPE
+
+                user_uuid = UUID_TYPE(pathforge_user_id)
+                result = await db.execute(
+                    select(Subscription).where(
+                        Subscription.user_id == user_uuid,
+                    ),
+                )
+                subscription = result.scalar_one_or_none()
+            except (ValueError, AttributeError):
+                pass
+
+        if subscription is None:
+            logger.warning(
+                "No subscription for checkout: customer=%s user=%s",
+                stripe_customer_id,
+                pathforge_user_id,
+            )
+            return False
+
+        # Set stripe_subscription_id if not already set
+        if not subscription.stripe_subscription_id and stripe_subscription_id:
+            subscription.stripe_subscription_id = stripe_subscription_id
+
+        # F10/F13: Tier overwrite safety — only upgrade, never downgrade
+        tier_rank: dict[str, int] = {"free": 0, "pro": 1, "premium": 2}
+        if (
+            requested_tier
+            and tier_rank.get(requested_tier, 0)
+            > tier_rank.get(subscription.tier, 0)
+        ):
+            subscription.tier = requested_tier
+
+        # Activate if currently incomplete
+        if subscription.status == SubscriptionStatus.INCOMPLETE.value:
+            subscription.status = SubscriptionStatus.ACTIVE.value
+
+        # F11: Update timestamp for cross-event ordering
+        if event_created:
+            subscription.last_event_timestamp = float(event_created)
+
+        await db.flush()
+        logger.info(
+            "Checkout completed: user=%s customer=%s subscription=%s tier=%s",
+            subscription.user_id,
+            stripe_customer_id,
+            stripe_subscription_id,
+            subscription.tier,
+        )
+        return True
 
     # ── Webhook Helpers ────────────────────────────────────────
 

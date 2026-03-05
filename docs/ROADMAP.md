@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-05 | **Current Phase**: J (Production Maturity) — Sprint 38 complete
+> **Last Updated**: 2026-03-05 | **Current Phase**: J (Production Maturity) — Sprint 38 complete (C4/C6 remediated)
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -827,10 +827,11 @@
 - [x] Warning remediation — 68→0 InsecureKeyLengthWarning (config.py, conftest.py, pyproject.toml)
 - [x] 6 new billing integration tests (test_billing_integration.py)
 - [-] A4–A5, A8: Landing page, observability, VR — deferred to Sprint 39+ (no code changes required this sprint)
-- [-] C4, C6: Stripe webhook handlers — deferred to Sprint 39+ (design pending)
+- [x] C4: Invoice webhook handlers — billing_reason discrimination, period update (remediated 2026-03-05)
+- [x] C6: Checkout session completed — subscription activation, tier safety (remediated 2026-03-05)
 - [-] H1: VR baselines — manual workflow dispatch pending
 
-> **Sprint 38 Deliverables**: 17 files (16 modified + 1 new). 8 findings remediated (C1–C3, C5, H2–H3 + warning fix). 6 new tests. Quality gates: Ruff ✅ 0 errors, Tests ✅ 191 passed / 0 warnings, Security scan ✅ 0 real findings. Tier-1 retrospective audit: all areas compliant ✅. Go/No-Go: **GO** ✅.
+> **Sprint 38 Deliverables**: 19 files (18 modified + 1 new). 10 findings remediated (C1–C6, H2–H3 + warning fix). 16 new tests (6 + 10 C4/C6). Quality gates: Ruff ✅ 0 errors, Tests ✅ all passed, Security scan ✅. Tier-1 retrospective audit: all areas compliant ✅. Go/No-Go: **GO** ✅.
 
 ---
 
