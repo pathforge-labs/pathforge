@@ -4,93 +4,156 @@ description: PathForge Tier-1 Quality Gate - Mandatory pre-task research and val
 
 # /quality-gate — Pre-Task Research & Validation Protocol
 
-> ⚠️ **MANDATORY**: This workflow must be executed before ANY implementation task.
-> See `.agent/rules/quality-gate.md` for the full governance document.
+> **Trigger**: `/quality-gate` — mandatory before implementation of new features or refactors
+> **Lifecycle**: Before `/plan` — research informs planning
+> **Output**: `docs/RESEARCH-{slug}.md`
 
-## Pre-Execution Checklist
+> [!CAUTION]
+> This is a mandatory governance gate. You must complete market research, gap analysis, and ethics review before any implementation begins. Approval required.
 
-Execute these steps IN ORDER. Do not skip any step.
+---
 
-### Step 1: Market Research (REQUIRED)
+## 🔴 Critical Rules
+
+1. **RESEARCH FIRST** — no implementation without validated research
+2. **EVIDENCE-BASED** — all claims backed by market data or competitor analysis
+3. **ETHICS GATE** — privacy, bias, and automation risks must be evaluated
+4. **APPROVAL REQUIRED** — present findings to Product Owner before proceeding
+
+---
+
+## Scope Filter
+
+| Task Type                         | Quality Gate Required? |
+| :-------------------------------- | :--------------------- |
+| `feat()` — new features           | ✅ Required            |
+| `refactor()` — structural changes | ✅ Required            |
+| `fix()` — bug fixes               | ❌ Skip                |
+| `chore()` — maintenance           | ❌ Skip                |
+| `docs()` — documentation          | ❌ Skip                |
+| `test()` — test additions         | ❌ Skip                |
+
+---
+
+## Steps
+
+Execute IN ORDER. Do not skip any step.
+
+### Step 1: Market Research
 
 // turbo
-Research the task domain across minimum 5 competitors:
 
-- LinkedIn, Indeed, Glassdoor, Stepstone, Hired
-- Plus any domain-specific leader relevant to the task (e.g., Jobscan, Rezi, Teal, Huntr, LazyApply)
-- Document: how is this feature/flow implemented today?
-- Document: why did users adopt it? What measurable outcomes does it drive?
+Research the task domain across minimum 5 market leaders:
 
-### Step 2: Comparative Analysis (REQUIRED)
+- Identify the top competitors for the feature domain
+- For PathForge job-platform features: LinkedIn, Indeed, Glassdoor, Stepstone, Hired, Jobscan, Rezi, Teal, Huntr, LazyApply
+- For other domains: identify the category leaders
+- Document: how is this feature implemented today?
+- Document: why did users adopt it? What outcomes does it drive?
 
-Produce a comparison table covering:
+### Step 2: Comparative Analysis
 
-- Each competitor's approach to the feature
-- AI/ML methods used (NLP, semantic matching, scoring algorithms)
-- UX patterns, step counts, automation levels
-- Data privacy & consent mechanisms
-- User control vs. full automation trade-offs
-- Conversion funnel metrics (where available)
+// turbo
 
-### Step 3: Gap Detection (REQUIRED)
+Produce a comparison table:
+
+| Competitor | Approach | AI/ML Methods | UX Pattern | Automation Level | Data Privacy |
+| :--------- | :------- | :------------ | :--------- | :--------------- | :----------- |
+| {leader 1} | ...      | ...           | ...        | ...              | ...          |
+
+### Step 3: Gap Detection
+
+// turbo
 
 Identify and document:
 
-- Where PathForge already meets/exceeds market standards
+- Where PathForge meets/exceeds market standards
 - Where PathForge is BELOW market level
-- Outdated patterns in the current or proposed approach
-- If the task uses deceptive, spammy, or ethically harmful automation patterns → REJECT
+- Outdated patterns in current/proposed approach
+- If the approach uses deceptive, spammy, or harmful patterns → **REJECT**
 
-### Step 4: Enhancement Strategy (REQUIRED)
+### Step 4: Enhancement Strategy
 
-Define how PathForge IMPROVES upon the market baseline:
+// turbo
 
-- More transparent scoring? How? (e.g., explainable skill gap metrics)
-- More ethical automation? How? (e.g., human-in-the-loop checkpoints)
-- More user-centric? How? (e.g., measurable funnel insights)
-- More data-sovereign? How? (e.g., local-first CV processing)
-- More accurate? How? (e.g., semantic analysis over keyword matching)
+Define how PathForge improves upon the market baseline:
 
-Never replicate without improvement.
+- More transparent? (explainable metrics, clear scoring)
+- More ethical? (human-in-the-loop, consent-first)
+- More user-centric? (measurable funnel insights)
+- More data-sovereign? (local-first processing, user-owned data)
+- More accurate? (semantic analysis over keyword matching)
 
-### Step 5: Ethics, Bias & Automation Risk Assessment (REQUIRED)
+**Rule:** Never replicate without improvement.
+
+### Step 5: Ethics, Bias & Automation Safety
+
+// turbo
 
 Evaluate:
 
-- Privacy implications (GDPR, CV/personal data handling)
-- AI bias risks in scoring, matching, or recommendation
-- Automation safety (rate limiting, anti-spam, employer ToS compliance)
-- User autonomy (human-in-the-loop control preserved?)
+- Privacy implications (GDPR, personal data handling)
+- AI bias risks in scoring, matching, or recommendations
+- Automation safety (rate limiting, anti-spam, ToS compliance)
+- User autonomy (human-in-the-loop preserved?)
 - Mitigation strategies for each identified risk
 
-### Step 6: Implementation Plan (REQUIRED)
+### Step 6: Research Summary
 
-Prepare a structured plan containing:
+// turbo
+
+Compile findings into `docs/RESEARCH-{slug}.md`:
 
 1. Research summary (from Steps 1-5)
 2. Key insights extracted
 3. Risks of weak approaches
 4. Proposed PathForge-grade solution
 5. Why this approach is superior
-6. Step-by-step execution plan
-7. Dependencies and blockers
+6. Dependencies and blockers
 
-### Step 7: Present for Approval (REQUIRED)
+### Step 7: Present for Approval
 
-Present the Research & Decision Report to the Product Owner.
+Present the Research Report to the Product Owner via `notify_user`.
 **Implementation may NOT begin until explicit approval is received.**
+After approval, proceed to `/plan` for structured task planning.
+
+---
 
 ## Rejection Triggers
 
-If any of these conditions are met, REJECT the task:
+If any of these conditions are met, **REJECT** the task:
 
-1. ❌ No market research exists for this feature domain
-2. ❌ The approach uses clearly outdated or harmful patterns
-3. ❌ The solution is below market standard
-4. ❌ Ethics, privacy, or automation safety risks are unmitigated
+1. ❌ No market research for this feature domain
+2. ❌ Approach uses outdated or harmful patterns
+3. ❌ Solution is below market standard
+4. ❌ Ethics/privacy/automation risks unmitigated
 5. ❌ "Just implement it" without research justification
 
-## Rejection Response Format
+---
 
-> "This task cannot be implemented in its current form, as it does not meet PathForge's quality and market standards.
-> Below are the identified risks and gaps. A revised, modern alternative is proposed."
+## Governance
+
+**PROHIBITED:** Implementing without research · skipping competitor analysis · ignoring ethics review · proceeding without approval · marking research "complete" without evidence
+
+**REQUIRED:** Minimum 5 competitors analyzed · enhancement over baseline documented · all risks mitigated · output saved to `docs/RESEARCH-{slug}.md` · Product Owner approval
+
+---
+
+## Completion Criteria
+
+- [ ] Market research completed (≥5 competitors)
+- [ ] Comparative analysis table produced
+- [ ] Gap detection documented
+- [ ] Enhancement strategy defined (improvement over baseline)
+- [ ] Ethics/bias/automation review completed
+- [ ] Research report saved to `docs/RESEARCH-{slug}.md`
+- [ ] Presented to Product Owner and approved
+
+## Related Resources
+
+| Resource          | Path                                |
+| :---------------- | :---------------------------------- |
+| Quality Gate Rule | `.agent/rules/quality-gate.md`      |
+| Plan (next step)  | `.agent/workflows/plan.md`          |
+| Retrospective     | `.agent/workflows/retrospective.md` |
+| Product Context   | `.agent/product.md`                 |

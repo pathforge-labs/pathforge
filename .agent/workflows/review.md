@@ -2,69 +2,53 @@
 description: Code review workflow. Lint, type-check, test, security scan, and build verification.
 ---
 
-# /review - Code Review Quality Gate
+# /review — Code Review Quality Gate
 
-$ARGUMENTS
+> **Trigger**: `/review` (full) · `/review lint` · `/review tests` · `/review security` · `/review build`
+> **Lifecycle**: After implementation, before `/retrospective`
 
----
-
-## 🔴 CRITICAL RULES
-
-1. **SEQUENTIAL** — Each step must pass before proceeding
-2. **NO OVERRIDES** — Failed gates block merge
-3. **DOCUMENT** — Log results for audit trail
+> [!CAUTION]
+> Sequential gate pipeline — each step must pass before proceeding. Failed gates block merge. No overrides.
 
 ---
 
-## Review Pipeline
+## 🔴 Critical Rules
 
-```
-/review
-    │
-    ▼
-1. Lint Check
-    │
-    Pass? ──No──► Fix lint errors
-    │
-   Yes
-    │
-    ▼
-2. Type Check
-    │
-    Pass? ──No──► Fix type errors
-    │
-   Yes
-    │
-    ▼
-3. Test Suite
-    │
-    Pass? ──No──► Fix failing tests
-    │
-   Yes
-    │
-    ▼
-4. Security Scan
-    │
-    Pass? ──No──► Fix vulnerabilities
-    │
-   Yes
-    │
-    ▼
-5. Build Verification
-    │
-    Pass? ──No──► Fix build errors
-    │
-   Yes
-    │
-    ▼
-✅ Review Complete — Ready for commit
+1. **SEQUENTIAL** — each gate must pass before the next runs
+2. **STOP ON FAILURE** — if a gate fails, stop immediately, show error + fix suggestion
+3. **NO OVERRIDES** — failed gates block merge, no exceptions
+4. **FULL-STACK** — both API (Python) and Web (TypeScript) are scanned
+5. **DOCUMENT** — log results for audit trail
+
+---
+
+## Argument Parsing
+
+| Command            | Gates Run                      |
+| :----------------- | :----------------------------- |
+| `/review`          | All gates (1-7)                |
+| `/review lint`     | Gates 1-2 (Ruff + ESLint)      |
+| `/review types`    | Gates 3-4 (MyPy + TSC)         |
+| `/review tests`    | Gate 5 (Pytest)                |
+| `/review security` | Gate 6 (npm audit + pip-audit) |
+| `/review build`    | Gate 7 (Build)                 |
+
+---
+
+## Pipeline Gates
+
+Execute gates IN ORDER. Stop at first failure.
+
+### Gate 1: Lint — Backend
+
+// turbo
+
+```powershell
+# Cwd: apps/api
+& ".venv\Scripts\python.exe" -m ruff check app/ --quiet
 ```
 
----
-
-## Steps
-
-### 1. Lint Check (Frontend)
+### Gate 2: Lint — Frontend
 
 // turbo
 
@@ -73,7 +57,16 @@ $ARGUMENTS
 pnpm lint
 ```
 
-### 2. Type Check (Frontend)
+### Gate 3: Type Check — Backend
+
+// turbo
+
+```powershell
+# Cwd: apps/api
+& ".venv\Scripts\python.exe" -m mypy app/
+```
+
+### Gate 4: Type Check — Frontend
 
 // turbo
 
@@ -82,25 +75,28 @@ pnpm lint
 npx tsc --noEmit
 ```
 
-### 3. Backend Tests
+### Gate 5: Tests — Backend
 
 // turbo
 
 ```powershell
 # Cwd: apps/api
-& ".venv\Scripts\python.exe" -m pytest tests/ -q
+& ".venv\Scripts\python.exe" -m pytest tests/ -q --tb=short
 ```
 
-### 4. Security Scan
+### Gate 6: Security Scan
 
 // turbo
 
 ```powershell
 # Cwd: apps/web
 npm audit --audit-level=moderate
+
+# Cwd: apps/api
+& ".venv\Scripts\python.exe" -m pip_audit
 ```
 
-### 5. Build Verification
+### Gate 7: Build Verification
 
 // turbo
 
@@ -113,65 +109,81 @@ pnpm build
 
 ## Output Format
 
-### All Checks Passed
+### ✅ All Gates Passed
 
 ```markdown
 ## ✅ Review Complete
 
-| Gate     | Status                | Duration |
-| :------- | :-------------------- | :------- |
-| Lint     | ✅ Pass               | 2.1s     |
-| Types    | ✅ Pass               | 4.3s     |
-| Tests    | ✅ Pass (146/146)     | 24s      |
-| Security | ✅ No vulnerabilities | 1.2s     |
-| Build    | ✅ Pass (23 routes)   | 8.7s     |
+| Gate             | Scope | Status                | Duration |
+| :--------------- | :---- | :-------------------- | :------- |
+| Lint (Backend)   | api   | ✅ Pass               | {time}   |
+| Lint (Frontend)  | web   | ✅ Pass               | {time}   |
+| Types (Backend)  | api   | ✅ Pass               | {time}   |
+| Types (Frontend) | web   | ✅ Pass               | {time}   |
+| Tests            | api   | ✅ Pass ({n}/{n})     | {time}   |
+| Security         | both  | ✅ No vulnerabilities | {time}   |
+| Build            | web   | ✅ Pass ({n} routes)  | {time}   |
 
 **Verdict**: Ready for commit.
 ```
 
-### Check Failed
+### ❌ Gate Failed
 
 ```markdown
-## ❌ Review Failed
+## ❌ Review Failed at Gate {N}
 
 | Gate   | Status    |
 | :----- | :-------- |
-| [gate] | ❌ FAILED |
+| {gate} | ❌ FAILED |
 
-### Failure Details
+### Error Output
 
-[Error output]
+{error details}
 
 ### Recommended Fix
 
-[Fix steps]
+{fix steps}
+
+Re-run: `/review` or `/review {gate}`
 ```
 
 ---
 
-## Examples
+## Pre-Push Hook vs /review
 
-```
-/review
-/review lint
-/review tests
-/review security
-```
-
----
-
-## Standalone Script (CI Mirror)
-
-> For **push-gating without agent**, run the local CI mirror directly:
-
-// turbo
-
-```bash
-.\scripts\ci-local.ps1           # All gates (API + Web)
-.\scripts\ci-local.ps1 -Scope api # API only (ruff, mypy, pytest)
-.\scripts\ci-local.ps1 -Scope web # Web only (lint, build)
-```
+| Aspect      | Pre-Push Hook (`ci-local.ps1`) | `/review`                        |
+| :---------- | :----------------------------- | :------------------------------- |
+| Trigger     | Automatic on `git push`        | Manual on-demand                 |
+| Scope       | Subset (lint + types + build)  | Full 7-gate pipeline             |
+| Interactive | No — blocks push silently      | Yes — shows output + suggestions |
+| Use case    | Continuous quality enforcement | Pre-merge deep validation        |
 
 > [!TIP]
-> Activate automatic pre-push gating:
-> `git config core.hooksPath .githooks`
+> Enable automatic pre-push gating: `git config core.hooksPath .githooks`
+
+---
+
+## Governance
+
+**PROHIBITED:** Skipping gates · overriding failures · merging without all gates passing · ignoring security scan results
+
+**REQUIRED:** Run all 7 gates for merge-ready code · document results · fix failures before re-running · both API and Web scanned
+
+---
+
+## Completion Criteria
+
+- [ ] All applicable gates executed in sequence
+- [ ] Zero failures across all gates
+- [ ] Results documented with pass/fail + duration
+- [ ] Verdict rendered: "Ready for commit" or "Failed at Gate N"
+
+## Related Resources
+
+| Resource        | Path                                |
+| :-------------- | :---------------------------------- |
+| CI Local Script | `scripts/ci-local.ps1`              |
+| Pre-Push Hook   | `.githooks/pre-push`                |
+| Quality Gate    | `.agent/workflows/quality-gate.md`  |
+| Retrospective   | `.agent/workflows/retrospective.md` |
+| Plan            | `.agent/workflows/plan.md`          |

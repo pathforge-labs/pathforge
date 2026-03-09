@@ -40,11 +40,18 @@
     "sprint_44": "Post-Launch Polish & Monitoring (1 session)"
   },
   "agent_tooling": {
-    "plan_workflow": "v2.0 — Strategic Sprint Planning Intelligence (261 lines, 27 audit findings)",
-    "review_verified": "2026-03-09"
+    "plan_workflow": "v2.0 — Strategic Sprint Planning Intelligence (261 lines, 27 findings)",
+    "review_workflow": "v2.0 — 7-gate full-stack pipeline (4,897 chars)",
+    "status_workflow": "v2.0 — 3-mode dashboard (4,868 chars)",
+    "quality_gate_workflow": "v2.0 — scope filter + output artifact (5,460 chars)",
+    "retrospective_workflow": "v2.0 — optimized (6,838 chars, was 11,903)",
+    "review_verified": "2026-03-09",
+    "audit_passes": 4,
+    "total_findings": 47
   },
   "commits": [
     {"hash": "36d02ea", "message": "fix(web): consolidate pricing — Premium €39/mo, Pro annual €149"},
-    {"hash": "8e20cf2", "message": "chore(api): add uv.lock for deterministic dependency resolution"}
+    {"hash": "8e20cf2", "message": "chore(api): add uv.lock for deterministic dependency resolution"},
+    {"hash": "441547f", "message": "feat(agent): upgrade /plan workflow — Strategic Sprint Planning Intelligence"}
   ]
 }

@@ -9,12 +9,13 @@
 ## Work Done This Session
 
 1. **`uv.lock` committed** — deterministic dependency resolution for `apps/api` (commit `8e20cf2`)
-2. **`/plan` workflow upgraded** — 73→261 lines, Strategic Sprint Planning & Engineering Intelligence
-   - 3 Tier-1 audit passes, 27 findings resolved
-   - Dual-mode: Sprint Planning (8 steps) + Feature Planning (6 steps)
-   - 5 Intelligence Domains, velocity guardrails, ROADMAP integration
-   - Optimized from 16,218→8,478 chars to fit 12,000 char limit
-3. **Tier-1 /review passed** — Ruff ✅, ESLint ✅, TSC ✅, Pytest 1103/1103 ✅, Build ✅
+2. **`/plan` workflow upgraded** — 73→261 lines, 27 findings, dual-mode (commit `441547f`)
+3. **Core workflow suite upgraded** — 4 workflows, 4 Tier-1 audit passes, 47 findings
+   - `/review`: 2,754→4,897 chars — 7-gate full-stack pipeline (Ruff, ESLint, MyPy, TSC, Pytest, Security, Build)
+   - `/status`: 1,273→4,868 chars — 3-mode dashboard (ROADMAP, session, git, readiness)
+   - `/quality-gate`: 3,490→5,460 chars — scope filter, output artifact, enforcement
+   - `/retrospective`: 11,903→6,838 chars — optimized with 5,065 headroom
+4. **Tier-1 /review passed** — Ruff ✅, ESLint ✅, TSC ✅, Pytest 1103/1103 ✅, Build ✅
 
 ## Key Audit Findings (8 P0 Blockers — unchanged)
 
@@ -35,3 +36,4 @@
 - **H2**: Manual tasks needed before Phase E: Google OAuth client + Microsoft OAuth app
 - **H3**: VR baselines still deferred (Sprint 44)
 - **H4**: Velocity warning — Sprint 39 is 2.3x larger than historical avg, consider splitting 39a/39b
+- **H5**: All core workflows now Tier-1 compliant — cross-workflow data flow documented

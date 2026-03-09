@@ -1058,6 +1058,7 @@
 | 2026-03-04 | uv migration for API CI job                | Post-37       | ✅ Done | 10-100x faster dep install, caching          |
 | 2026-03-04 | Migration chain + deprecation fixes        | Post-37       | ✅ Done | Alembic chain, utcnow, HTTP_422, bcrypt opt  |
 | 2026-03-09 | /plan workflow — Strategic Sprint Planning | Pre-39        | ✅ Done | 73→261 lines, 3 Tier-1 audits, 27 findings   |
+| 2026-03-09 | Core workflow suite Tier-1 upgrade         | Pre-39        | ✅ Done | 4 workflows, 4 audit passes, 47 findings     |
 
 ---
 
