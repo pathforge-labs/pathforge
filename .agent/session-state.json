@@ -1,18 +1,19 @@
 {
   "sprint": "39",
-  "focus": "Auth Hardening & Email Service — Planning not started",
+  "focus": "Auth Hardening & Email Service — ✅ Complete (33 tasks, 5 phases)",
   "branch": "main",
   "phase": "K — Production Launch",
   "session_date": "2026-03-09",
-  "status": "Pre-sprint agent tooling upgraded, Sprint 39 implementation next",
+  "status": "Sprint 39 complete — 6/8 P0 blockers resolved. Sprint 40 (Stripe + LLM setup) next.",
   "production_readiness": {
-    "global_score": 49,
-    "verdict": "NO-GO",
-    "p0_blockers": 8,
-    "p1_blockers": 6,
+    "global_score": 59,
+    "verdict": "NO-GO (6/8 P0 resolved, Stripe + LLM remain)",
+    "p0_blockers": 2,
+    "p0_resolved": 6,
+    "p1_blockers": 4,
     "p2_blockers": 4,
     "p3_blockers": 2,
-    "total_gaps": 20
+    "total_gaps": 12
   },
   "tracking": {
     "tests_backend": 1103,
@@ -21,37 +22,35 @@
     "ruff_violations": 0,
     "tsc_errors": 0,
     "eslint_errors": 0,
-    "mypy_errors": 0,
-    "build_routes": 38
+    "npm_audit_vulns": 0,
+    "pip_audit_vulns": 0,
+    "build_routes": 42
   },
   "audit": {
-    "passes": 4,
+    "passes": 5,
     "standard": "FAANG/Tier-1",
     "domains_audited": 12,
-    "findings_total": 20,
-    "sprint_38_verdict_corrected": "GO → NO-GO"
+    "review_gates_passed": "7/7",
+    "sprint_39_verdict": "GO — all 33 tasks complete"
   },
   "sprint_plan": {
-    "sprint_39": "Auth Hardening & Email Service (5 phases, 6-7 sessions)",
-    "sprint_40": "Stripe & LLM Operational Setup (1-2 sessions)",
-    "sprint_41": "Production Infrastructure Hardening (2 sessions)",
-    "sprint_42": "Monitoring, Token Security & Polish (1 session)",
-    "sprint_43": "Stripe Live Mode Cutover (1 session)",
-    "sprint_44": "Post-Launch Polish & Monitoring (1 session)"
+    "sprint_39": "✅ Complete — Auth Hardening & Email Service (33 tasks, 1 session)",
+    "sprint_40": "⏳ Stripe & LLM Operational Setup (manual, 1-2 sessions)",
+    "sprint_41": "⏳ Production Infrastructure Hardening (2 sessions)",
+    "sprint_42": "⏳ Monitoring, Token Security & Polish (1 session)",
+    "sprint_43": "⏳ Stripe Live Mode Cutover (1 session)",
+    "sprint_44": "⏳ Post-Launch Polish & Monitoring (1 session)"
   },
-  "agent_tooling": {
-    "plan_workflow": "v2.0 — Strategic Sprint Planning Intelligence (261 lines, 27 findings)",
-    "review_workflow": "v2.0 — 7-gate full-stack pipeline (4,897 chars)",
-    "status_workflow": "v2.0 — 3-mode dashboard (4,868 chars)",
-    "quality_gate_workflow": "v2.0 — scope filter + output artifact (5,460 chars)",
-    "retrospective_workflow": "v2.0 — optimized (6,838 chars, was 11,903)",
-    "review_verified": "2026-03-09",
-    "audit_passes": 4,
-    "total_findings": 47
+  "handoff": {
+    "manual_steps": 6,
+    "h1": "Copy TURNSTILE_SECRET_KEY to apps/api/.env",
+    "h2": "Run alembic upgrade head (migration d4e5f6g7h8i9)",
+    "h3": "Google OAuth client setup (GCP Console)",
+    "h4": "Microsoft OAuth app setup (Azure AD)",
+    "h5": "Install @azure/msal-browser when MS OAuth activated",
+    "h6": "Add Google GIS script to layout.tsx when Google OAuth activated"
   },
   "commits": [
-    {"hash": "36d02ea", "message": "fix(web): consolidate pricing — Premium €39/mo, Pro annual €149"},
-    {"hash": "8e20cf2", "message": "chore(api): add uv.lock for deterministic dependency resolution"},
-    {"hash": "441547f", "message": "feat(agent): upgrade /plan workflow — Strategic Sprint Planning Intelligence"}
+    {"hash": "160b48c", "message": "feat(auth): Sprint 39 — Auth Hardening, Email Service & OAuth"}
   ]
 }

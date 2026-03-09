@@ -7,9 +7,10 @@ Platform user account with authentication fields.
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String, Text
+from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -35,12 +36,15 @@ class User(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auth_provider: Mapped[str] = mapped_column(String(50), default="email", nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Sprint 39: Email verification
+    verification_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Sprint 34: RBAC role (D3)
     role: Mapped[str] = mapped_column(
         String(20), default=UserRole.USER.value, server_default="user",

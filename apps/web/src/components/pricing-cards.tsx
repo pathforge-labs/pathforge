@@ -3,7 +3,7 @@
 import { useState, type ReactElement } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { PRICING_TIERS } from "@/data/landing-data";
+import { LANDING_TIERS } from "@/data/landing-data";
 
 /** Monthly/Annual toggle + 3 pricing cards with glassmorphism design */
 export function PricingCards(): ReactElement {
@@ -52,7 +52,7 @@ export function PricingCards(): ReactElement {
 
       {/* ── Tier Cards ─────────────────────────────── */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {PRICING_TIERS.map((tier) => {
+        {LANDING_TIERS.map((tier) => {
           const TierIcon = tier.icon;
           return (
             <div
@@ -89,12 +89,12 @@ export function PricingCards(): ReactElement {
               <div className="mb-6">
                 <div className="flex items-baseline gap-1">
                   <span className="pricing-price font-display text-4xl font-bold tracking-tight">
-                    {isAnnual && tier.annualPrice !== "€0"
-                      ? tier.annualPrice
+                    {isAnnual && tier.annualPriceDisplay !== "€0"
+                      ? tier.annualPriceDisplay
                       : tier.price}
                   </span>
                   <span className="text-sm text-foreground/60">
-                    {isAnnual && tier.annualPrice !== "€0"
+                    {isAnnual && tier.annualPriceDisplay !== "€0"
                       ? "/yr"
                       : tier.period}
                   </span>

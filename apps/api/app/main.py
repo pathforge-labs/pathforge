@@ -38,6 +38,7 @@ from app.api.v1 import (
     hidden_job_market,
     interview_intelligence,
     notifications,
+    oauth,
     observability,
     predictive_career,
     public_profiles,
@@ -213,6 +214,7 @@ def create_app() -> FastAPI:
     # API routes
     application.include_router(health.router, prefix="/api/v1")
     application.include_router(auth.router, prefix="/api/v1")
+    application.include_router(oauth.router, prefix="/api/v1")
     application.include_router(users.router, prefix="/api/v1")
     application.include_router(ai.router, prefix="/api/v1")
     application.include_router(applications.router, prefix="/api/v1")

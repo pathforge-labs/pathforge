@@ -32,15 +32,21 @@ export default function RegisterPage() {
       return;
     }
 
+    const complexityErrors: string[] = [];
+    if (!/[A-Z]/.test(password)) complexityErrors.push("one uppercase letter");
+    if (!/\d/.test(password)) complexityErrors.push("one digit");
+    if (!/[!@#$%^&*(),.?":{}|<>\-_=+[\]\\/\'`~;]/.test(password)) complexityErrors.push("one special character");
+    if (complexityErrors.length > 0) {
+      setError(`Password must contain at least ${complexityErrors.join(", ")}`);
+      return;
+    }
+
     setLoading(true);
 
     try {
       await authApi.register({ email, password, full_name: fullName });
-      // Auto-login after registration
-      const tokens = await authApi.login({ email, password });
-      localStorage.setItem("pathforge_access_token", tokens.access_token);
-      localStorage.setItem("pathforge_refresh_token", tokens.refresh_token);
-      router.push("/dashboard");
+      // F28: Redirect to verification instead of auto-login
+      router.push(`/check-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {

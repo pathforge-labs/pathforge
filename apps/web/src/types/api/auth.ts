@@ -40,3 +40,23 @@ export interface UserUpdateRequest {
   full_name?: string;
   avatar_url?: string | null;
 }
+
+// ── Sprint 39: Password Reset & Email Verification ──────────
+
+export interface ForgotPasswordRequest {
+  readonly email: string;
+}
+
+export interface ResetPasswordRequest {
+  readonly token: string;
+  readonly new_password: string;
+}
+
+export interface VerifyEmailRequest {
+  readonly token: string;
+}
+
+export interface OAuthTokenRequest {
+  readonly id_token: string;
+}
+

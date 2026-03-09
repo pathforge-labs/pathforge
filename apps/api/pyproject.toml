@@ -28,6 +28,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.19.0",
     # Sprint 34: Stripe billing
     "stripe>=14.0.0",
+    "resend>=2.23.0",
 ]
 
 [project.optional-dependencies]

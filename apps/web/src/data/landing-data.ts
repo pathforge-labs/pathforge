@@ -108,92 +108,87 @@ export const HOW_IT_WORKS = [
   },
 ];
 
-/* ── Pricing Tiers ────────────────────────────── */
+/* ── Pricing Tiers (SSOT: @/config/pricing.ts) ──── */
 
-export interface PricingTier {
-  readonly name: string;
-  readonly price: string;
-  readonly period: string;
-  readonly annualPrice: string;
-  readonly annualSavings: string;
-  readonly description: string;
-  readonly popular: boolean;
-  readonly cta: string;
-  readonly features: readonly string[];
+import {
+  PRICING_TIERS as BASE_TIERS,
+  type PricingTier,
+  formatPrice,
+  getAnnualSavingsPercent,
+} from "@/config/pricing";
+
+/**
+ * Landing-page extension of the SSOT PricingTier.
+ * Adds marketing-only display fields (icon, gradient, description, etc.)
+ * that are NOT part of the backend pricing config.
+ */
+export interface LandingTier extends PricingTier {
   readonly icon: LucideIcon;
   readonly gradient: string;
+  readonly description: string;
+  /** Formatted display price (e.g. "€0", "€19"). */
+  readonly price: string;
+  /** Period label (e.g. "forever", "/mo"). */
+  readonly period: string;
+  /** Formatted annual price display. */
+  readonly annualPriceDisplay: string;
+  /** Annual savings label (e.g. "Save 35%"). */
+  readonly annualSavings: string;
+  /** Alias for `highlighted` — marketing convenience. */
+  readonly popular: boolean;
+  /** Alias for `ctaText` — marketing convenience. */
+  readonly cta: string;
 }
 
-export const PRICING_TIERS: readonly PricingTier[] = [
-  {
-    name: "Starter",
-    price: "€0",
-    period: "forever",
-    annualPrice: "€0",
-    annualSavings: "",
-    description: "Explore your career potential with core AI features.",
-    popular: false,
-    cta: "Join Waitlist",
+/** Marketing metadata keyed by tier id. */
+const TIER_MARKETING: Record<string, {
+  icon: LucideIcon;
+  gradient: string;
+  description: string;
+}> = {
+  free: {
     icon: Sparkles,
     gradient: "from-emerald-500 to-teal-500",
-    features: [
-      "1 Career DNA™ profile",
-      "3 job matches per month",
-      "1 tailored CV",
-      "Basic ATS score",
-      "Skill gap overview",
-      "Community support",
-    ],
+    description: "Explore your career potential with core AI features.",
   },
-  {
-    name: "Pro",
-    price: "€19",
-    period: "/mo",
-    annualPrice: "€149",
-    annualSavings: "Save 35%",
-    description: "Full career intelligence for active job seekers.",
-    popular: true,
-    cta: "Join Waitlist",
+  pro: {
     icon: Target,
     gradient: "from-violet-500 to-purple-500",
-    features: [
-      "Full Career DNA™ analysis",
-      "25 job matches per month",
-      "10 tailored CVs per month",
-      "Full ATS optimization",
-      "Detailed skill gap + learning paths",
-      "Salary intelligence benchmarks",
-      "2 career simulations per month",
-      "Monthly AI disruption digest",
-      "Email support (24h)",
-    ],
+    description: "Full career intelligence for active job seekers.",
   },
-  {
-    name: "Premium",
-    price: "€39",
-    period: "/mo",
-    annualPrice: "€299",
-    annualSavings: "Save 36%",
-    description: "Maximum career power for career changers and power users.",
-    popular: false,
-    cta: "Join Waitlist",
+  premium: {
     icon: Rocket,
     gradient: "from-amber-500 to-orange-500",
-    features: [
-      "Everything in Pro",
-      "Unlimited job matches",
-      "Unlimited tailored CVs",
-      "ATS optimization + A/B tracking",
-      "Priority skill gap alerts",
-      "Salary negotiation coach",
-      "Unlimited career simulations",
-      "Real-time AI disruption alerts",
-      "Human-in-loop application automation",
-      "Career DNA™ history & evolution",
-      "Priority support (4h)",
-    ],
+    description: "Maximum career power for career changers and power users.",
   },
-] as const;
+};
+
+/**
+ * Landing-page pricing tiers derived from the SSOT (`@/config/pricing.ts`).
+ * All pricing data (name, prices, features, CTA) comes from the SSOT.
+ * Marketing display fields (icon, gradient, description) are layered on top.
+ */
+export const LANDING_TIERS: readonly LandingTier[] = BASE_TIERS.map((tier) => {
+  const marketing = TIER_MARKETING[tier.id] ?? {
+    icon: Sparkles,
+    gradient: "from-gray-500 to-gray-600",
+    description: "",
+  };
+  const savingsPercent = getAnnualSavingsPercent(tier);
+
+  return {
+    ...tier,
+    icon: marketing.icon,
+    gradient: marketing.gradient,
+    description: marketing.description,
+    price: tier.monthlyPrice === 0 ? "€0" : formatPrice(tier.monthlyPrice),
+    period: tier.monthlyPrice === 0 ? "forever" : "/mo",
+    annualPriceDisplay: tier.annualPrice === 0 ? "€0" : formatPrice(tier.annualPrice),
+    annualSavings: savingsPercent > 0 ? `Save ${savingsPercent}%` : "",
+    popular: tier.highlighted,
+    cta: tier.ctaText,
+  };
+}) as unknown as readonly LandingTier[];
 
 export const COMPARISON = {
   headers: ["", "Resume Builders", "Job Boards", "Career Coaches", "PathForge"],

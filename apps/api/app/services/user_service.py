@@ -28,18 +28,28 @@ class UserService:
         db: AsyncSession,
         *,
         email: str,
-        password: str,
+        password: str | None = None,
         full_name: str,
+        auth_provider: str = "email",
+        is_verified: bool = False,
     ) -> User:
-        """Register a new user. Raises ValueError if email already taken."""
+        """Register a new user. Raises ValueError if email already taken.
+
+        Args:
+            password: Required for email users, None for OAuth users (F24).
+            auth_provider: "email", "google", or "microsoft".
+            is_verified: OAuth users are pre-verified; email users are not.
+        """
         result = await db.execute(select(User).where(User.email == email))
         if result.scalar_one_or_none():
             raise ValueError("A user with this email already exists")
 
         user = User(
             email=email,
-            hashed_password=hash_password(password),
+            hashed_password=hash_password(password) if password else None,
             full_name=full_name,
+            auth_provider=auth_provider,
+            is_verified=is_verified,
         )
         db.add(user)
         await db.flush()
@@ -61,7 +71,17 @@ class UserService:
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
-        if not user or not verify_password(password, user.hashed_password):
+        if not user:
+            raise ValueError("Incorrect email or password")
+
+        # F23: Guard against OAuth users attempting password login
+        if user.hashed_password is None:
+            raise ValueError(
+                f"This account uses {user.auth_provider} sign-in. "
+                f"Please use the {user.auth_provider} button to log in."
+            )
+
+        if not verify_password(password, user.hashed_password):
             raise ValueError("Incorrect email or password")
 
         if not user.is_active:

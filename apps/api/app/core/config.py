@@ -179,8 +179,25 @@ class Settings(BaseSettings):  # type: ignore[misc]
     rate_limit_public_profile: str = "30/minute"
     rate_limit_billing: str = "10/minute"     # S35/AC4: billing mutation rate limit
 
+    # ── Sprint 39: Auth Hardening ─────────────────────────────────
+    # Token expiry
+    password_reset_token_expire_minutes: int = 30
+    email_verification_token_expire_hours: int = 24
+    # Rate limits for new auth endpoints
+    rate_limit_forgot_password: str = "3/minute"
+    rate_limit_reset_password: str = "5/minute"
+    rate_limit_verify_email: str = "5/minute"
+    rate_limit_resend_verification: str = "3/minute"
+    # Cloudflare Turnstile CAPTCHA (empty = skip validation in dev)
+    turnstile_secret_key: str = ""
+    # OAuth providers (empty = disabled)
+    google_oauth_client_id: str = ""
+    microsoft_oauth_client_id: str = ""
+    microsoft_oauth_client_secret: str = ""
+
     # ── Sprint 38 H3: JWT Secret Production Guard ────────────
     _INSECURE_JWT_DEFAULTS: frozenset[str] = frozenset({
+        "pathforge-dev-secret-change-in-production",
         "change-me-in-production-use-a-real-secret",
         "change-me-refresh-secret-must-differ",
     })
