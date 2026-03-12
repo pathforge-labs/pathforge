@@ -1,13 +1,13 @@
 {
-  "sprint": "39-HN",
-  "focus": "Sprint 39 Handoff Notes Remediation — ✅ Complete (7 phases, 18 audit findings)",
+  "sprint": "39-HN-S2",
+  "focus": "Sprint 39 Handoff Notes Session 2 — H3/H4 OAuth Provider Setup Complete",
   "branch": "main",
   "phase": "K — Production Launch",
   "session_date": "2026-03-12",
-  "status": "Sprint 39 handoff remediation complete — H1-H6 resolved. Sprint 40 (Stripe + LLM setup) next.",
+  "status": "H3 (Google) + H4 (Microsoft) OAuth setup complete. H7 added for E2E testing. Sprint 40 next.",
   "production_readiness": {
     "global_score": 59,
-    "verdict": "NO-GO (8/8 P0 resolved except Stripe + LLM)",
+    "verdict": "NO-GO (Stripe + LLM still pending)",
     "p0_blockers": 2,
     "p0_resolved": 8,
     "p1_blockers": 4,
@@ -31,24 +31,27 @@
     "standard": "FAANG/Tier-1",
     "domains_audited": 12,
     "review_gates_passed": "8/8",
-    "sprint_39_hn_verdict": "GO — all 7 phases + 18 audit findings resolved"
+    "sprint_39_hn_s2_verdict": "GO — H3/H4 OAuth provider setup complete, H7 added for E2E testing"
   },
   "sprint_plan": {
     "sprint_39": "✅ Complete — Auth Hardening & Email Service (33 tasks, 1 session)",
     "sprint_39_hn": "✅ Complete — Handoff Notes Remediation (7 phases, 18 findings, 1 session)",
-    "sprint_40": "⏳ Stripe & LLM Operational Setup (manual, 1-2 sessions)",
+    "sprint_39_hn_s2": "✅ Complete — H3/H4 OAuth Provider Setup (Google GCP + Microsoft Azure)",
+    "sprint_40": "⏳ Stripe & LLM Operational Setup + OAuth E2E Testing (manual, 1-2 sessions)",
     "sprint_41": "⏳ Production Infrastructure Hardening (2 sessions)",
     "sprint_42": "⏳ Monitoring, Token Security & Polish (1 session)",
     "sprint_43": "⏳ Stripe Live Mode Cutover (1 session)",
     "sprint_44": "⏳ Post-Launch Polish & Monitoring (1 session)"
   },
   "handoff": {
-    "manual_steps": 2,
-    "h3": "Google OAuth client setup (GCP Console) → set env vars in Railway + Vercel",
-    "h4": "Microsoft OAuth app setup (Azure AD) → set env vars in Railway + Vercel"
+    "manual_steps": 3,
+    "h7": "OAuth E2E testing — test Google & Microsoft login/register flows end-to-end",
+    "h8": "Stripe + LLM API key setup",
+    "h9": "VR baselines (deferred to Sprint 44)"
   },
   "commits": [
     {"hash": "160b48c", "message": "feat(auth): Sprint 39 — Auth Hardening, Email Service & OAuth"},
-    {"hash": "pending", "message": "feat(auth): Sprint 39 Handoff Notes remediation — OAuth JWKS hardening, MSAL, CSP, test fix"}
+    {"hash": "553b791", "message": "feat(auth): Sprint 39 Handoff Notes remediation — OAuth JWKS hardening, MSAL, CSP, test fix"},
+    {"hash": "pending", "message": "fix(auth): MSAL redirectUri fix + H3/H4 OAuth provider setup tracking"}
   ]
 }

@@ -78,6 +78,7 @@ export default function OAuthButtons({ mode }: OAuthButtonsProps): ReactElement 
         auth: {
           clientId: microsoftClientId ?? "",
           authority: "https://login.microsoftonline.com/common",
+          redirectUri: window.location.origin,
         },
       };
       const msalInstance = new PublicClientApplication(msalConfig);

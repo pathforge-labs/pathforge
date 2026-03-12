@@ -2,27 +2,31 @@
 
 ## Current Sprint
 
-- **Sprint**: 39 Handoff Notes Remediation — ✅ complete
+- **Sprint**: 39 Handoff Notes Remediation (Session 2) — ✅ complete
 - **Branch**: `main`
 - **Phase**: K (Production Launch)
 
 ## Work Done This Session
 
-1. **Sprint 39 Handoff Notes — Full Remediation** — 7 phases, 13 files, 18 Tier-1 audit findings
-   - Phase A: `TURNSTILE_SECRET_KEY` + OAuth vars → `apps/api/.env`
-   - Phase B: `@azure/msal-browser@^5.4.0` installed, `oauth-buttons.tsx` fully refactored (typed MSAL, GIS interface, conditional render, `@ts-expect-error`/`eslint-disable` removed)
-   - Phase C: CSP hardened (`script-src`, `connect-src`, `frame-src` → Google + Microsoft domains), GIS `<Script>` in auth layout
-   - Phase D: `oauth.py` rewritten — JWKS RS256 verification (was `verify_signature: False`), `asyncio.to_thread()` for both providers, `Literal["google", "microsoft"]` type, `msal` dead import removed, `google-auth>=2.37.0` as explicit dep
-   - Phase E: `OAuthButtons` wired into login (after form) + register (OAuth-first) pages
-   - Phase F: Alembic migration `d4e5f6g7h8i9` applied → head
-   - Phase G: Both `.env.example` files updated with OAuth + Turnstile sections
-2. **Test Fix**: `_disable_turnstile()` autouse fixture added to `conftest.py` — clears `TURNSTILE_SECRET_KEY` in tests
-3. **Tier-1 Retrospective Audit** — Dead code removed from `oauth.py`, security scan clean, all checks pass
-4. **Verification**: TSC ✅, ESLint ✅, Ruff ✅, Build ✅, 1103/1103 tests ✅, Alembic at head ✅
+1. **H3 — Google OAuth Client Setup (GCP Console)**
+   - OAuth consent screen configured, Client ID created (`PathForge Web`)
+   - `GOOGLE_OAUTH_CLIENT_ID` set in Railway, `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` set in Vercel
+   - Local `apps/api/.env` and `apps/web/.env` updated
+2. **H4 — Microsoft OAuth App Setup (Azure AD)**
+   - Microsoft Entra ID tenant created (`emre@pathforge.eu`), App Registration (`PathForge Web`)
+   - SPA redirect URIs: `https://pathforge.eu` + `http://localhost:3000`
+   - Client Secret created (24mo), API permissions added (`openid`, `email`, `profile`)
+   - `MICROSOFT_OAUTH_CLIENT_ID` + `MICROSOFT_OAUTH_CLIENT_SECRET` set in Railway
+   - `NEXT_PUBLIC_MICROSOFT_OAUTH_CLIENT_ID` set in Vercel
+3. **Security Fix**: `MICROSOFT_OAUTH_CLIENT_SECRET` removed from `apps/web/.env` (server secret must not be in frontend)
+4. **NEXT*PUBLIC* prefix fix**: Google/Microsoft Client IDs in web `.env` renamed with `NEXT_PUBLIC_` prefix
+5. **MSAL redirect URI fix**: `redirectUri: window.location.origin` added to MSAL config to match Azure-registered URI
+6. **Dependency**: `google-auth-2.49.0` installed in API venv
+7. **DB Fix**: `role` column added to `users` table (model existed, migration was incomplete)
+8. **Local Verification**: OAuth buttons confirmed visible on login + register pages
 
 ## Handoff Notes (Next Sprint)
 
-- **H3**: 🔧 Create Google OAuth client (Google Cloud Console) → set `GOOGLE_OAUTH_CLIENT_ID` in Railway + `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` in Vercel
-- **H4**: 🔧 Create Microsoft OAuth app (Azure AD) → set `MICROSOFT_OAUTH_CLIENT_ID` + `MICROSOFT_OAUTH_CLIENT_SECRET` in Railway + `NEXT_PUBLIC_MICROSOFT_OAUTH_CLIENT_ID` in Vercel
-- **H7**: Sprint 40 is primarily manual/browser work — Stripe account setup + LLM API key configuration
-- **H8**: VR baselines still deferred (Sprint 44)
+- **H7**: 🔧 OAuth E2E testing — test Google & Microsoft login/register flows end-to-end (token exchange, user creation/lookup, session management, error handling). Both local dev and production after `main` → `production` merge.
+- **H8**: Sprint 40 is primarily manual/browser work — Stripe account setup + LLM API key configuration
+- **H9**: VR baselines still deferred (Sprint 44)
