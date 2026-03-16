@@ -340,6 +340,10 @@ export const API_ROUTE_MAP: Record<string, unknown> = {
   "/api/v1/auth/login": MOCK_TOKEN_RESPONSE,
   "/api/v1/auth/logout": { status: "ok" },
 
+  // OAuth (Sprint Pre-40 H7)
+  "/api/v1/auth/oauth/google": MOCK_TOKEN_RESPONSE,
+  "/api/v1/auth/oauth/microsoft": MOCK_TOKEN_RESPONSE,
+
   // Health
   "/api/v1/health/ready": MOCK_HEALTH,
 

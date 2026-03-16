@@ -80,4 +80,29 @@ describe("Auth API Client", () => {
       expect.objectContaining({ method: "POST" }),
     );
   });
+
+  // Sprint Pre-40 H7: OAuth API client test
+  it("oauthLogin should POST to /api/v1/auth/oauth/{provider}", async () => {
+    await authApi.oauthLogin("google", { id_token: "mock-google-token" });
+
+    expect(mockedFetchPublic).toHaveBeenCalledWith(
+      "/api/v1/auth/oauth/google",
+      expect.objectContaining({
+        method: "POST",
+        body: { id_token: "mock-google-token" },
+      }),
+    );
+  });
+
+  it("oauthLogin should support Microsoft provider", async () => {
+    await authApi.oauthLogin("microsoft", { id_token: "mock-ms-token" });
+
+    expect(mockedFetchPublic).toHaveBeenCalledWith(
+      "/api/v1/auth/oauth/microsoft",
+      expect.objectContaining({
+        method: "POST",
+        body: { id_token: "mock-ms-token" },
+      }),
+    );
+  });
 });
