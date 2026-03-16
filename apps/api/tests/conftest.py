@@ -390,3 +390,50 @@ async def billing_test_user(
     await db_session.refresh(authenticated_user)
     return authenticated_user
 
+
+# ── Sprint Pre-40: OAuth Test Fixtures (H7) ─────────────────
+
+
+@pytest.fixture
+async def oauth_user(db_session: AsyncSession) -> User:
+    """Create an OAuth-registered user (Google, no password, verified).
+
+    Provides a user that was created via Google OAuth — has no password
+    and is pre-verified. Used for OAuth login and account-linking tests.
+    """
+    from app.models.user import User as UserModel
+
+    user = UserModel(
+        email="oauth@google.test",
+        hashed_password=None,
+        full_name="OAuth User",
+        auth_provider="google",
+        is_verified=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def inactive_user(db_session: AsyncSession) -> User:
+    """Create an inactive user for access-denied tests.
+
+    Provides a deactivated user to verify 403 guards on OAuth
+    and standard auth endpoints.
+    """
+    from app.core.security import hash_password
+    from app.models.user import User as UserModel
+
+    user = UserModel(
+        email="inactive@pathforge.eu",
+        hashed_password=hash_password("InactivePass123!"),
+        full_name="Inactive User",
+        is_active=False,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.refresh(user)
+    return user
+
