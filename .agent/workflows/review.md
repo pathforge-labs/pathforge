@@ -1,5 +1,9 @@
 ---
-description: Code review workflow. Lint, type-check, test, security scan, and build verification.
+description: Code review workflow. Sequential quality gate pipeline — lint, type-check, test, security scan, and build verification.
+version: 2.1.0
+sdlc-phase: verify
+skills: [verification-loop]
+commit-types: [fix, refactor]
 ---
 
 # /review — Code Review Quality Gate
@@ -10,28 +14,44 @@ description: Code review workflow. Lint, type-check, test, security scan, and bu
 > [!CAUTION]
 > Sequential gate pipeline — each step must pass before proceeding. Failed gates block merge. No overrides.
 
+> [!TIP]
+> This workflow leverages the **verification-loop** skill. Read `.agent/skills/verification-loop/SKILL.md` for extended guidance.
+
 ---
 
-## 🔴 Critical Rules
+## Scope Filter
+
+| Commit Type | Review Required? | Rationale |
+| :---------- | :--------------- | :-------- |
+| `feat()` | ✅ Full review | New functionality needs all gates |
+| `fix()` | ✅ Full review | Bug fixes need regression verification |
+| `refactor()` | ✅ Full review | Structural changes need quality validation |
+| `test()` | ⚠️ Gate 3 only | Test-only changes need test verification |
+| `docs()` | ❌ Skip | No testable code changes |
+| `chore()` | ❌ Skip | Config/tooling, no code quality risk |
+
+---
+
+## Critical Rules
 
 1. **SEQUENTIAL** — each gate must pass before the next runs
 2. **STOP ON FAILURE** — if a gate fails, stop immediately, show error + fix suggestion
 3. **NO OVERRIDES** — failed gates block merge, no exceptions
-4. **FULL-STACK** — both API (Python) and Web (TypeScript) are scanned
+4. **FULL-STACK** — all relevant stacks are scanned
 5. **DOCUMENT** — log results for audit trail
 
 ---
 
 ## Argument Parsing
 
-| Command            | Gates Run                      |
-| :----------------- | :----------------------------- |
-| `/review`          | All gates (1-7)                |
-| `/review lint`     | Gates 1-2 (Ruff + ESLint)      |
-| `/review types`    | Gates 3-4 (MyPy + TSC)         |
-| `/review tests`    | Gate 5 (Pytest)                |
-| `/review security` | Gate 6 (npm audit + pip-audit) |
-| `/review build`    | Gate 7 (Build)                 |
+| Command            | Gates Run                 |
+| :----------------- | :------------------------ |
+| `/review`          | All gates (1-5)           |
+| `/review lint`     | Gate 1 (Lint)             |
+| `/review types`    | Gate 2 (Type Check)       |
+| `/review tests`    | Gate 3 (Tests)            |
+| `/review security` | Gate 4 (Security Scan)    |
+| `/review build`    | Gate 5 (Build)            |
 
 ---
 
@@ -39,90 +59,86 @@ description: Code review workflow. Lint, type-check, test, security scan, and bu
 
 Execute gates IN ORDER. Stop at first failure.
 
-### Gate 1: Lint — Backend
+### Gate 1: Lint
 
 // turbo
 
-```powershell
-# Cwd: apps/api
-& ".venv\Scripts\python.exe" -m ruff check app/ --quiet
+Run the project's lint tool:
+
+```bash
+# Examples (adapt to your stack):
+npm run lint            # JavaScript/TypeScript
+ruff check .            # Python
+cargo clippy            # Rust
 ```
 
-### Gate 2: Lint — Frontend
+### Gate 2: Type Check
 
 // turbo
 
-```powershell
-# Cwd: apps/web
-pnpm lint
+Run the project's type checker:
+
+```bash
+# Examples:
+npx tsc --noEmit        # TypeScript
+mypy .                  # Python
 ```
 
-### Gate 3: Type Check — Backend
+### Gate 3: Tests
 
 // turbo
 
-```powershell
-# Cwd: apps/api
-& ".venv\Scripts\python.exe" -m mypy app/
+Run the project's test suite:
+
+```bash
+# Examples:
+npm test                # Node.js
+pytest tests/ -q        # Python
+cargo test              # Rust
 ```
 
-### Gate 4: Type Check — Frontend
+### Gate 4: Security Scan
 
 // turbo
 
-```powershell
-# Cwd: apps/web
-npx tsc --noEmit
+Run dependency and vulnerability scanning:
+
+```bash
+# Examples:
+npm audit --audit-level=moderate    # Node.js
+pip-audit                           # Python
+cargo audit                         # Rust
 ```
 
-### Gate 5: Tests — Backend
+### Gate 5: Build Verification
 
 // turbo
 
-```powershell
-# Cwd: apps/api
-& ".venv\Scripts\python.exe" -m pytest tests/ -q --tb=short
-```
+Verify the project builds successfully:
 
-### Gate 6: Security Scan
-
-// turbo
-
-```powershell
-# Cwd: apps/web
-npm audit --audit-level=moderate
-
-# Cwd: apps/api
-& ".venv\Scripts\python.exe" -m pip_audit
-```
-
-### Gate 7: Build Verification
-
-// turbo
-
-```powershell
-# Cwd: apps/web
-pnpm build
+```bash
+# Examples:
+npm run build           # Node.js
+python -m build         # Python
+cargo build --release   # Rust
 ```
 
 ---
 
-## Output Format
+## Output Template
 
 ### ✅ All Gates Passed
 
 ```markdown
 ## ✅ Review Complete
 
-| Gate             | Scope | Status                | Duration |
-| :--------------- | :---- | :-------------------- | :------- |
-| Lint (Backend)   | api   | ✅ Pass               | {time}   |
-| Lint (Frontend)  | web   | ✅ Pass               | {time}   |
-| Types (Backend)  | api   | ✅ Pass               | {time}   |
-| Types (Frontend) | web   | ✅ Pass               | {time}   |
-| Tests            | api   | ✅ Pass ({n}/{n})     | {time}   |
-| Security         | both  | ✅ No vulnerabilities | {time}   |
-| Build            | web   | ✅ Pass ({n} routes)  | {time}   |
+| Gate          | Status                | Duration |
+| :------------ | :-------------------- | :------- |
+| Lint          | ✅ Pass               | {time}   |
+| Type Check    | ✅ Pass               | {time}   |
+| Tests         | ✅ Pass ({n}/{n})     | {time}   |
+| Security      | ✅ No vulnerabilities | {time}   |
+| Build         | ✅ Pass               | {time}   |
 
 **Verdict**: Ready for commit.
 ```
@@ -149,25 +165,11 @@ Re-run: `/review` or `/review {gate}`
 
 ---
 
-## Pre-Push Hook vs /review
-
-| Aspect      | Pre-Push Hook (`ci-local.ps1`) | `/review`                        |
-| :---------- | :----------------------------- | :------------------------------- |
-| Trigger     | Automatic on `git push`        | Manual on-demand                 |
-| Scope       | Subset (lint + types + build)  | Full 7-gate pipeline             |
-| Interactive | No — blocks push silently      | Yes — shows output + suggestions |
-| Use case    | Continuous quality enforcement | Pre-merge deep validation        |
-
-> [!TIP]
-> Enable automatic pre-push gating: `git config core.hooksPath .githooks`
-
----
-
 ## Governance
 
 **PROHIBITED:** Skipping gates · overriding failures · merging without all gates passing · ignoring security scan results
 
-**REQUIRED:** Run all 7 gates for merge-ready code · document results · fix failures before re-running · both API and Web scanned
+**REQUIRED:** Run all gates for merge-ready code · document results · fix failures before re-running
 
 ---
 
@@ -180,10 +182,7 @@ Re-run: `/review` or `/review {gate}`
 
 ## Related Resources
 
-| Resource        | Path                                |
-| :-------------- | :---------------------------------- |
-| CI Local Script | `scripts/ci-local.ps1`              |
-| Pre-Push Hook   | `.githooks/pre-push`                |
-| Quality Gate    | `.agent/workflows/quality-gate.md`  |
-| Retrospective   | `.agent/workflows/retrospective.md` |
-| Plan            | `.agent/workflows/plan.md`          |
+- **Previous**: `/test` (tests must pass before review)
+- **Next**: `/deploy` (deployment after all gates pass)
+- **Skill**: `.agent/skills/verification-loop/SKILL.md`
+- **Related**: `/quality-gate` (pre-task research) · `/retrospective` (sprint-level audit)

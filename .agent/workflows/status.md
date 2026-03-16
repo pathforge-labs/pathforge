@@ -1,193 +1,142 @@
 ---
 description: Display project and progress status. Current state overview.
+version: 2.1.0
+sdlc-phase: cross-cutting
+skills: [verification-loop]
+commit-types: [chore]
 ---
 
-# /status — Project & Sprint Status Dashboard
+# /status — Project Status Overview
 
-> **Trigger**: `/status` (full) · `/status brief` · `/status health`
-> **Lifecycle**: On-demand, any time during development
+> **Trigger**: `/status [sub-command]`
+> **Lifecycle**: Cross-cutting — any SDLC phase
 
----
+> [!NOTE]
+> This is a read-only, informational workflow. It gathers and displays data without modifying anything.
 
-## 🔴 Critical Rules
-
-1. **READ-ONLY** — this workflow only reads and reports, never modifies files
-2. **REAL DATA** — all numbers come from source files, never estimated or invented
-3. **ROADMAP is SSOT** — sprint progress comes from `docs/ROADMAP.md`
+> [!TIP]
+> Skill reference: `.agent/skills/verification-loop/SKILL.md` — health checks and continuous quality gates
 
 ---
 
-## Mode Detection
+## Critical Rules
 
-| Command          | Output                                        |
-| :--------------- | :-------------------------------------------- |
-| `/status`        | Full dashboard (all sections)                 |
-| `/status brief`  | 1-line summary                                |
-| `/status health` | Health gates only (lint, types, tests, build) |
+1. **Accurate data** — all reported information must reflect the current state, not cached data
+2. **No stale info** — read live data from git, filesystem, and project config
+3. **Health checks** — always include build and test health indicators
+4. **Non-destructive** — this workflow must never modify any files or state
+
+---
+
+## Argument Parsing
+
+| Command | Action |
+| :----------------- | :------------------------------------------ |
+| `/status` | Full status report (all sections) |
+| `/status brief` | Condensed one-line summary |
+| `/status health` | Health checks only (build, tests, server) |
+| `/status git` | Git status only (branch, changes, commits) |
 
 ---
 
 ## Steps
 
-### Step 1: Load Data Sources
+// turbo
+1. **Project Detection**
+   - Detect project name, path, and type from config files
+   - Identify the tech stack (framework, language, database, etc.)
 
 // turbo
-
-Read and extract data from:
-
-- `docs/ROADMAP.md` — current sprint definition, task status, Sprint Velocity table
-- `.agent/session-context.md` — work done, P0 blockers, handoff notes
-- `.agent/session-state.json` — production readiness score, test counts, gate results
-- `docs/CHANGELOG.md` — recent shipped work
-- `git status` — branch, uncommitted changes
-- `git log -5 --oneline` — recent commits
-
-**Edge case:** No active sprint → show "No active sprint" with last completed sprint summary.
-
-### Step 2: Sprint Progress
+2. **Git Status**
+   - Current branch and last commit
+   - Uncommitted changes (staged, unstaged, untracked)
+   - Branch ahead/behind status
 
 // turbo
-
-From ROADMAP sprint section, count:
-
-- Total tasks: `[ ]` + `[x]` + `[-]` + `[/]`
-- Completed: `[x]`
-- In progress: `[/]`
-- Deferred: `[-]`
-- Remaining: `[ ]`
-- Progress: `completed / total * 100`
-
-### Step 3: Health Check (for `/status` and `/status health`)
+3. **Progress Tracking**
+   - Read ROADMAP or task files for sprint/task status
+   - Count completed, in-progress, and pending items
+   - Identify blockers if any
 
 // turbo
-
-Run quick health gates:
-
-```powershell
-# Cwd: apps/api
-& ".venv\Scripts\python.exe" -m ruff check app/ --quiet
-
-# Cwd: apps/web
-pnpm lint
-npx tsc --noEmit
-```
-
-### Step 4: Velocity Trend
+4. **Health Check**
+   - Build status (can the project compile/build?)
+   - Test status (are tests passing?)
+   - Server status (is the dev server running?)
 
 // turbo
-
-From ROADMAP Sprint Velocity table, extract last 5 sprints:
-
-| Sprint | Tasks | Sessions | Completed | Ad-Hoc |
-| :----- | :---- | :------- | :-------- | :----- |
-| {N-4}  | ...   | ...      | ...       | ...    |
-| {N-3}  | ...   | ...      | ...       | ...    |
-| {N-2}  | ...   | ...      | ...       | ...    |
-| {N-1}  | ...   | ...      | ...       | ...    |
-| {N}    | ...   | ...      | ...       | ...    |
+5. **File Statistics**
+   - Files created and modified (from git)
+   - Recent changes summary
 
 ---
 
-## Output Format
-
-### `/status` — Full Dashboard
+## Output Template
 
 ```markdown
-# PathForge Status
+## 📊 Project Status
 
-> Branch: {branch} · Sprint: {N} — {title} · {date}
+### Project
 
-## Sprint {N} Progress
+- **Name**: [project name]
+- **Path**: [project path]
+- **Stack**: [language] + [framework] + [database]
 
-{progress_bar} {completed}/{total} ({percent}%)
+### Git
 
-- ✅ Completed: {n}
-- 🔄 In Progress: {n}
-- ⏳ Remaining: {n}
-- 📦 Deferred: {n}
+- **Branch**: [branch name]
+- **Last Commit**: [hash] — [message]
+- **Changes**: [N] staged · [N] unstaged · [N] untracked
 
-## P0 Blockers
+### Progress
 
-| #                                  | Blocker | Sprint |
-| :--------------------------------- | :------ | :----- |
-| {blockers from session-context.md} |
+✅ Completed ([N]): [list]
+🔄 In Progress ([N]): [list]
+⏳ Pending ([N]): [list]
 
-## Production Readiness
+### Health
 
-Score: {score}/100 · Verdict: {GO/NO-GO}
+| Check | Status |
+| :---- | :----- |
+| Build | ✅ Passing / ❌ Failing |
+| Tests | ✅ [N]/[N] passing / ❌ [N] failures |
+| Server | 🟢 Running / ⚪ Stopped |
 
-- P0: {n} · P1: {n} · P2: {n} · P3: {n}
+### Statistics
 
-## Git
-
-- Branch: {branch}
-- Uncommitted: {n} files
-- Recent:
-  {last 5 commits}
-
-## Health
-
-| Gate   | Status |
-| :----- | :----- |
-| Ruff   | ✅/❌  |
-| ESLint | ✅/❌  |
-| TSC    | ✅/❌  |
-
-## Velocity (Last 5 Sprints)
-
-| Sprint           | Planned | Done | Sessions |
-| :--------------- | :------ | :--- | :------- |
-| {velocity table} |
-
-## Recent Shipped
-
-{last 3 entries from CHANGELOG.md}
-```
-
-### `/status brief` — One-Line Summary
-
-```
-Sprint {N}: {percent}% ({completed}/{total}) · {score}/100 readiness · {branch} · {n} uncommitted
-```
-
-### `/status health` — Gates Only
-
-```markdown
-## Health Check
-
-| Gate              | Status |
-| :---------------- | :----- |
-| Ruff (Backend)    | ✅/❌  |
-| ESLint (Frontend) | ✅/❌  |
-| TSC (Frontend)    | ✅/❌  |
-
-Verdict: {Healthy/Issues Found}
+- Files created: [N]
+- Files modified: [N]
+- Test coverage: [N]%
 ```
 
 ---
 
 ## Governance
 
-**PROHIBITED:** Modifying any file · inventing numbers · reporting gates as ✅ without running them
+**PROHIBITED:**
+- Modifying files, state, or configuration
+- Reporting stale or cached data
+- Skipping health checks
+- Skipping failed steps · proceeding without resolution
 
-**REQUIRED:** All data from source files · sprint progress from ROADMAP.md · P0 blockers surfaced
+**REQUIRED:**
+- Live data from git, filesystem, and project config
+- Health check in every full status report
+- Accurate progress tracking from project files
 
 ---
 
 ## Completion Criteria
 
-- [ ] All relevant data sources loaded
-- [ ] Sprint progress calculated from ROADMAP
-- [ ] Output matches requested mode (full/brief/health)
-- [ ] P0 blockers surfaced (if any exist)
+- [ ] Project info is detected and displayed
+- [ ] Git status is current and accurate
+- [ ] Progress tracking reflects actual state
+- [ ] Health checks are performed and reported
+
+---
 
 ## Related Resources
 
-| Resource        | Path                         |
-| :-------------- | :--------------------------- |
-| ROADMAP         | `docs/ROADMAP.md`            |
-| Session Context | `.agent/session-context.md`  |
-| Session State   | `.agent/session-state.json`  |
-| CHANGELOG       | `docs/CHANGELOG.md`          |
-| Review Pipeline | `.agent/workflows/review.md` |
-| Plan            | `.agent/workflows/plan.md`   |
+- **Previous**: `/deploy` (post-deployment monitoring)
+- **Cross-cutting**: Available at any SDLC phase
+- **Related**: `/retrospective` (sprint-level status review)

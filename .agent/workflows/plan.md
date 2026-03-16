@@ -1,261 +1,191 @@
 ---
-description: Strategic Sprint Planning & Engineering Intelligence. Dual-mode — sprint planning with velocity analysis & health scan, or feature planning with Socratic discovery.
+description: Create implementation plan. Invokes planner agent for structured task breakdown.
+version: 2.2.0
+sdlc-phase: plan
+agents: [planner]
+skills: [plan-writing, brainstorming, plan-validation]
+commit-types: [docs]
 ---
 
-# /plan — Strategic Sprint Planning & Engineering Intelligence
+# /plan — Implementation Planning
 
-> **Trigger**: `/plan Sprint N` (sprint mode) · `/plan {feature}` (feature mode)
-> **Skills**: `plan-writing`, `behavioral-modes` (BRAINSTORM)
+> **Trigger**: `/plan [task description]`
+> **Lifecycle**: Plan — first step of SDLC after discovery
 
-> [!CAUTION]
-> Plan ONLY — no implementation code. All 5 intelligence domains required. Approval required before execution.
+> [!IMPORTANT]
+> This workflow creates plans, NOT code. No implementation during planning. All plans require user approval before execution begins.
 
----
-
-## Mode Detection
-
-| Input                   | Mode                          |
-| :---------------------- | :---------------------------- |
-| `/plan Sprint N`        | 🏃 Sprint Planning (8 steps)  |
-| `/plan {anything else}` | 🔧 Feature Planning (6 steps) |
-
-## 🔴 Critical Rules
-
-1. **NO CODE** — planning only, zero implementation
-2. **ROADMAP.md is SSOT** — sprint tasks come from `docs/ROADMAP.md`, never invented
-3. **5 Domains** — evaluate Architecture, Security, Reliability, Product Strategy, Engineering Velocity
-4. **Velocity Guardrails** — if planned > 1.5× historical avg → MUST propose sprint split
-5. **P0 Gate** — unresolved P0 blockers from previous sprint = first workstream
-6. **Approval** — plan presented to Product Owner before any execution
+> [!TIP]
+> This workflow leverages the **plan-writing** skill. Read `.agent/skills/plan-writing/SKILL.md` for extended guidance.
 
 ---
 
-# 🏃 Sprint Planning Mode
+## Critical Rules
 
-Execute ALL steps IN ORDER.
+1. **No code writing** — this workflow produces plans only
+2. **Socratic gate** — ask at least 3 clarifying questions before creating a plan
+3. **Dynamic naming** — name plan files based on the task (e.g., `PLAN-auth-fix.md`)
+4. **Verification criteria** — every task in the plan must have clear "done" criteria
+5. **User approval required** — never proceed to implementation without explicit approval
+6. **Small, focused tasks** — break down work into atomic, verifiable steps
 
-### Step 1: Context Loading
+---
+
+## Argument Parsing
+
+| Command | Action |
+| :----------------------- | :---------------------------------------------- |
+| `/plan` | Prompt for task description |
+| `/plan [description]` | Create implementation plan for the described task |
+
+---
+
+## Steps
 
 // turbo
-
-Load and extract data from:
-
-- `docs/ROADMAP.md` — sprint definition, tasks, Phases, Verification Gates
-- `.agent/session-context.md` — current context, P0 blockers, handoff notes, previous retro findings
-- `.agent/session-state.json` — production readiness scores
-- Previous sprint in ROADMAP → scan for `[ ]` (incomplete) and `[-]` (deferred) → **Rollover Items**
-- `git log -10 --oneline` — recent commit context
-
-**Parse format:** `### Sprint N — Title (emoji)` → `**Phase A — Name (N sessions)**` → `- [ ] task` → `> **Sprint N Verification Gates**: ...`
-
-**Errors:** Missing sprint → ABORT. Stale session files (>7 days) → WARN and continue.
-
----
-
-### Step 2: Sprint Velocity Analysis
+1. **Clarify Requirements** (Socratic Gate)
+   - Ask at least 3 clarifying questions about purpose, scope, and constraints
+   - Confirm acceptance criteria and edge cases
+   - Identify relevant existing code and patterns
 
 // turbo
+2. **Explore Codebase**
+   - Scan project structure and architecture
+   - Identify files, modules, and patterns relevant to the task
+   - Note dependencies and integration points
 
-From the **Sprint Velocity** table in `docs/ROADMAP.md`:
+3. **Create Plan**
+   - The loading engine provides `matchedDomains` and `mandatoryRules` — pass these to the planner agent
+   - Consult all mandatory rules (security, testing, coding-style, documentation, git-workflow) using the Rule Extraction Algorithm
+   - Classify task size: Trivial (1-2 files), Medium (3-10 files), Large (10+ files)
+   - Break down the task into right-sized steps with exact file paths (see plan-writing SKILL.md Principle 1)
+   - Assign verification criteria to each step
+   - Order tasks logically (dependencies first)
+   - Include cross-cutting concerns (security, testing, documentation) — ALWAYS, for ALL task sizes
+   - For Medium/Large tasks: invoke specialist synthesis (security-reviewer, tdd-guide, architect) per the Specialist Invocation Protocol
+   - Include domain-specific sections based on `matchedDomains` (see `domain-enhancers.md`)
+   - Identify which agents are needed for multi-domain tasks
+   - Save plan to `docs/PLAN-{task-slug}.md`
 
-1. `avg_tasks` = sum(Completed) / count(sprints)
-2. `avg_sessions` = sum(Sessions) / count(sprints)
-3. `avg_adhoc` = sum(Ad-Hoc Added) / count(sprints)
-4. `velocity_ratio` = planned_tasks / avg_tasks
-5. Reserve `ceil(avg_adhoc)` tasks as ad-hoc buffer (~15%)
+// turbo
+3.5. **Validate Plan Quality**
+   - The planner performs self-validation using the `plan-validation` skill checklist:
+     1. Classify task size from file count and effort estimate
+     2. Schema compliance: verify all required Tier sections are present and populated
+     3. Cross-cutting verification: Security, Testing, Documentation sections are non-empty (or explicit "N/A — [reason]")
+     4. Specificity audit: every implementation step includes a file path
+     5. Score the plan against the rubric in `plan-schema.md`
+     6. Apply domain scoring: +2 bonus per matched domain with enhancer, -2 penalty per missing
+   - **Verdict**: Score >= 70% of tier max → PASS (present to user with score)
+   - **Revision**: Score < 70% → identify gaps, revise, re-validate (max 2 cycles, then present with warnings)
+   - The quality score is displayed alongside the plan for transparency
 
-| Ratio    | Action                                       |
-| :------- | :------------------------------------------- |
-| ≤ 1.0×   | ✅ Healthy                                   |
-| 1.0–1.5× | ⚠️ Elevated — note in plan                   |
-| > 1.5×   | 🔴 MUST propose sprint split (e.g., 39a/39b) |
-
-No velocity data? Default: **8 tasks / 2 sessions**.
-
----
-
-### Step 3: Platform Health Scan
-
-Rate each domain ✅/⚠️/🔴 with evidence:
-
-**Architecture** — Service boundaries clean? Data model consistent? Scalability bottlenecks?
-**Security** — Auth flows complete? API protection (rate limit, CAPTCHA)? Dependencies audited?
-**Reliability** — Monitoring active? Rollback strategy? Error rate acceptable?
-**Product Strategy** — Highest-impact features identified? User journey bottlenecks?
-**Engineering Velocity** — CI/CD healthy? Test coverage? Tech debt trend? Production readiness score from `session-state.json`?
-
----
-
-### Step 4: Dependency & Risk Analysis
-
-**Risk Matrix:**
-
-| Risk          | Severity (P0–P4) | Likelihood | Mitigation |
-| :------------ | :--------------- | :--------- | :--------- |
-| [description] | P0–P4            | H/M/L      | [action]   |
-
-**Dependency Chain** — identify `🔧 MANUAL` blockers:
-
-```
-Phase A (CODE) → no blockers
-Phase B (CODE) → depends on A
-Phase E (CODE) → ⚠️ BLOCKED BY: 🔧 MANUAL OAuth setup
-```
-
-**Cross-Sprint:** list dependencies on/from other sprints.
+4. **Present for Approval**
+   - Show the plan summary to the user with quality score
+   - Wait for explicit approval before any implementation
 
 ---
 
-### Step 5: Strategic Prioritization
+## Naming Convention
 
-Priority order: **P0** Safety → **P1** Security → **P2** Architecture/Reliability → **P3** Product → **P4** Debt
-
-Organize into **5 workstreams:**
-
-1. **Platform Reliability** — infra, monitoring, resilience
-2. **Security & Identity** — auth, authz, data protection
-3. **Architecture** — service boundaries, data model, scalability
-4. **Developer Experience** — CI/CD, tooling, testing, debt
-5. **Product Capability** — user-facing features
+| Request | Plan File |
+| :----------------------- | :--------------------------- |
+| `/plan e-commerce cart` | `PLAN-ecommerce-cart.md` |
+| `/plan mobile app` | `PLAN-mobile-app.md` |
+| `/plan auth fix` | `PLAN-auth-fix.md` |
 
 ---
 
-### Step 6: Session Breakdown
-
-Use ROADMAP Phase convention:
-
-```
-**Phase A — [Name] ([N] sessions)**
-- [ ] Task (P0 — CODE)
-- [ ] 🔧 MANUAL: Task (user action)
-→ depends on Phase A
-
-**Phase B — [Name] ([N] sessions)**
-- [ ] Task (P1 — CODE)
-```
-
-Rules: P0 first · MANUAL tasks prefixed with `🔧 MANUAL:` · Dependencies noted with `→`
-
----
-
-### Step 7: Validation Plan
-
-1. Extract `> **Sprint N Verification Gates**:` from ROADMAP as exit criteria
-2. Verify plan quality:
-   - [ ] Every task has success criteria
-   - [ ] Every workstream has ≥1 task
-   - [ ] Risk matrix populated
-   - [ ] Sessions ≤ historical avg (or split justified)
-   - [ ] Rollover items addressed
-   - [ ] MANUAL tasks have instructions
-   - [ ] Cross-sprint dependencies documented
-
----
-
-### Step 8: Output & Tracking
-
-Create `docs/PLAN-sprint-{N}.md` with this structure:
+## Output Template
 
 ```markdown
-# Sprint {N} Plan — {Title}
+## 📋 Plan: [Task Name]
 
-> Generated: {date} · Velocity: {ratio}× · Readiness: {score}/100
+### Scope
 
-## Strategic Objectives
+[What this plan covers and what it doesn't]
 
-## Platform Health Assessment (5 domains, ✅/⚠️/🔴)
+### Tasks
 
-## Rollover Items
+1. [ ] [Task description] — **Verify**: [done criteria]
+2. [ ] [Task description] — **Verify**: [done criteria]
+3. [ ] [Task description] — **Verify**: [done criteria]
 
-## Workstreams (WS1–WS5 with tasks + verify criteria)
+### Agent Assignments (if multi-domain)
 
-## Session Breakdown (Phase A/B/C convention)
+| Task | Agent | Domain |
+| :--- | :---- | :----- |
+| [task] | [agent] | [domain] |
 
-## Dependency Chain (with 🔧 MANUAL blockers)
+### Risks & Considerations
 
-## Risk Matrix (severity/likelihood/mitigation)
-
-## Verification Gates (from ROADMAP)
-
-## Strategic Initiatives (optional — long-term proposals)
-
-## Lessons from Previous Sprint
-```
-
-Present to Product Owner via `notify_user`. After approval: update Sprint Velocity table in ROADMAP.
+- [risk or constraint]
 
 ---
 
-# 🔧 Feature Planning Mode
+✅ Plan saved: `docs/PLAN-{slug}.md`
 
-### Step 1: Socratic Gate
-
-Ask **3+ clarifying questions** (purpose, scope, constraints). Do NOT proceed until answered.
-
-### Step 2: Architecture Impact
-
-Files/services affected · dependency chain · breaking changes · pattern alignment
-
-### Step 3: Security Implications
-
-New auth requirements · data access controls · input validation · rate limiting needs
-
-### Step 4: Task Breakdown
-
-Follow `plan-writing` skill: 2–5 min tasks · explicit verify criteria · max 10 tasks · SPECIFIC (paths, commands, outputs)
-
-### Step 5: Risk Assessment
-
-Performance impact · backward compatibility · scalability · testing requirements
-
-### Step 6: Plan Output
-
-Create `docs/PLAN-{slug}.md`:
-
-```markdown
-# {Feature Name}
-
-## Goal — one sentence
-
-## Impact — files, services, breaking changes
-
-## Tasks — [ ] Action → Verify: [check]
-
-## Done When — success criteria
-
-## Risks — risk → mitigation
-
-## Notes
+Approve to start implementation with `/create` or `/enhance`.
 ```
-
-Present to Product Owner via `notify_user`.
 
 ---
 
 ## Governance
 
-**PROHIBITED:** Writing code · inventing tasks outside ROADMAP · skipping domains · ignoring velocity data · starting without approval · marking ✅ without evidence
+**PROHIBITED:**
+- Writing implementation code during planning
+- Proceeding to implementation without user approval
+- Creating vague, unverifiable tasks
+- Skipping the Socratic gate
+- Skipping failed steps · proceeding without resolution
 
-**REQUIRED:** Evaluate all 5 domains · separate MANUAL vs CODE · flag >1.5× with split · carry forward P0s first · include previous sprint lessons · extract Verification Gates
+**REQUIRED:**
+- At least 3 clarifying questions before planning
+- Mandatory rule consultation before plan creation
+- Verification criteria for every task
+- Cross-cutting concerns (security, testing, documentation) in every plan
+- Plan validation against quality schema before presentation
+- User approval before implementation begins
+- Plan file saved in `docs/` with dynamic name
+
+---
+
+## Post-Implementation Retrospective
+
+After the planned task is fully implemented and verified (reaches VERIFY phase), the `plan-complete` hook triggers a retrospective:
+
+1. **Trigger**: Workflow state transitions to VERIFY (or user runs `/retrospective` on a completed plan)
+2. **Data Source**: Compare `docs/PLAN-{slug}.md` against `git diff --name-only` from plan start
+3. **Execution**: Run the plan-retrospective protocol (`.agent/skills/plan-writing/plan-retrospective.md`)
+4. **Output**: Append one row to `.agent/contexts/plan-quality-log.md`
+5. **Feedback Loop**: Planner reads the quality log at planning time (Step 1, Requirements Analysis) to adjust estimates, predict surprise files, and weight risk categories
+
+This is non-blocking (severity: medium, onFailure: log). If skipped, no impact on current work, but future plan accuracy degrades.
 
 ---
 
 ## Completion Criteria
 
-- [ ] All steps executed in order
-- [ ] Plan file created (`docs/PLAN-sprint-{N}.md` or `docs/PLAN-{slug}.md`)
-- [ ] 5 domains evaluated (sprint) · Velocity documented · Risks mitigated
-- [ ] MANUAL tasks flagged · Sessions follow Phase convention
-- [ ] Product Owner approved
+- [ ] Clarifying questions asked and answered
+- [ ] Codebase explored for relevant context
+- [ ] Mandatory rules consulted (security, testing, coding-style, documentation)
+- [ ] Plan created with verifiable tasks and exact file paths
+- [ ] Cross-cutting concerns addressed (security, testing, documentation)
+- [ ] Plan validated against quality schema (score >= 70% of tier max)
+- [ ] Domain-specific sections included for all matched domains
+- [ ] Plan saved to `docs/PLAN-{slug}.md`
+- [ ] User has reviewed and approved the plan
+- [ ] After approval: proceed to `/create` or `/enhance` for implementation
+- [ ] After implementation: retrospective logged to `plan-quality-log.md` (via plan-complete hook)
+
+---
 
 ## Related Resources
 
-| Resource        | Path                                  |
-| :-------------- | :------------------------------------ |
-| ROADMAP         | `docs/ROADMAP.md`                     |
-| Session Context | `.agent/session-context.md`           |
-| Session State   | `.agent/session-state.json`           |
-| Plan Writing    | `.agent/skills/plan-writing/SKILL.md` |
-| Quality Gate    | `.agent/workflows/quality-gate.md`    |
-| Retrospective   | `.agent/workflows/retrospective.md`   |
-| Architecture    | `docs/architecture/ARCHITECTURE.md`   |
+- **Previous**: `/brainstorm` (explore options) · `/quality-gate` (validate approach)
+- **Next**: `/create` (scaffold new features) · `/enhance` (iterative development)
+- **Skill**: `.agent/skills/plan-writing/SKILL.md`
+- **Schema**: `.agent/skills/plan-writing/plan-schema.md`
+- **Domains**: `.agent/skills/plan-writing/domain-enhancers.md`
+- **Validation**: `.agent/skills/plan-validation/SKILL.md`
+- **Agent**: `planner` agent (see `.agent/agents/planner.md`)
