@@ -89,6 +89,19 @@
         { "name": "test", "file": "workflows/test.md" },
         { "name": "ui-ux-pro-max", "file": "workflows/ui-ux-pro-max.md" }
       ]
+    },
+    "rules": {
+      "count": 8,
+      "items": [
+        { "name": "architecture", "file": "rules/architecture.md" },
+        { "name": "coding-style", "file": "rules/coding-style.md" },
+        { "name": "documentation", "file": "rules/documentation.md" },
+        { "name": "git-workflow", "file": "rules/git-workflow.md" },
+        { "name": "quality-gate", "file": "rules/quality-gate.md" },
+        { "name": "security", "file": "rules/security.md" },
+        { "name": "sprint-tracking", "file": "rules/sprint-tracking.md" },
+        { "name": "testing", "file": "rules/testing.md" }
+      ]
     }
   }
 }
