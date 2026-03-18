@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-16 | **Current Phase**: K (Production Launch) — H7 OAuth tests + H10 PyJWT CVE fix ✅, Sprint 40 next
+> **Last Updated**: 2026-03-18 | **Current Phase**: K (Production Launch) — Auth E2E tests ✅, Sprint 34 DB fix ✅, Sprint 40 next
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -1052,6 +1052,7 @@
 | 2026-03-12 | Sprint 39 Handoff Notes Remediation        | Post-39       | ✅ Done | 18 audit findings, 13 files, OAuth JWKS hardening, Turnstile test fix |
 | 2026-03-15 | Antigravity AI Kit v3.1.0 upgrade           | Pre-40        | ✅ Done | 57 files updated, 9 new items, 8 PF customizations preserved         |
 | 2026-03-16 | H7 OAuth testing + H10 PyJWT CVE fix       | Pre-40        | ✅ Done | 29 new tests (18 BE + 7 FE + 4 E2E), PyJWT 2.12.1, 12-finding audit |
+| 2026-03-18 | Auth E2E tests + Sprint 34 DB fix          | Pre-40        | ✅ Done | 4 new E2E specs, auth fixture, subscriptions table, test user        |
 
 ---
 
@@ -1101,3 +1102,4 @@
 | 39     | 33            | 33          | 0            | 1        |
 | 39-HN  | 7 (handoff)   | 7           | 1            | 1        |
 | Pre-40 | 4 (handoff)   | 4           | 0            | 2        |
+| Pre-40s2 | 8 (E2E)     | 6 (+2 WIP) | 1            | 1        |

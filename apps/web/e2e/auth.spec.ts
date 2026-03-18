@@ -18,7 +18,8 @@ test.describe('Authentication Flow', () => {
   test('should display login page', async ({ page }) => {
     await page.goto('/login');
     await expect(page).toHaveTitle(/PathForge/i);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // CardTitle renders as <div>, check for visible text instead of heading role
+    await expect(page.getByText(/welcome back|sign in/i).first()).toBeVisible();
   });
 
   test('should navigate to register page', async ({ page }) => {
@@ -35,10 +36,10 @@ test.describe('Authentication Flow', () => {
     const submitButton = page.getByRole('button', { name: /sign in|log in|login/i });
     if (await submitButton.isVisible()) {
       await submitButton.click();
-      // Should show validation message — either native HTML5 or custom
-      await expect(
-        page.getByText(/required|email|password/i).first(),
-      ).toBeVisible({ timeout: 5_000 });
+      // HTML5 required validation uses browser-native tooltip, not DOM text.
+      // Verify form was NOT submitted by checking we're still on login page.
+      await page.waitForTimeout(1_000);
+      await expect(page).toHaveURL(/login/i);
     }
   });
 
@@ -200,5 +201,132 @@ test.describe('OAuth API Integration', () => {
     const url = page.url();
     // Should NOT redirect to login when tokens are present
     expect(url).toMatch(/dashboard|login/);
+  });
+});
+
+/**
+ * Sprint 40: Login Negative Cases (Audit C4)
+ *
+ * Critical for production — validates error handling for
+ * wrong password, unverified email, and server errors.
+ */
+test.describe('Login Negative Cases', () => {
+  test('should show error on wrong password', async ({ page }) => {
+    await page.route('**/api/v1/auth/login', (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Invalid email or password' }),
+      }),
+    );
+
+    await page.goto('/login');
+
+    await page.getByLabel('Email').fill('user@pathforge.test');
+    await page.getByLabel('Password').fill('WrongPassword1!');
+    await page.getByRole('button', { name: /sign in/i }).click();
+
+    await expect(page.getByText(/invalid email or password/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('should show error for unverified email', async ({ page }) => {
+    await page.route('**/api/v1/auth/login', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Please verify your email before signing in' }),
+      }),
+    );
+
+    await page.goto('/login');
+
+    await page.getByLabel('Email').fill('unverified@pathforge.test');
+    await page.getByLabel('Password').fill('SecurePass1!');
+    await page.getByRole('button', { name: /sign in/i }).click();
+
+    await expect(page.getByText(/verify your email/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('should handle server error gracefully', async ({ page }) => {
+    await page.route('**/api/v1/auth/login', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Internal server error' }),
+      }),
+    );
+
+    await page.goto('/login');
+
+    await page.getByLabel('Email').fill('user@pathforge.test');
+    await page.getByLabel('Password').fill('SecurePass1!');
+    await page.getByRole('button', { name: /sign in/i }).click();
+
+    // Should show some form of error — exact message depends on error handler
+    await expect(
+      page.getByText(/error|failed|try again/i).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+/**
+ * Sprint 40: OAuth Edge Cases (Audit C4)
+ *
+ * Network failure and account conflict scenarios.
+ */
+test.describe('OAuth Edge Cases', () => {
+  test('should handle OAuth network failure', async ({ page }) => {
+    // Abort the network request to simulate offline/DNS failure
+    await page.route('**/api/v1/auth/oauth/google', (route) =>
+      route.abort('connectionfailed'),
+    );
+
+    await page.goto('/login');
+
+    const errorStatus = await page.evaluate(async () => {
+      try {
+        await fetch('/api/v1/auth/oauth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: 'token' }),
+        });
+        return 'success';
+      } catch {
+        return 'network-error';
+      }
+    });
+
+    expect(errorStatus).toBe('network-error');
+  });
+
+  test('should handle OAuth 409 account conflict', async ({ page }) => {
+    await page.route('**/api/v1/auth/oauth/google', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          detail: 'An account with this email already exists. Please sign in with your password.',
+        }),
+      }),
+    );
+
+    await page.goto('/login');
+
+    const result = await page.evaluate(async () => {
+      const response = await fetch('/api/v1/auth/oauth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: 'existing-user-token' }),
+      });
+      const body = await response.json();
+      return { status: response.status, detail: body.detail };
+    });
+
+    expect(result.status).toBe(409);
+    expect(result.detail).toContain('already exists');
   });
 });

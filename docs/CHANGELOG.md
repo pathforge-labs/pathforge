@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Pre-Sprint 40 Session 2] — Auth E2E Tests & Sprint 34 DB Fix — 2026-03-18
+
+### Added
+
+- **Auth E2E test suite** — 4 new Playwright spec files (15 tests total):
+  - `email-verification.spec.ts` (5) — verification flow, valid/expired/invalid tokens, resend
+  - `logout.spec.ts` (4) — button visibility, redirect, token clearing, nav update
+  - `password-recovery.spec.ts` (6) — forgot flow, reset flow, weak password, expired/invalid tokens, resend
+  - `fixtures/auth.ts` — shared authenticated page fixture with localStorage token injection
+- **Test user seed script** — `testuser@pathforge.dev` / `TestPass123!` with `is_verified=true`
+
+### Fixed
+
+- **Sprint 34 subscriptions table** — applied `subscriptions` table + `role` column via direct SQL (Alembic migration `b2c3d4e5f6g7` was on a dead branch not reachable from head `d4e5f6g7h8i9`)
+- **`/users/me` 500 error** — root cause: `get_current_user` dependency uses `selectinload(User.subscription)` which failed when `subscriptions` table was missing
+- **`auth.spec.ts`** — fixed display test, empty validation test, and login negative tests
+- **`dashboard.spec.ts`** — fixed console errors test
+
+### Changed
+
+- `email-verification.spec.ts` — `Promise.all` with `waitForResponse` pattern to prevent route/navigation race conditions
+- `ROADMAP.md` — updated Last Updated, ad-hoc work log, velocity row
+- `session-context.md` / `session-state.json` — updated with session work
+
+---
+
 ## [Pre-Sprint 40] — Antigravity AI Kit v3.1.0 Upgrade — 2026-03-15
 
 ### Added

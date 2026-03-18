@@ -1,42 +1,20 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { setupAuthenticatedSession } from './fixtures/auth';
 
 /**
  * PathForge — Dashboard Overview E2E Tests
  *
  * Sprint 30 WS-3: Validates the main dashboard page rendering,
  * widget display, and navigation to sub-pages.
+ *
+ * Sprint 40: Refactored to use shared auth fixture (C2 fix).
  */
-
-async function setupAuthenticatedSession(page: Page): Promise<void> {
-  await page.route('**/api/v1/auth/me', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: 'test-user-id',
-        email: 'e2e@pathforge.test',
-        full_name: 'E2E Test User',
-      }),
-    });
-  });
-
-  // Mock all dashboard API calls with minimal data
-  await page.route('**/api/v1/**', (route) => {
-    if (route.request().url().includes('/auth/')) {
-      return route.fallback();
-    }
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [], total: 0 }),
-    });
-  });
-}
 
 test.describe('Dashboard Overview', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuthenticatedSession(page);
   });
+
 
   test('should load main dashboard page', async ({ page }) => {
     await page.goto('/dashboard');
