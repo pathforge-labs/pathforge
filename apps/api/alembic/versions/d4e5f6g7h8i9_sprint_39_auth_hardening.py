@@ -10,9 +10,9 @@ Changes:
 - Alter hashed_password from NOT NULL to nullable (F4: OAuth support)
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d4e5f6g7h8i9"

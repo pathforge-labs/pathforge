@@ -87,9 +87,11 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     rate_limit_status = "degraded (memory://)" if RATE_LIMIT_DEGRADED else "ok"
 
     # ── Build response ─────────────────────────────────────────
+    # Sprint 40 Audit P1-4: Rate limit degradation affects readiness
     all_healthy = (
         db_status == "connected"
         and redis_status in ("connected", "not_configured")
+        and not RATE_LIMIT_DEGRADED
     )
 
     response_body: dict[str, object] = {

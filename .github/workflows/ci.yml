@@ -99,9 +99,9 @@ jobs:
           ENVIRONMENT: testing
 
       # Sprint 30 Audit H3: Dependency vulnerability scan
+      # Sprint 40 Audit P1-3: Made blocking — CVEs must not ship to production
       - name: Security audit (pip-audit)
         working-directory: apps/api
-        continue-on-error: true # Non-blocking: initial baseline
         run: |
           uv pip install pip-audit --system
           python -m pip_audit --desc --progress-spinner off
@@ -144,8 +144,8 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
       # Sprint 30 Audit H3: Dependency vulnerability scan
+      # Sprint 40 Audit P1-3: Made blocking — CVEs must not ship to production
       - name: Security audit (pnpm audit)
-        continue-on-error: true # Non-blocking: initial baseline
         run: pnpm audit --prod --no-optional
 
   # ── Mobile Quality Gate ───────────────────────────────────

@@ -108,3 +108,13 @@ class MessageResponse(BaseModel):
     """Generic message response for endpoints that don't return data."""
     message: str
 
+
+# ── Sprint 40 (Audit P0-1): GDPR Account Deletion ──────────────
+
+class AccountDeletionResponse(BaseModel):
+    """Response confirming account and data deletion."""
+    deleted: bool
+    message: str
+    records_deleted: int
+    tables_affected: int
+

@@ -895,6 +895,16 @@
 
 > Sprint 40: Configure external services for payments and AI features. Primarily manual/browser work with env var configuration. LLM keys enable Career DNA, Threat Radar, Salary Intelligence, and all AI-powered features.
 
+**Tier-1 Audit Remediation (Sprint 40 Session)**
+
+- [x] P0-1: GDPR full account deletion — `DELETE /api/v1/users/me` with cascade across all 32+ models, Stripe cancellation, token revocation, audit trail (`account_deletion_service.py`)
+- [x] P1-1: Token blacklist fail-closed policy — configurable `TOKEN_BLACKLIST_FAIL_MODE` (default: closed), 503 on Redis failure instead of silent allow
+- [x] P1-3: Security scans blocking in CI — removed `continue-on-error: true` from `pip-audit` and `pnpm audit` steps in `ci.yml`
+- [x] P1-4: Health check rate limit degradation — readiness probe now returns 503 when rate limiter is in degraded memory:// mode
+- [x] P1-6: Incident runbooks — 5 runbooks created: Redis outage, DB connection exhaustion, Stripe webhook failure, LLM budget exceeded, DDoS/high traffic
+- [x] Audit report archived: `docs/TIER1_PRODUCTION_READINESS_AUDIT.md`
+- [x] ROADMAP updated with elevated sprint items (uptime monitoring, refresh token rotation → Sprint 41)
+
 **Stripe Account Setup (P0-5)**
 
 - [ ] 🔧 MANUAL: Create Stripe account at stripe.com
@@ -915,13 +925,13 @@
 - [ ] 🔧 MANUAL: Set `LLM_MONTHLY_BUDGET_USD=200` in Railway
 - [ ] Verify Career DNA scan succeeds with real LLM call
 
-> **Sprint 40 Verification Gates**: Stripe test checkout fires webhook → subscription activates · Career DNA scan completes with real LLM · All AI features return real results
+> **Sprint 40 Verification Gates**: Stripe test checkout fires webhook → subscription activates · Career DNA scan completes with real LLM · All AI features return real results · Account deletion smoke test passes
 
 ---
 
 ### Sprint 41 — Production Infrastructure Hardening (⏳ Upcoming)
 
-> Sprint 41: Production environment secure and stable. Redis for rate limiting, database SSL, full env var audit, Sentry activation, Alembic verification, and first full smoke test.
+> Sprint 41: Production environment secure and stable. Redis for rate limiting, database SSL, full env var audit, Sentry activation, Alembic verification, and first full smoke test. **Updated by Sprint 40 Tier-1 audit**: elevated uptime monitoring, security scan blocking, refresh token rotation, and incident runbooks into this sprint.
 
 **Rate Limiting → Redis (P1-1)**
 
@@ -939,10 +949,22 @@
 - [ ] 🔧 MANUAL: Audit Railway: `ENVIRONMENT`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `CORS_ORIGINS`, `INITIAL_ADMIN_EMAIL`
 - [ ] 🔧 MANUAL: Audit Vercel: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SENTRY_DSN`
 
-**Sentry Activation (P2-2)**
+**Sentry Activation (P0-2 — elevated from P2)**
 
 - [ ] 🔧 MANUAL: Create Sentry project → copy DSN
 - [ ] 🔧 MANUAL: Set `SENTRY_DSN` in Railway + `NEXT_PUBLIC_SENTRY_DSN` in Vercel
+- [ ] Verify Sentry captures synthetic error with PII scrubbed
+
+**Uptime Monitoring (P1-5 — elevated from Sprint 44)**
+
+- [ ] 🔧 MANUAL: Set up UptimeRobot for `https://api.pathforge.eu/api/v1/health/ready` (5 min interval)
+- [ ] 🔧 MANUAL: Set up UptimeRobot for `https://pathforge.eu` (5 min interval)
+- [ ] Configure alert email to `emre@pathforge.eu`
+
+**Refresh Token Rotation (P1-2 — elevated from Sprint 42)**
+
+- [ ] Implement refresh token rotation — issue new refresh token on each refresh, revoke old one
+- [ ] Verify old refresh token is rejected after rotation
 
 **Alembic Verification (P2-3)**
 
@@ -953,23 +975,27 @@
 
 - [ ] Deploy `main` → `production`
 - [ ] Health check: `curl https://api.pathforge.eu/api/v1/health/ready` → 200
-- [ ] Full user journey: Register → Verify → Login → Upload CV → Career DNA → Checkout → Subscription → Portal
+- [ ] Full user journey: Register → Verify → Login → Upload CV → Career DNA → Checkout → Subscription → Portal → Delete Account
 
-> **Sprint 41 Verification Gates**: Health check 200 · All env vars set · Rate limiting persists after redeploy · DB uses SSL · Full smoke test passes
+> **Sprint 41 Verification Gates**: Health check 200 · All env vars set · Rate limiting persists after redeploy · DB uses SSL · Sentry captures errors · Uptime monitor active · Token rotation works · Full smoke test passes (including account deletion)
 
 ---
 
-### Sprint 42 — Monitoring, Token Security & Polish (⏳ Upcoming)
+### Sprint 42 — Polish & Post-Launch Hardening (⏳ Upcoming)
 
-> Sprint 42: Production observable, tokens secure, welcome emails working.
+> Sprint 42: Post-launch hardening. Token rotation and Sentry verification elevated to Sprint 41 by Tier-1 audit. Remaining items: coverage, secret rotation docs, circuit breaker fallback, N+1 analysis.
 
-- [ ] P2-1: Implement refresh token rotation — revoke old refresh token on reissue
+- [-] P2-1: Refresh token rotation — **elevated to Sprint 41** by Tier-1 audit
 - [ ] Send welcome email on successful email verification
-- [ ] Verify Sentry captures errors with synthetic test
+- [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41** by Tier-1 audit
 - [ ] Add `--cov` to pytest CI step + coverage threshold (≥80%)
 - [ ] Review error response formats for consistency
+- [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`
+- [ ] P2-3: Circuit breaker in-memory fallback when Redis is down
+- [ ] P2-4: N+1 query analysis — enable `warn_on_unnested_lazy_load`, profile top 10 endpoints
+- [ ] P2-8: Review ignored CVEs (`CVE-2025-69873`, `CVE-2025-09073`) — document justification
 
-> **Sprint 42 Verification Gates**: Token rotation works · Sentry captures error · Welcome email delivered · Coverage ≥80%
+> **Sprint 42 Verification Gates**: Welcome email delivered · Coverage ≥80% · Secret rotation documented · CVE review complete
 
 ---
 
@@ -990,15 +1016,19 @@
 
 ### Sprint 44 — Post-Launch Polish & Monitoring (⏳ Upcoming)
 
-> Sprint 44: Post-launch stability, VR baselines, uptime monitoring, mobile planning.
+> Sprint 44: Post-launch stability, VR baselines, mobile planning. **Note**: Uptime monitoring and security scan blocking elevated to Sprint 41 by Tier-1 audit.
 
 - [ ] P3-1: Resolve Playwright h1 timeout → generate VR baselines → commit to `e2e/__screenshots__/`
-- [ ] P3-2: Set up uptime monitoring (UptimeRobot/BetterStack) for API + web
+- [-] P3-2: Set up uptime monitoring — **elevated to Sprint 41** by Tier-1 audit
 - [ ] P2-4: Mobile app launch planning — scope, timeline, dependencies
 - [ ] Stripe webhook failure alerting (Dashboard → Webhooks → Alert settings)
-- [ ] CI: Make `pip-audit` and `pnpm audit` blocking (remove `continue-on-error`)
+- [-] CI: Make `pip-audit` and `pnpm audit` blocking — **completed in Sprint 40 audit session**
+- [ ] P2-5: Langfuse LLM observability activation
+- [ ] P2-6: API staging environment (Railway preview)
+- [ ] P3-1: Canary/blue-green deployment strategy evaluation
+- [ ] P3-2: API response caching for intelligence endpoints (5-60 min TTL)
 
-> **Sprint 44 Verification Gates**: VR baselines committed · CI VR job passes · Uptime monitor active · Security scans blocking
+> **Sprint 44 Verification Gates**: VR baselines committed · CI VR job passes · Langfuse traces visible · Webhook alerts configured
 
 ---
 

@@ -109,7 +109,7 @@ async def get_current_user(
     except PyJWTError as exc:
         raise credentials_exception from exc
 
-    # Check token blacklist (graceful degradation if Redis unavailable)
+    # Check token blacklist (Sprint 40 Audit P1-1: configurable fail mode)
     if jti:
         try:
             if await token_blacklist.is_revoked(jti):
@@ -121,7 +121,13 @@ async def get_current_user(
         except HTTPException:
             raise
         except Exception:
-            logger.warning("Token blacklist check failed — allowing request (degraded mode)")
+            if settings.token_blacklist_fail_mode == "closed":
+                logger.error("Token blacklist check failed — rejecting request (fail-closed mode)")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable",
+                ) from None
+            logger.warning("Token blacklist check failed — allowing request (fail-open mode)")
 
     result = await db.execute(
         select(User)

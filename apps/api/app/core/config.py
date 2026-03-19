@@ -188,6 +188,10 @@ class Settings(BaseSettings):  # type: ignore[misc]
     rate_limit_reset_password: str = "5/minute"
     rate_limit_verify_email: str = "5/minute"
     rate_limit_resend_verification: str = "3/minute"
+    # Token blacklist fail mode: "open" allows requests on Redis failure,
+    # "closed" rejects all authenticated requests on Redis failure.
+    # Sprint 40 (Audit P1-1): Configurable for security-critical deployments.
+    token_blacklist_fail_mode: str = "closed"
     # Cloudflare Turnstile CAPTCHA (empty = skip validation in dev)
     turnstile_secret_key: str = ""
     # OAuth providers (empty = disabled)
