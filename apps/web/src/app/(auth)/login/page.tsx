@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authApi } from "@/lib/api-client/auth";
+import { useAuth } from "@/hooks/use-auth";
 import OAuthButtons from "@/components/auth/oauth-buttons";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login: authLogin } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,9 +24,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const tokens = await authApi.login({ email, password });
-      localStorage.setItem("pathforge_access_token", tokens.access_token);
-      localStorage.setItem("pathforge_refresh_token", tokens.refresh_token);
+      await authLogin({ email, password });
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

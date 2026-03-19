@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Configuration as MsalConfiguration } from "@azure/msal-browser";
 import { Button } from "@/components/ui/button";
 import { authApi } from "@/lib/api-client/auth";
+import { setTokens } from "@/lib/token-manager";
 
 /** Typed global from Google Identity Services script */
 interface GoogleIdentityServices {
@@ -37,8 +38,7 @@ export default function OAuthButtons({ mode }: OAuthButtonsProps): ReactElement 
   const handleOAuthLogin = async (provider: "google" | "microsoft", idToken: string): Promise<void> => {
     try {
       const tokens = await authApi.oauthLogin(provider, { id_token: idToken });
-      localStorage.setItem("pathforge_access_token", tokens.access_token);
-      localStorage.setItem("pathforge_refresh_token", tokens.refresh_token);
+      setTokens(tokens.access_token, tokens.refresh_token);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : `${provider} sign-in failed`);

@@ -4,6 +4,7 @@ PathForge API — Auth Routes
 Registration, login, token refresh, logout, password reset, and email verification.
 """
 
+import contextlib
 import hashlib
 from datetime import UTC, datetime, timedelta
 
@@ -27,6 +28,7 @@ from app.core.token_blacklist import token_blacklist
 from app.models.user import User
 from app.schemas.user import (
     ForgotPasswordRequest,
+    LogoutRequest,
     MessageResponse,
     RefreshTokenRequest,
     ResetPasswordRequest,
@@ -145,6 +147,23 @@ async def refresh_token(
             detail="Invalid or expired refresh token",
         ) from exc
 
+    # Sprint 41 P1-2: Extract JTI for rotation + replay detection
+    old_jti: str | None = token_data.get("jti")
+    old_exp: int | None = token_data.get("exp")
+
+    # Replay detection: reject already-consumed refresh tokens
+    if old_jti:
+        try:
+            if await token_blacklist.is_revoked(old_jti):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token has already been used",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Best-effort: allow refresh if Redis is unavailable
+
     user = await UserService.get_by_id(db, user_id)
     if not user or not user.is_active:
         raise HTTPException(
@@ -152,34 +171,60 @@ async def refresh_token(
             detail="User not found or inactive",
         )
 
-    return TokenResponse(
+    new_tokens = TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
     )
+
+    # Sprint 41 P1-2: Rotate — revoke the consumed refresh token
+    if old_jti and old_exp:
+        remaining = max(int(old_exp - datetime.now(UTC).timestamp()), 1)
+        with contextlib.suppress(Exception):
+            await token_blacklist.revoke(old_jti, ttl_seconds=remaining)
+
+    return new_tokens
 
 
 @router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Revoke current access token",
+    summary="Revoke current access token and optional refresh token",
 )
 async def logout(
+    payload: LogoutRequest | None = None,
     token: str = Depends(oauth2_scheme),
     _current_user: User = Depends(get_current_user),
 ) -> None:
-    """Blacklist the current access token so it cannot be reused."""
+    """Blacklist the current access token and optional refresh token."""
+    # Revoke access token
     try:
-        payload = jwt.decode(
+        decoded = jwt.decode(
             token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
         )
-        jti: str | None = payload.get("jti")
-        exp: int | None = payload.get("exp")
+        jti: str | None = decoded.get("jti")
+        exp: int | None = decoded.get("exp")
 
         if jti and exp:
             remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
             await token_blacklist.revoke(jti, ttl_seconds=remaining)
     except PyJWTError:
         pass  # Token already invalid — nothing to revoke
+
+    # Sprint 41 P1: Also revoke refresh token if provided
+    if payload and payload.refresh_token:
+        try:
+            refresh_data = jwt.decode(
+                payload.refresh_token,
+                settings.jwt_refresh_secret,
+                algorithms=[settings.jwt_algorithm],
+            )
+            refresh_jti: str | None = refresh_data.get("jti")
+            refresh_exp: int | None = refresh_data.get("exp")
+            if refresh_jti and refresh_exp:
+                remaining_r = max(int(refresh_exp - datetime.now(UTC).timestamp()), 1)
+                await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
+        except (PyJWTError, Exception):
+            pass  # Best-effort: don't fail logout if refresh token is invalid
 
 
 # ── Sprint 39: Password Reset ──────────────────────────────────
@@ -202,8 +247,8 @@ async def forgot_password(
     if user and user.is_active:
         # Generate token pair (raw for email, hash for DB)
         raw_token, hashed_token = generate_token()
-        user.verification_token = hashed_token
-        user.verification_sent_at = datetime.now(UTC)
+        user.password_reset_token = hashed_token
+        user.password_reset_sent_at = datetime.now(UTC)
         await db.flush()
 
         EmailService.send_password_reset_email(
@@ -234,7 +279,7 @@ async def reset_password(
     incoming_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
     result = await db.execute(
-        select(User).where(User.verification_token == incoming_hash)
+        select(User).where(User.password_reset_token == incoming_hash)
     )
     user = result.scalar_one_or_none()
 
@@ -245,14 +290,14 @@ async def reset_password(
         )
 
     # Check token expiry
-    if user.verification_sent_at:
-        expiry = user.verification_sent_at + timedelta(
+    if user.password_reset_sent_at:
+        expiry = user.password_reset_sent_at + timedelta(
             minutes=settings.password_reset_token_expire_minutes
         )
         if datetime.now(UTC) > expiry:
             # Clear expired token
-            user.verification_token = None
-            user.verification_sent_at = None
+            user.password_reset_token = None
+            user.password_reset_sent_at = None
             await db.flush()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -261,8 +306,8 @@ async def reset_password(
 
     # Update password and clear token
     user.hashed_password = hash_password(payload.new_password)
-    user.verification_token = None
-    user.verification_sent_at = None
+    user.password_reset_token = None
+    user.password_reset_sent_at = None
     await db.flush()
 
     return MessageResponse(message="Password has been reset successfully.")

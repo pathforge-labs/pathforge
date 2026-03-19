@@ -52,6 +52,11 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class LogoutRequest(BaseModel):
+    """Optional body for logout — include refresh_token for full revocation."""
+    refresh_token: str | None = None
+
+
 # ── User Schemas ────────────────────────────────────────────────
 
 class UserResponse(BaseModel):

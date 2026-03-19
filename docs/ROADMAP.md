@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-18 | **Current Phase**: K (Production Launch) — Auth E2E tests ✅, Sprint 34 DB fix ✅, Sprint 40 next
+> **Last Updated**: 2026-03-20 | **Current Phase**: K (Production Launch) — Sprint 41 remediation complete ✅, Sprint 40 operational setup next
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -929,9 +929,39 @@
 
 ---
 
-### Sprint 41 — Production Infrastructure Hardening (⏳ Upcoming)
+### Sprint 41 — Production Readiness Remediation (📋 In Progress)
 
-> Sprint 41: Production environment secure and stable. Redis for rate limiting, database SSL, full env var audit, Sentry activation, Alembic verification, and first full smoke test. **Updated by Sprint 40 Tier-1 audit**: elevated uptime monitoring, security scan blocking, refresh token rotation, and incident runbooks into this sprint.
+> Sprint 41: Production environment secure and stable. **Code remediation complete** (refresh rotation, logout revocation, token separation, account deletion tests, production checklist). Remaining items are manual operational setup (Redis, SSL, Sentry, uptime).
+
+**Refresh Token Rotation (P1-2 — elevated from Sprint 42) ✅**
+
+- [x] Implement refresh token rotation — issue new refresh token on each `/auth/refresh`, revoke old JTI via blacklist
+- [x] Replay detection — reusing consumed refresh token returns 401
+- [x] Best-effort Redis failure — rotation degrades gracefully if Redis unavailable
+- [x] 4 tests: distinct tokens, old JTI revocation, replay → 401, Redis failure graceful
+
+**Logout Refresh Revocation (P1) ✅**
+
+- [x] Logout accepts optional `refresh_token` in body for full revocation (backward compatible)
+- [x] `LogoutRequest` schema added to `schemas/user.py`
+- [x] 3 tests: both revoked, no-body backward compat, invalid refresh still 204
+
+**Password Reset Token Separation (P2 — token collision fix) ✅**
+
+- [x] Added `password_reset_token` + `password_reset_sent_at` columns to User model
+- [x] Alembic migration `e5f6g7h8i9j0` — adds 2 nullable columns
+- [x] Updated forgot-password and reset-password endpoints to use new columns
+- [x] `TestTokenFieldIndependence` — 2 tests proving tokens are now independent
+- [x] 8 password reset tests updated and passing
+
+**Account Deletion Test Coverage (P0-1) ✅**
+
+- [x] `test_account_deletion.py` — 5 tests: success, token revocation, Stripe cancellation, unauthenticated, user-gone-after
+- [x] Fixed `AccountDeletionService` bug: `AdminAuditLog` used nonexistent `resource_type`/`resource_id` kwargs
+
+**Production Operator Checklist ✅**
+
+- [x] `docs/runbooks/production-checklist.md` — env vars, DB, Redis, security, monitoring, Stripe, email, LLM, smoke tests
 
 **Rate Limiting → Redis (P1-1)**
 
@@ -961,11 +991,6 @@
 - [ ] 🔧 MANUAL: Set up UptimeRobot for `https://pathforge.eu` (5 min interval)
 - [ ] Configure alert email to `emre@pathforge.eu`
 
-**Refresh Token Rotation (P1-2 — elevated from Sprint 42)**
-
-- [ ] Implement refresh token rotation — issue new refresh token on each refresh, revoke old one
-- [ ] Verify old refresh token is rejected after rotation
-
 **Alembic Verification (P2-3)**
 
 - [ ] Verify `alembic current` on production DB
@@ -985,9 +1010,9 @@
 
 > Sprint 42: Post-launch hardening. Token rotation and Sentry verification elevated to Sprint 41 by Tier-1 audit. Remaining items: coverage, secret rotation docs, circuit breaker fallback, N+1 analysis.
 
-- [-] P2-1: Refresh token rotation — **elevated to Sprint 41** by Tier-1 audit
+- [-] P2-1: Refresh token rotation — **completed in Sprint 41**
 - [ ] Send welcome email on successful email verification
-- [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41** by Tier-1 audit
+- [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41**
 - [ ] Add `--cov` to pytest CI step + coverage threshold (≥80%)
 - [ ] Review error response formats for consistency
 - [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`

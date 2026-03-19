@@ -149,6 +149,33 @@ def _disable_turnstile() -> None:
     object.__setattr__(settings, "turnstile_secret_key", "")
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _test_token_blacklist_fail_open() -> None:
+    """Set token blacklist to fail-open in tests (no Redis available).
+
+    Without Redis, the blacklist check raises an exception. In production
+    fail-closed mode rejects all requests (503). Tests need fail-open so
+    that authenticated endpoints are reachable.
+    """
+    from app.core.config import settings
+
+    object.__setattr__(settings, "token_blacklist_fail_mode", "open")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _enable_oauth_providers() -> None:
+    """Set OAuth client IDs so provider routes don't return 501.
+
+    Without configured client IDs, the OAuth routes return
+    501 Not Implemented before reaching the token verification
+    logic (which tests mock).
+    """
+    from app.core.config import settings
+
+    object.__setattr__(settings, "google_oauth_client_id", "test-google-client-id")
+    object.__setattr__(settings, "microsoft_oauth_client_id", "test-microsoft-client-id")
+
+
 # ── Test Database ─────────────────────────────────────────────
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

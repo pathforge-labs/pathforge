@@ -1,68 +1,55 @@
 {
-  "sprint": "Pre-40s2",
-  "focus": "Auth E2E tests + Sprint 34 subscriptions table fix",
+  "sprint": "41",
+  "focus": "Production Readiness Remediation — code complete",
   "branch": "main",
   "phase": "K — Production Launch",
-  "session_date": "2026-03-18",
-  "status": "Auth E2E specs (4 new), fixture, Sprint 34 DB fix shipped. Sprint 40 next.",
+  "session_date": "2026-03-20",
+  "status": "Sprint 41 code remediation complete (5 phases). Manual ops remaining. 71 backend + 249 frontend tests passing.",
   "production_readiness": {
-    "global_score": 59,
-    "verdict": "NO-GO (Stripe + LLM still pending)",
+    "global_score": 72,
+    "verdict": "NO-GO (Stripe + LLM + Redis + Sentry still pending manual setup)",
     "p0_blockers": 2,
-    "p0_resolved": 9,
-    "p1_blockers": 4,
-    "p2_blockers": 3,
-    "p3_blockers": 2,
-    "total_gaps": 11
+    "p0_resolved": 11,
+    "p1_blockers": 2,
+    "p1_resolved": 5,
+    "p2_blockers": 1,
+    "p2_resolved": 4,
+    "total_gaps": 5
   },
   "tracking": {
-    "tests_backend": 1121,
+    "tests_backend_auth": 71,
     "tests_frontend": 249,
-    "tests_e2e_new": 15,
-    "tests_total": 1385,
+    "tests_e2e": 15,
     "ruff_violations": 0,
     "tsc_errors": 0,
     "eslint_errors": 0,
     "npm_audit_vulns": 0,
     "pip_audit_vulns": 0,
-    "build_routes": 15,
-    "kit_version": "3.1.0",
-    "kit_agents": 20,
-    "kit_skills": 31,
-    "kit_commands": 31,
-    "kit_workflows": 15
-  },
-  "audit": {
-    "passes": 9,
-    "standard": "FAANG/Tier-1",
-    "domains_audited": 12,
-    "review_gates_passed": "7/7 (Ruff, TSC, pip-audit, build, pytest, Vitest, security)",
-    "plan_audit_findings": 12,
-    "plan_audit_rounds": 3
+    "build_routes": 15
   },
   "sprint_plan": {
-    "sprint_39": "✅ Complete — Auth Hardening & Email Service (33 tasks, 1 session)",
-    "sprint_39_hn": "✅ Complete — Handoff Notes Remediation (7 phases, 18 findings, 1 session)",
-    "sprint_39_hn_s2": "✅ Complete — H3/H4 OAuth Provider Setup (Google GCP + Microsoft Azure)",
+    "sprint_39": "✅ Complete — Auth Hardening & Email Service",
+    "sprint_39_hn": "✅ Complete — Handoff Notes Remediation",
+    "sprint_39_hn_s2": "✅ Complete — H3/H4 OAuth Provider Setup",
     "pre_40": "✅ Complete — AI Kit v3.1.0 upgrade + H7 OAuth tests + H10 PyJWT CVE fix",
     "pre_40_s2": "✅ Complete — Auth E2E tests (4 specs, fixture) + Sprint 34 DB fix",
     "sprint_40": "⏳ Stripe & LLM Operational Setup (manual, 1-2 sessions)",
-    "sprint_41": "⏳ Production Infrastructure Hardening (2 sessions)",
-    "sprint_42": "⏳ Monitoring, Token Security & Polish (1 session)",
-    "sprint_43": "⏳ Stripe Live Mode Cutover (1 session)",
-    "sprint_44": "⏳ Post-Launch Polish & Monitoring (1 session)"
+    "sprint_41": "📋 Code remediation complete — manual ops remaining (Redis, SSL, Sentry, uptime)",
+    "sprint_42": "⏳ Polish & Post-Launch Hardening",
+    "sprint_43": "⏳ Stripe Live Mode Cutover",
+    "sprint_44": "⏳ Post-Launch Polish & Monitoring"
   },
   "handoff": {
-    "manual_steps": 2,
-    "h8": "Stripe + LLM API key setup",
+    "manual_steps": 8,
+    "h8": "Stripe + LLM API key setup (Sprint 40)",
     "h9": "VR baselines (deferred to Sprint 44)",
-    "h11": "oauth-buttons.tsx uses raw localStorage instead of token-manager.ts (Sprint 41)",
-    "h12": "2 E2E test specs need final verification after backend fix",
-    "h13": "Sprint 34 migration applied via direct SQL — consider merging into Alembic chain"
+    "h13": "Sprint 34 migration applied via direct SQL — consider merging into Alembic chain",
+    "h14": "Sprint 41 manual ops: Redis, DB SSL, Sentry, uptime monitoring, env var audit",
+    "h15": "Sprint 40 Stripe + LLM still pending"
   },
   "commits": [
-    {"hash": "160b48c", "message": "feat(auth): Sprint 39 — Auth Hardening, Email Service & OAuth"},
-    {"hash": "553b791", "message": "feat(auth): Sprint 39 Handoff Notes remediation — OAuth JWKS hardening, MSAL, CSP, test fix"},
-    {"hash": "pending", "message": "test(e2e): auth lifecycle E2E tests — 4 specs, fixture, Sprint 34 DB fix"}
+    {"hash": "bd4f70b", "message": "feat(api): Sprint 40 Tier-1 production readiness audit remediation"},
+    {"hash": "8e6425c", "message": "test(e2e): auth lifecycle E2E tests + Sprint 34 subscriptions fix"},
+    {"hash": "pending", "message": "fix(auth): Sprint 41 production readiness remediation"}
   ]
 }

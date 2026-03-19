@@ -45,6 +45,9 @@ class User(UUIDMixin, TimestampMixin, Base):
     # Sprint 39: Email verification
     verification_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
     verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sprint 41: Separate password reset token fields (P2 — token collision fix)
+    password_reset_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    password_reset_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Sprint 34: RBAC role (D3)
     role: Mapped[str] = mapped_column(
         String(20), default=UserRole.USER.value, server_default="user",

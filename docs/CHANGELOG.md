@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Sprint 41] — Production Readiness Remediation — 2026-03-20
+
+### Added
+
+- **Refresh token rotation** (P1-2) — `/auth/refresh` now revokes consumed refresh token JTI and issues new pair; replay detection returns 401 for reused tokens
+- **Logout refresh revocation** (P1) — logout accepts optional `refresh_token` in body for full revocation (backward compatible)
+- **Password reset token separation** (P2) — new `password_reset_token` + `password_reset_sent_at` columns; email verification and password reset no longer share a token column
+- **Alembic migration** `e5f6g7h8i9j0` — adds 2 nullable columns to `users` table
+- **Account deletion tests** — `test_account_deletion.py` with 5 tests (success, token revocation, Stripe cancellation, unauthenticated, user-gone-after)
+- **Refresh rotation tests** — `TestRefreshTokenRotation` (4 tests), `TestLogoutRefreshRevocation` (3 tests), `TestTokenFieldIndependence` (2 tests)
+- **Production operator checklist** — `docs/runbooks/production-checklist.md` covering env vars, DB, Redis, security, monitoring, Stripe, email, LLM, smoke tests
+
+### Fixed
+
+- **`AccountDeletionService`** — `AdminAuditLog` constructor used nonexistent `resource_type`/`resource_id` kwargs; changed to `target_user_id`
+- **Token field collision** — password reset no longer overwrites email verification token (separate DB columns)
+
+### Changed
+
+- `LogoutRequest` schema added to `schemas/user.py` (optional body for logout)
+- `TestTokenFieldConflict` renamed to `TestTokenFieldIndependence` with flipped assertions (bug is now fixed)
+- `TestPasswordReset` updated to use `password_reset_token`/`password_reset_sent_at`
+- `ROADMAP.md` updated with Sprint 41 completion status
+- `session-context.md` / `session-state.json` updated with session work
+
+### Verified
+
+- 71/71 backend auth tests passing
+- 249/249 frontend tests passing
+- Code review + security scan completed
+
+---
+
 ## [Pre-Sprint 40 Session 2] — Auth E2E Tests & Sprint 34 DB Fix — 2026-03-18
 
 ### Added

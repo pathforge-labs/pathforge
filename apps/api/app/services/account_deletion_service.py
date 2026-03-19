@@ -191,8 +191,7 @@ class AccountDeletionService:
         audit_entry = AdminAuditLog(
             admin_user_id=user_id,
             action="account_deletion",
-            resource_type="user",
-            resource_id=str(user_id),
+            target_user_id=user_id,
             details={
                 "reason": "gdpr_article_17_user_request",
                 "email_hash": _hash_email(user_email),
