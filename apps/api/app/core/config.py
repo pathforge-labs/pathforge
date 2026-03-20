@@ -129,6 +129,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     rate_limit_login: str = "5/minute"       # Brute-force protection
     rate_limit_register: str = "3/minute"    # Registration abuse prevention
     rate_limit_refresh: str = "10/minute"    # Token refresh protection
+    rate_limit_logout: str = "10/minute"     # Logout abuse prevention
     rate_limit_global_default: str = "200/minute"  # Configurable global default
 
     # ── Push Notification Rate Limits (Sprint 33) ──────────────────

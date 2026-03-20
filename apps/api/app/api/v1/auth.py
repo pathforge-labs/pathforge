@@ -4,7 +4,6 @@ PathForge API — Auth Routes
 Registration, login, token refresh, logout, password reset, and email verification.
 """
 
-import contextlib
 import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
@@ -154,10 +153,13 @@ async def refresh_token(
     old_jti: str | None = token_data.get("jti")
     old_exp: int | None = token_data.get("exp")
 
-    # Replay detection: reject already-consumed refresh tokens
-    if old_jti:
+    # Atomic rotation: consume_once checks AND revokes in a single Redis SETNX
+    # (eliminates TOCTOU race window between separate check + revoke calls)
+    if old_jti and old_exp:
+        remaining = max(int(old_exp - datetime.now(UTC).timestamp()), 1)
         try:
-            if await token_blacklist.is_revoked(old_jti):
+            is_first_use = await token_blacklist.consume_once(old_jti, ttl_seconds=remaining)
+            if not is_first_use:
                 logger.warning("Refresh token replay detected for user %s", user_id)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -168,12 +170,12 @@ async def refresh_token(
         except Exception:
             # Respect configurable fail mode (same as get_current_user)
             if settings.token_blacklist_fail_mode == "closed":
-                logger.error("Refresh replay check failed — rejecting (fail-closed)")
+                logger.error("Refresh rotation failed — rejecting (fail-closed)")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Authentication service temporarily unavailable",
                 ) from None
-            logger.warning("Refresh replay check failed — allowing (fail-open)")
+            logger.warning("Refresh rotation failed — allowing (fail-open)")
 
     user = await UserService.get_by_id(db, user_id)
     if not user or not user.is_active:
@@ -181,12 +183,6 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
-
-    # Sprint 41 P1-2: Rotate — revoke old token BEFORE issuing new ones
-    if old_jti and old_exp:
-        remaining = max(int(old_exp - datetime.now(UTC).timestamp()), 1)
-        with contextlib.suppress(Exception):
-            await token_blacklist.revoke(old_jti, ttl_seconds=remaining)
 
     new_tokens = TokenResponse(
         access_token=create_access_token(str(user.id)),
@@ -201,7 +197,9 @@ async def refresh_token(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke current access token and optional refresh token",
 )
+@limiter.limit(settings.rate_limit_logout)
 async def logout(
+    request: Request,
     payload: LogoutRequest | None = None,
     token: str = Depends(oauth2_scheme),
     _current_user: User = Depends(get_current_user),
@@ -325,6 +323,8 @@ async def reset_password(
     user.hashed_password = hash_password(payload.new_password)
     user.password_reset_token = None
     user.password_reset_sent_at = None
+    # Sprint 41 C2: Invalidate all existing sessions after password change
+    user.tokens_invalidated_at = datetime.now(UTC)
     await db.flush()
 
     return MessageResponse(message="Password has been reset successfully.")

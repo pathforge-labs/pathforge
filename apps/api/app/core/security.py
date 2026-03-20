@@ -61,9 +61,11 @@ def create_access_token(
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes)
     )
+    now = datetime.now(UTC)
     to_encode = {
         "sub": subject,
         "exp": expire,
+        "iat": now,
         "type": "access",
         "jti": str(_uuid.uuid4()),
     }
@@ -72,10 +74,12 @@ def create_access_token(
 
 def create_refresh_token(subject: str) -> str:
     """Create a JWT refresh token with longer expiry and unique jti."""
-    expire = datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
+    now = datetime.now(UTC)
+    expire = now + timedelta(days=settings.jwt_refresh_token_expire_days)
     to_encode = {
         "sub": subject,
         "exp": expire,
+        "iat": now,
         "type": "refresh",
         "jti": str(_uuid.uuid4()),  # unique ID for token rotation/revocation
     }
@@ -143,4 +147,16 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user account",
         )
+
+    # Sprint 41: Reject tokens issued before a global invalidation event
+    # (password reset, security lockout) — ensures all pre-existing sessions
+    # are terminated after credential change.
+    iat = payload.get("iat")
+    if user.tokens_invalidated_at and iat and iat < user.tokens_invalidated_at.timestamp():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been invalidated. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user

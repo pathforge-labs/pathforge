@@ -38,12 +38,30 @@ class TokenBlacklist:
     async def get_redis(cls) -> Redis:
         """Lazily initialize and return the Redis connection."""
         if cls._redis is None:
+            url = settings.redis_url
+            if settings.redis_ssl and not url.startswith("rediss://"):
+                url = url.replace("redis://", "rediss://", 1)
             cls._redis = Redis.from_url(
-                settings.redis_url,
+                url,
                 decode_responses=True,
                 socket_connect_timeout=5,
             )
         return cls._redis
+
+    @classmethod
+    async def consume_once(cls, jti: str, ttl_seconds: int) -> bool:
+        """Atomically mark a JTI as consumed. Returns True if this was the
+        first consumer (token is valid), False if already consumed (replay).
+
+        Uses Redis SET NX (set-if-not-exists) to collapse the check and
+        revoke into a single atomic operation with no TOCTOU race window.
+        """
+        redis = await cls.get_redis()
+        key = f"{_PREFIX}{jti}"
+        was_set = await redis.set(key, "revoked", nx=True, ex=ttl_seconds)
+        if was_set:
+            logger.info("Token %s consumed + blacklisted (TTL=%ds)", jti[:8], ttl_seconds)
+        return bool(was_set)
 
     @classmethod
     async def revoke(cls, jti: str, ttl_seconds: int) -> None:

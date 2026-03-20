@@ -393,6 +393,39 @@ class TestPasswordReset:
         assert "expired" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
+    async def test_reset_password_invalidates_existing_sessions(
+        self, client: AsyncClient, db_session,
+    ) -> None:
+        """Password reset sets tokens_invalidated_at to reject pre-existing tokens."""
+        from sqlalchemy import select
+
+        from app.models.user import User
+
+        await _register_user(
+            client, email="reset-inval@pathforge.eu", password="OldPass123!"
+        )
+
+        result = await db_session.execute(
+            select(User).where(User.email == "reset-inval@pathforge.eu")
+        )
+        user = result.scalar_one()
+        assert user.tokens_invalidated_at is None
+
+        raw_token, hashed_token = generate_token()
+        user.password_reset_token = hashed_token
+        user.password_reset_sent_at = datetime.now(UTC)
+        await db_session.flush()
+
+        response = await client.post(
+            self.RESET_ENDPOINT,
+            json={"token": raw_token, "new_password": "NewSecure456!"},
+        )
+        assert response.status_code == 200
+
+        await db_session.refresh(user)
+        assert user.tokens_invalidated_at is not None
+
+    @pytest.mark.asyncio
     async def test_reset_password_token_single_use(
         self, client: AsyncClient, db_session,
     ) -> None:
@@ -618,11 +651,16 @@ class TestAuthEdgeCases:
         user.is_active = False
         await db_session.flush()
 
-        # Try to refresh
-        response = await client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": tokens["refresh_token"]},
-        )
+        # Try to refresh — consume_once must be mocked (no Redis in tests)
+        with patch(
+            "app.core.token_blacklist.TokenBlacklist.consume_once",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            response = await client.post(
+                "/api/v1/auth/refresh",
+                json={"refresh_token": tokens["refresh_token"]},
+            )
         assert response.status_code == 401
 
 
@@ -724,12 +762,9 @@ class TestRefreshTokenRotation:
         tokens = await _login_user(client, user_data["email"], user_data["password"])
 
         with patch(
-            "app.core.token_blacklist.TokenBlacklist.revoke",
+            "app.core.token_blacklist.TokenBlacklist.consume_once",
             new_callable=AsyncMock,
-        ), patch(
-            "app.core.token_blacklist.TokenBlacklist.is_revoked",
-            new_callable=AsyncMock,
-            return_value=False,
+            return_value=True,  # First use — valid
         ):
             response = await client.post(
                 self.REFRESH_ENDPOINT,
@@ -745,7 +780,7 @@ class TestRefreshTokenRotation:
     async def test_refresh_revokes_old_token(
         self, client: AsyncClient,
     ) -> None:
-        """Refresh calls token_blacklist.revoke with the old refresh token's JTI."""
+        """Refresh calls consume_once with the old refresh token's JTI."""
         import jwt as pyjwt
 
         from app.core.config import settings
@@ -762,22 +797,18 @@ class TestRefreshTokenRotation:
         old_jti = old_decoded["jti"]
 
         with patch(
-            "app.core.token_blacklist.TokenBlacklist.revoke",
+            "app.core.token_blacklist.TokenBlacklist.consume_once",
             new_callable=AsyncMock,
-        ) as mock_revoke, patch(
-            "app.core.token_blacklist.TokenBlacklist.is_revoked",
-            new_callable=AsyncMock,
-            return_value=False,
-        ):
+            return_value=True,  # First use — valid
+        ) as mock_consume:
             response = await client.post(
                 self.REFRESH_ENDPOINT,
                 json={"refresh_token": tokens["refresh_token"]},
             )
 
         assert response.status_code == 200
-        # revoke should have been called with the old JTI
-        mock_revoke.assert_called_once()
-        call_args = mock_revoke.call_args
+        mock_consume.assert_called_once()
+        call_args = mock_consume.call_args
         assert call_args[0][0] == old_jti
         assert call_args[1]["ttl_seconds"] > 0
 
@@ -790,12 +821,9 @@ class TestRefreshTokenRotation:
         tokens = await _login_user(client, user_data["email"], user_data["password"])
 
         with patch(
-            "app.core.token_blacklist.TokenBlacklist.revoke",
+            "app.core.token_blacklist.TokenBlacklist.consume_once",
             new_callable=AsyncMock,
-        ), patch(
-            "app.core.token_blacklist.TokenBlacklist.is_revoked",
-            new_callable=AsyncMock,
-            return_value=True,  # Simulate already-consumed
+            return_value=False,  # Already consumed — replay
         ):
             response = await client.post(
                 self.REFRESH_ENDPOINT,
@@ -814,11 +842,7 @@ class TestRefreshTokenRotation:
         tokens = await _login_user(client, user_data["email"], user_data["password"])
 
         with patch(
-            "app.core.token_blacklist.TokenBlacklist.revoke",
-            new_callable=AsyncMock,
-            side_effect=ConnectionError("Redis down"),
-        ), patch(
-            "app.core.token_blacklist.TokenBlacklist.is_revoked",
+            "app.core.token_blacklist.TokenBlacklist.consume_once",
             new_callable=AsyncMock,
             side_effect=ConnectionError("Redis down"),
         ):
