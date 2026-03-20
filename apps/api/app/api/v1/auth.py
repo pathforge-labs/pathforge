@@ -6,6 +6,7 @@ Registration, login, token refresh, logout, password reset, and email verificati
 
 import contextlib
 import hashlib
+import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -26,6 +27,8 @@ from app.core.security import (
 )
 from app.core.token_blacklist import token_blacklist
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 from app.schemas.user import (
     ForgotPasswordRequest,
     LogoutRequest,
@@ -155,6 +158,7 @@ async def refresh_token(
     if old_jti:
         try:
             if await token_blacklist.is_revoked(old_jti):
+                logger.warning("Refresh token replay detected for user %s", user_id)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Refresh token has already been used",
@@ -162,7 +166,14 @@ async def refresh_token(
         except HTTPException:
             raise
         except Exception:
-            pass  # Best-effort: allow refresh if Redis is unavailable
+            # Respect configurable fail mode (same as get_current_user)
+            if settings.token_blacklist_fail_mode == "closed":
+                logger.error("Refresh replay check failed — rejecting (fail-closed)")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable",
+                ) from None
+            logger.warning("Refresh replay check failed — allowing (fail-open)")
 
     user = await UserService.get_by_id(db, user_id)
     if not user or not user.is_active:
@@ -171,16 +182,16 @@ async def refresh_token(
             detail="User not found or inactive",
         )
 
-    new_tokens = TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
-    )
-
-    # Sprint 41 P1-2: Rotate — revoke the consumed refresh token
+    # Sprint 41 P1-2: Rotate — revoke old token BEFORE issuing new ones
     if old_jti and old_exp:
         remaining = max(int(old_exp - datetime.now(UTC).timestamp()), 1)
         with contextlib.suppress(Exception):
             await token_blacklist.revoke(old_jti, ttl_seconds=remaining)
+
+    new_tokens = TokenResponse(
+        access_token=create_access_token(str(user.id)),
+        refresh_token=create_refresh_token(str(user.id)),
+    )
 
     return new_tokens
 
@@ -223,8 +234,8 @@ async def logout(
             if refresh_jti and refresh_exp:
                 remaining_r = max(int(refresh_exp - datetime.now(UTC).timestamp()), 1)
                 await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
-        except (PyJWTError, Exception):
-            pass  # Best-effort: don't fail logout if refresh token is invalid
+        except (PyJWTError, ConnectionError, OSError):
+            pass  # Best-effort: JWT decode failure or Redis unavailability
 
 
 # ── Sprint 39: Password Reset ──────────────────────────────────
@@ -289,20 +300,26 @@ async def reset_password(
             detail="Invalid or expired reset token",
         )
 
-    # Check token expiry
-    if user.password_reset_sent_at:
-        expiry = user.password_reset_sent_at + timedelta(
-            minutes=settings.password_reset_token_expire_minutes
+    # Check token expiry (fail-safe: reject if timestamp is missing)
+    if not user.password_reset_sent_at:
+        user.password_reset_token = None
+        await db.flush()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
         )
-        if datetime.now(UTC) > expiry:
-            # Clear expired token
-            user.password_reset_token = None
-            user.password_reset_sent_at = None
-            await db.flush()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Reset token has expired. Please request a new one.",
-            )
+
+    expiry = user.password_reset_sent_at + timedelta(
+        minutes=settings.password_reset_token_expire_minutes
+    )
+    if datetime.now(UTC) > expiry:
+        user.password_reset_token = None
+        user.password_reset_sent_at = None
+        await db.flush()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired. Please request a new one.",
+        )
 
     # Update password and clear token
     user.hashed_password = hash_password(payload.new_password)

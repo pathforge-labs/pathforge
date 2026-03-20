@@ -29,10 +29,10 @@ class AdminAuditLog(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "admin_audit_logs"
 
-    admin_user_id: Mapped[uuid.UUID] = mapped_column(
+    admin_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
