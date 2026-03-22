@@ -52,3 +52,10 @@ htmlcov/
 # ── Docker ──────────────────────────────────────────
 docker-compose.override.yml
 .vercel
+
+# Devran AI Kit (local dev tooling)
+# Install: npx @devran-ai/kit init
+.agent/
+.codex/
+.opencode/
+.cursor/rules/kit-governance.mdc
