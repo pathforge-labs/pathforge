@@ -1,4 +1,4 @@
-# Antigravity AI Kit — Checklists
+# Devran AI Kit — Checklists
 
 > **Purpose**: Quality gates and structured workflows  
 > **Count**: 3 Core Checklists

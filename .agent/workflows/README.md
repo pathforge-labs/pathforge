@@ -1,7 +1,7 @@
-# Antigravity AI Kit — Workflows
+# Devran AI Kit — Workflows
 
 > **Purpose**: Process templates for common development tasks
-> **Count**: 14 Workflows
+> **Count**: 21 Workflows
 > **Standard**: Enterprise Workflow Standard (EWS) v1.0
 
 ---
@@ -27,11 +27,18 @@ Invoke them using slash commands (e.g., `/brainstorm authentication system`).
 | **ui-ux-pro-max** | `/ui-ux-pro-max` | Build | Premium UI/UX design and implementation |
 | **test** | `/test` | Verify | Systematic test writing and execution |
 | **review** | `/review` | Verify | Sequential quality gate pipeline |
+| **preflight** | `/preflight` | Verify | Production readiness assessment with 10-domain scoring |
+| **pr** | `/pr` | Ship | Production-grade PR creation with branch validation and size guards |
+| **pr-review** | `/pr-review` | Verify | Multi-perspective PR review with senior engineering expertise |
+| **pr-fix** | `/pr-fix` | Build | Fix PR issues based on review comments with verification |
+| **pr-merge** | `/pr-merge` | Ship | Safe PR merge with dependency validation and post-merge checks |
+| **pr-split** | `/pr-split` | Build | Split oversized PRs into focused sub-PRs by concern category |
 | **deploy** | `/deploy` | Ship | Production deployment with pre-flight checks |
 | **debug** | `/debug` | Reactive | Systematic problem investigation |
 | **orchestrate** | `/orchestrate` | Reactive | Multi-agent coordination for complex tasks |
 | **retrospective** | `/retrospective` | Evaluate | Tier-1 quality audit against market standards |
 | **status** | `/status` | Cross-cutting | Project status overview and health check |
+| **upgrade** | `/upgrade` | Maintenance | Formal protocol for non-destructive framework upgrades |
 
 ---
 
@@ -41,15 +48,17 @@ Invoke them using slash commands (e.g., `/brainstorm authentication system`).
 Discover ──► Plan ──► Build ──► Verify ──► Ship ──► Evaluate
    │           │        │         │         │          │
    ▼           ▼        ▼         ▼         ▼          ▼
-/brainstorm  /plan   /create   /test     /deploy   /retrospective
-/quality-gate        /enhance  /review
-                     /preview
+/brainstorm  /plan   /create   /test       /pr        /retrospective
+/quality-gate        /enhance  /review     /pr-merge
+                     /preview  /preflight  /deploy
+                     /pr-fix   /pr-review
+                     /pr-split
                      /ui-ux-pro-max
 
     Reactive (any phase)          Cross-cutting (any phase)
     ────────────────────          ────────────────────────
     /debug                        /status
-    /orchestrate
+    /orchestrate                  /upgrade
 ```
 
 ---

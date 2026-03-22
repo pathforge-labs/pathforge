@@ -1,7 +1,7 @@
-# Antigravity AI Kit — Agents
+# Agents
 
 > **Purpose**: Specialized sub-agents for task delegation
-> **Count**: 19 Core Agents
+> **Count**: 23 Agents
 
 ---
 
@@ -56,6 +56,20 @@ Agents are specialized personas that handle delegated tasks with focused experti
 | 🔭 **Explorer Agent**      | `explorer-agent.md`      | Codebase discovery          |
 | 📊 **Sprint Orchestrator** | `sprint-orchestrator.md` | Sprint planning & velocity  |
 
+### PR & Code Review Agents
+
+| Agent                      | File                     | Purpose                     |
+| :------------------------- | :----------------------- | :-------------------------- |
+| 👀 **PR Reviewer**         | `pr-reviewer.md`         | PR review, branch strategy, code quality |
+
+### Language-Specific Reviewers
+
+| Agent                          | File                        | Purpose                     |
+| :----------------------------- | :-------------------------- | :-------------------------- |
+| 📘 **TypeScript Reviewer**    | `typescript-reviewer.md`    | Type safety & TS patterns   |
+| 🐍 **Python Reviewer**        | `python-reviewer.md`        | PEP 8 & Python best practices |
+| 🔷 **Go Reviewer**            | `go-reviewer.md`            | Go idioms & concurrency     |
+
 ---
 
 ## Agent Selection Matrix
@@ -77,6 +91,10 @@ The `intelligent-routing` skill automatically selects agents based on request ke
 | Backend      | "backend", "api", "server", "node"  | `backend-specialist`      |
 | Sprint       | "sprint", "velocity", "backlog"     | `sprint-orchestrator`     |
 | Reliability  | "SRE", "incident", "production"     | `reliability-engineer`    |
+| PR Review    | "PR", "pull request", "review PR"   | `pr-reviewer`             |
+| TypeScript | "typescript", ".ts", "type"   | `typescript-reviewer` |
+| Python     | "python", "django", "flask"   | `python-reviewer`     |
+| Go         | "golang", "goroutine", "go"   | `go-reviewer`         |
 
 ---
 
@@ -101,7 +119,7 @@ Each agent file follows this structure:
 ```markdown
 # [Agent Name]
 
-> **Platform**: Antigravity AI Kit
+> **Platform**: Devran AI Kit
 > **Purpose**: [Brief description]
 
 ---

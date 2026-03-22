@@ -1,6 +1,6 @@
 # Task-Complete Checkpoint
 
-> **Framework**: Antigravity AI Kit v3.5.0
+> **Framework**: Devran AI Kit v4.1.0
 > **Purpose**: Decision gate after task completion — present options before commit/push
 > **Principle**: Human-in-the-loop governance
 
