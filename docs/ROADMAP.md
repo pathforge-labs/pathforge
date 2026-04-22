@@ -902,7 +902,7 @@
 - [x] P1-3: Security scans blocking in CI — removed `continue-on-error: true` from `pip-audit` and `pnpm audit` steps in `ci.yml`
 - [x] P1-4: Health check rate limit degradation — readiness probe now returns 503 when rate limiter is in degraded memory:// mode
 - [x] P1-6: Incident runbooks — 5 runbooks created: Redis outage, DB connection exhaustion, Stripe webhook failure, LLM budget exceeded, DDoS/high traffic
-- [x] Audit report archived: `docs/TIER1_PRODUCTION_READINESS_AUDIT.md`
+- [x] Audit report consolidated into `docs/MASTER_PRODUCTION_READINESS.md` (SSOT); original `docs/TIER1_PRODUCTION_READINESS_AUDIT.md` deleted
 - [x] ROADMAP updated with elevated sprint items (uptime monitoring, refresh token rotation → Sprint 41)
 
 **Stripe Account Setup (P0-5)**
