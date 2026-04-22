@@ -3,7 +3,7 @@
 > **Status**: Single-source production launch checklist consolidating the prior Tier-1 audit (2026-03-19) and roadmap (2026-02-24) with a fresh `/preflight` full-scan on the current worktree.
 > **Generated**: 2026-04-22 · **Branch**: `claude/brave-shaw-16cf72` · **Head**: `9bede13`
 > **Prior audits superseded**: `TIER1_PRODUCTION_READINESS_AUDIT.md`, `PRODUCTION_READINESS_ROADMAP.md` (deleted).
-> **Stack of record**: FastAPI 3.12 · Next.js 15 · React Native Expo SDK 52 · PostgreSQL 16 + pgvector (Supabase) · Redis · Stripe · Railway + Vercel.
+> **Stack of record**: Python 3.12 + FastAPI · Next.js 15 · React Native Expo SDK 52 · PostgreSQL 16 + pgvector (Supabase) · Redis · Stripe · Railway + Vercel.
 
 ---
 
@@ -11,7 +11,7 @@
 
 | Question | Answer |
 | :--- | :--- |
-| **Composite Score** | **74 / 100** |
+| **Composite Score** | **72.4 / 100** |
 | **Verdict** | **CONDITIONAL GO** — code freeze eligible; launch gated on **manual operational setup** (Sprint 40 + Sprint 41 manual tasks). |
 | **Code Readiness** | ✅ GO — remediation sprints 39→41 landed. All prior P0 code gaps closed. |
 | **Ops Readiness** | ❌ NOT READY — Sentry DSN empty, no Stripe account, no LLM keys, Redis not provisioned, DB SSL off, no uptime monitor. |
@@ -34,7 +34,7 @@
 | D8 | Documentation | 5 | 4 | 🟢 | 5 incident runbooks + production checklist + architecture/ADRs. README accurate. API docs auto-generated (disabled in prod). |
 | D9 | Infrastructure / CI-CD | 10 | 7 | 🟡 | CI green; `pip-audit` + `pnpm audit` now blocking. `deploy.yml` gated by manual `deploy` confirmation. No staging env. |
 | D10 | Observability | 10 | 4.5 | 🔴 | Structured logging + Sentry SDK integrated backend+web+mobile, BUT `SENTRY_DSN` empty → **zero prod error visibility**. Langfuse off. No external uptime monitor. |
-| | **Total** | **100** | **74** | 🟡 | — |
+| | **Total** | **100** | **72.4** | 🟡 | — |
 
 **Blocker Rule Precedence** (evaluated in order, none tripped):
 
