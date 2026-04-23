@@ -73,7 +73,7 @@ Code is ready, but these require a human in the Stripe/Railway/Vercel/UptimeRobo
 | **OPS-2** | **Stripe account not provisioned** | Stripe Dashboard + Railway + Vercel env | KVK, IBAN, 4 Products, webhook endpoint `https://api.pathforge.eu/api/v1/webhooks/stripe`, 6 events; `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4× `STRIPE_PRICE_ID_*`, `BILLING_ENABLED=true`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. |
 | **OPS-3** | **LLM API keys absent** | Railway env | `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `VOYAGE_API_KEY`, `LLM_MONTHLY_BUDGET_USD=200`. |
 | **OPS-4** | **Redis not provisioned in prod** | Railway plugin or Upstash | `REDIS_URL`, `RATELIMIT_STORAGE_URI=redis://…`. Without it: rate limit degrades to per-instance memory, circuit breaker loses state, LLM budget guard can't cap. |
-| **OPS-5** | **`DATABASE_SSL=false`** | `apps/api/app/core/config.py:56` default; unset in Railway env | Set `DATABASE_SSL=true` on Railway so asyncpg negotiates TLS to Supabase. |
+| ~~**OPS-5**~~ | ~~`DATABASE_SSL=false`~~ — **closed by ADR-0001 (2026-04-23)**. TLS auto-enables when `ENVIRONMENT=production`; explicit `false` in prod now fails boot. Verify post-deploy via `curl /api/v1/health/ready \| jq .db.ssl`. | — | — |
 | **OPS-6** | **No uptime monitor** | UptimeRobot (free tier) | `https://api.pathforge.eu/api/v1/health/ready` + `https://pathforge.eu`, 5-min poll, alert → `emre@pathforge.eu`. |
 | **OPS-7** | **Full env-var audit not run** | Railway + Vercel | Verify `ENVIRONMENT`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `CORS_ORIGINS`, `INITIAL_ADMIN_EMAIL`, `NEXT_PUBLIC_API_URL`. |
 | **OPS-8** | **`alembic current` on prod unverified** | Railway shell | `alembic current` → `alembic upgrade head` if behind. |
@@ -83,7 +83,7 @@ Code is ready, but these require a human in the Stripe/Railway/Vercel/UptimeRobo
 
 | # | Finding | Severity | Action |
 | :-- | :--- | :-- | :--- |
-| N-1 | `database_ssl` default is `False` in `config.py:56` — wrong default for a project whose only prod DB is Supabase. | Medium | Flip default to `True`; require explicit opt-out for local dev. |
+| ~~N-1~~ | ~~`database_ssl` default is `False`~~ — **closed 2026-04-23 via [ADR-0001](adr/0001-database-ssl-secure-by-default.md)**. Auto-derives from `ENVIRONMENT`; explicit `false` in prod fails boot; Alembic + runtime use the same hardened TLS context; readiness probe attests server-side `ssl_cipher`. | — | — |
 | N-2 | No test/CI coverage gate enforced (pytest `--cov` not wired, no threshold). | Medium | Add `--cov=app --cov-fail-under=80` to CI `api-quality` step (planned in Sprint 42). |
 | N-3 | `auditConfig.ignoreCves` carries `CVE-2025-69873`, `CVE-2025-09073` without justification comments. | Low | Document rationale + expiry quarter inline or in `SECURITY.md`. |
 | N-4 | No staging environment — code goes CI→prod; Vercel previews cover web only. | Medium | Add Railway staging env (Sprint 44 item). |
@@ -100,7 +100,7 @@ Estimated ≤1 working session (mostly clicks in external dashboards).
 1. **OPS-2** Provision Stripe test mode → webhook → set 7 Railway env vars + 1 Vercel env var → test with `4242 4242 4242 4242`.
 2. **OPS-3** Create Anthropic + Google AI + Voyage AI keys → set in Railway → `LLM_MONTHLY_BUDGET_USD=200`.
 3. **OPS-4** Provision Redis (Railway plugin or Upstash free) → set `REDIS_URL` + `RATELIMIT_STORAGE_URI`.
-4. **OPS-5 / N-1** Set `DATABASE_SSL=true` in Railway **and** change `config.py` default to `True`.
+4. ~~**OPS-5 / N-1**~~ — closed by [ADR-0001](adr/0001-database-ssl-secure-by-default.md); no manual step required. Verify post-deploy that `curl /api/v1/health/ready` returns `db.ssl: true`.
 5. **OPS-1** Create Sentry project → set `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` → fire synthetic 500 to verify PII-scrubbed event lands.
 6. **OPS-7** Walk the full env-var checklist in `docs/runbooks/production-checklist.md`.
 7. **OPS-8** `alembic current` on prod → `alembic upgrade head` if behind.

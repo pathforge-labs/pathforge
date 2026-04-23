@@ -104,6 +104,63 @@ jobs:
           uv pip install pip-audit --system
           python -m pip_audit --desc --progress-spinner off
 
+      # ADR-0001: boot-time config-guards. Fail the build if the
+      # production TLS posture regresses.
+      - name: Boot-time config guards (ADR-0001)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Shared fake secrets — must not collide with _INSECURE_JWT_DEFAULTS
+          # and must be distinct from each other.
+          export JWT_SECRET="ci-guard-jwt-secret-aaaaaaaaaaaaaaaaaaaa"
+          export JWT_REFRESH_SECRET="ci-guard-jwt-refresh-bbbbbbbbbbbbbbbbb"
+          export DATABASE_URL="postgresql+asyncpg://u:p@h:5432/db"
+
+          echo "::group::prod + unset DATABASE_SSL → auto-enables TLS"
+          ENVIRONMENT=production python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.database_ssl is True, f'expected True, got {s.database_ssl!r}'
+          print('OK: database_ssl auto-resolved to True in production')
+          "
+          echo "::endgroup::"
+
+          echo "::group::prod + DATABASE_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production DATABASE_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised ValueError"
+            exit 1
+          fi
+          echo "OK: production downgrade correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::dev + unset DATABASE_SSL → TLS off (local-friendly)"
+          ENVIRONMENT=development python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.database_ssl is False, f'expected False, got {s.database_ssl!r}'
+          print('OK: database_ssl auto-resolved to False in development')
+          "
+          echo "::endgroup::"
+
+          echo "::group::DATABASE_URL ssl-param stripping"
+          ENVIRONMENT=development python -c "
+          from app.core.config import Settings
+          s = Settings(database_url='postgresql+asyncpg://u:p@h:5432/db?sslmode=require')
+          assert 'sslmode' not in s.database_url.lower()
+          assert 'ssl=' not in s.database_url.lower()
+          print('OK: DATABASE_URL ssl params stripped')
+          "
+          echo "::endgroup::"
+
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
     name: Web — Lint & Build

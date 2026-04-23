@@ -12,6 +12,8 @@ Usage:
 """
 
 import logging
+from typing import ClassVar
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -53,7 +55,10 @@ class Settings(BaseSettings):  # type: ignore[misc]
     database_echo: bool = False
     database_pool_recycle: int = 3600   # Prevent stale connections (seconds)
     database_pool_timeout: int = 30     # Max wait for pool connection (seconds)
-    database_ssl: bool = False          # Enable for Supabase production
+    # ADR-0001: secure-by-default. Leave unset (None) to auto-derive from
+    # environment — True in production, False elsewhere. Explicit False in
+    # production fails fast at Settings() construction.
+    database_ssl: bool | None = None
 
     # ── Redis ───────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
@@ -200,15 +205,84 @@ class Settings(BaseSettings):  # type: ignore[misc]
     microsoft_oauth_client_id: str = ""
     microsoft_oauth_client_secret: str = ""
 
-    # ── Sprint 38 H3: JWT Secret Production Guard ────────────
-    _INSECURE_JWT_DEFAULTS: frozenset[str] = frozenset({
+    # ── Constants for validators ──────────────────────────────
+    # `ClassVar` prevents Pydantic from treating these as settings fields
+    # and from attempting env-var population. They are pure lookup tables.
+    _INSECURE_JWT_DEFAULTS: ClassVar[frozenset[str]] = frozenset({
         "pathforge-dev-secret-change-in-production",
         "change-me-in-production-use-a-real-secret",
         "change-me-refresh-secret-must-differ",
     })
 
     @model_validator(mode="after")
-    def _validate_jwt_secrets(self) -> "Settings":
+    def _post_init_guards(self) -> "Settings":
+        """All post-initialisation invariants, run in an explicit order.
+
+        Ordering matters: the URL sanitiser strips SSL params *before* the
+        SSL resolver inspects state, and the production-downgrade guard
+        runs before the SSL default is auto-derived so it cannot be masked
+        by a fresh True. Collapsed into a single method so the order is
+        locked in source and not subject to Pydantic's validator-dispatch
+        heuristics.
+
+        Sub-steps (do not reorder without an ADR):
+        1. Strip SSL/TLS query params from `database_url`.
+        2. Enforce the production-TLS-downgrade guard.
+        3. Auto-derive `database_ssl` default from environment.
+        4. Enforce JWT-secret production guards.
+        """
+        self._sanitise_database_url_ssl_params()
+        self._guard_production_tls_downgrade()
+        self._resolve_database_ssl_default()
+        self._validate_jwt_secrets()
+        return self
+
+    # ── ADR-0001: Database URL SSL-param sanitiser ─────────────
+    # SSL/TLS is controlled exclusively via `database_ssl` (→ asyncpg
+    # `connect_args`). If the operator pasted a DSN containing any libpq
+    # SSL directive (`ssl=`, `sslmode=`, `sslcert=`, `sslkey=`,
+    # `sslrootcert=`, `sslcrl=`, `sslnegotiation=` …), strip every key
+    # whose lowercase form starts with `ssl` and log a warning so the two
+    # SSL control surfaces can never disagree.
+    def _sanitise_database_url_ssl_params(self) -> None:
+        parts = urlsplit(self.database_url)
+        if not parts.query:
+            return
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        kept = [(k, v) for k, v in pairs if not k.lower().startswith("ssl")]
+        if len(kept) == len(pairs):
+            return
+        cleaned = urlunsplit(parts._replace(query=urlencode(kept)))
+        # NOTE: log ONLY a static string. Never interpolate `self.database_url`
+        # or the stripped pairs — they carry credentials (user:password@host).
+        _config_logger.warning(
+            "DATABASE_URL contained one or more ssl* query params; "
+            "stripped. TLS is controlled exclusively by DATABASE_SSL "
+            "(ADR-0001).",
+        )
+        object.__setattr__(self, "database_url", cleaned)
+
+    def _guard_production_tls_downgrade(self) -> None:
+        """ADR-0001: explicit False in production is a configuration bug."""
+        if self.database_ssl is False and self.is_production:
+            msg = (
+                "FATAL: DATABASE_SSL=false is forbidden when "
+                "ENVIRONMENT=production. Supabase connections must use TLS. "
+                "Remove the override or set it to true (ADR-0001)."
+            )
+            raise ValueError(msg)
+
+    def _resolve_database_ssl_default(self) -> None:
+        """ADR-0001: auto-derive from environment when unset."""
+        if self.database_ssl is None:
+            resolved = self.is_production
+            object.__setattr__(self, "database_ssl", resolved)
+            _config_logger.info(
+                "database_ssl auto-resolved to %s (environment=%s)",
+                resolved, self.environment,
+            )
+
+    def _validate_jwt_secrets(self) -> None:
         """Block startup if default JWT secrets are used in production."""
         for field_name in ("jwt_secret", "jwt_refresh_secret"):
             value = getattr(self, field_name)
@@ -233,13 +307,28 @@ class Settings(BaseSettings):  # type: ignore[misc]
                 )
                 raise ValueError(msg)
             _config_logger.warning(
-                "⚠️  jwt_secret and jwt_refresh_secret are identical — fix before production"
+                "⚠️  jwt_secret and jwt_refresh_secret are identical — fix before production",
             )
-        return self
 
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def database_ssl_enabled(self) -> bool:
+        """Validated `database_ssl`, narrowed to `bool` (ADR-0001).
+
+        The declared type is `bool | None` to accept unset as a sentinel
+        for auto-derivation. Post-validation the value is always a bool;
+        this property asserts the invariant so callers get a concrete
+        `bool` without silent coercion that could fail open.
+        """
+        assert self.database_ssl is not None, (
+            "Settings did not complete post-init validation — "
+            "database_ssl is still None. This indicates a Pydantic "
+            "configuration bug."
+        )
+        return self.database_ssl
 
     @property
     def effective_cors_origins(self) -> list[str]:
