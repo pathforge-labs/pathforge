@@ -15,7 +15,9 @@ from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
 from app.core.config import settings
+from app.core.redis_ssl import resolve_redis_url
 from app.jobs.providers.base import RawJobListing
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,14 @@ class AdzunaProvider:
         self._app_id = app_id or settings.adzuna_app_id
         self._app_key = app_key or settings.adzuna_app_key
         self._client: httpx.AsyncClient | None = None
+        self._breaker = CircuitBreaker(
+            name="adzuna",
+            redis_url=resolve_redis_url(
+                settings.redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            ),
+        )
 
     @property
     def name(self) -> str:
@@ -96,19 +106,25 @@ class AdzunaProvider:
 
         client = self._get_client()
         try:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error("Adzuna API error %d: %s", e.response.status_code, str(e)[:200])
+            async with self._breaker:
+                response = await client.get(url, params=params)
+                if 400 <= response.status_code < 500:
+                    logger.error("Adzuna API client error %d", response.status_code)
+                    return []
+                response.raise_for_status()  # 5xx propagates → trips breaker
+                data = response.json()
+        except CircuitOpenError as exc:
+            logger.warning("Adzuna circuit open, skipping search: %s", exc)
             return []
-        except httpx.RequestError as e:
-            logger.error("Adzuna request failed: %s", str(e)[:200])
+        except httpx.HTTPStatusError as exc:
+            logger.error("Adzuna API server error %d: %s", exc.response.status_code, str(exc)[:200])
+            return []
+        except httpx.RequestError as exc:
+            logger.error("Adzuna request failed: %s", str(exc)[:200])
             return []
 
         results = data.get("results", [])
         logger.info("Adzuna returned %d results for '%s' in %s", len(results), keywords, country)
-
         return [self._map_result(r) for r in results]
 
     @staticmethod

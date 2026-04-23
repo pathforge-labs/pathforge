@@ -20,6 +20,7 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -58,6 +59,11 @@ async def get_career_dna(
     db: AsyncSession = Depends(get_db),
 ) -> CareerDNAResponse:
     """Retrieve the full Career DNA profile with all dimensions."""
+    cache_key = ic_cache.key(current_user.id, "career_dna")
+    cached = await ic_cache.get(cache_key)
+    if cached is not None:
+        return CareerDNAResponse.model_validate(cached)
+
     career_dna = await CareerDNAService.get_full_profile(
         db, user_id=current_user.id
     )
@@ -66,7 +72,9 @@ async def get_career_dna(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Career DNA profile not found. Generate one first.",
         )
-    return _build_full_response(career_dna)
+    result = _build_full_response(career_dna)
+    await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_CAREER_DNA)
+    return result
 
 
 @router.get(
@@ -134,7 +142,10 @@ async def generate_career_dna(
         await BillingService.record_usage(db, current_user, "career_dna")
 
     await db.commit()
-    return _build_full_response(career_dna)
+    result = _build_full_response(career_dna)
+    # Invalidate stale cache — newly generated profile replaces prior entry.
+    await ic_cache.invalidate_user(current_user.id)
+    return result
 
 
 @router.delete(
@@ -303,6 +314,7 @@ async def update_target_role(
     db.add(activity)
 
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
 
     return GrowthVectorResponse.model_validate(career_dna.growth_vector)
 
@@ -376,6 +388,7 @@ async def confirm_hidden_skill(
             detail="Hidden skill not found.",
         )
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
     return _hidden_skill_response(skill)
 
 

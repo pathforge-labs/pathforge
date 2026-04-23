@@ -24,6 +24,7 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -70,6 +71,11 @@ async def get_threat_radar_overview(
     db: AsyncSession = Depends(get_db),
 ) -> ThreatRadarOverviewResponse:
     """Full Career Threat Radar™ dashboard with all components."""
+    cache_key = ic_cache.key(current_user.id, "threat_radar_overview")
+    cached = await ic_cache.get(cache_key)
+    if cached is not None:
+        return ThreatRadarOverviewResponse.model_validate(cached)
+
     data = await ThreatRadarService.get_overview(
         db, user_id=current_user.id,
     )
@@ -77,7 +83,7 @@ async def get_threat_radar_overview(
     if not data:
         return ThreatRadarOverviewResponse()
 
-    return ThreatRadarOverviewResponse(
+    result = ThreatRadarOverviewResponse(
         resilience=(
             _resilience_response(data["snapshot"])
             if data.get("snapshot") else None
@@ -99,6 +105,8 @@ async def get_threat_radar_overview(
         ],
         total_unread_alerts=data.get("total_unread_alerts", 0),
     )
+    await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_THREAT_RADAR)
+    return result
 
 
 # ── Full Scan ──────────────────────────────────────────────────
@@ -150,6 +158,7 @@ async def trigger_threat_scan(
         await BillingService.record_usage(db, current_user, "threat_radar")
 
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
 
     return ThreatRadarScanResponse(
         status="completed",
@@ -351,6 +360,7 @@ async def update_alert(
             detail="Alert not found.",
         )
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
     return _alert_response(alert)
 
 

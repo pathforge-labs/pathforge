@@ -157,12 +157,41 @@ async def _check_budget() -> float:
     if settings.llm_monthly_budget_usd <= 0:
         return 0.0  # Budget guard disabled
 
-    r = await _get_budget_redis()
-    spent_raw = await r.get(_budget_key())
+    try:
+        r = await _get_budget_redis()
+        spent_raw = await r.get(_budget_key())
+    except Exception as exc:
+        # Redis unavailable — fail-open: allow LLM call, skip budget enforcement.
+        logger.warning("Budget check skipped (Redis unavailable): %s", type(exc).__name__)
+        return 0.0
+
     spent = float(spent_raw) if spent_raw else 0.0
 
     if spent >= settings.llm_monthly_budget_usd:
         raise BudgetExceededError(spent, settings.llm_monthly_budget_usd)
+
+    # R5: Sentry alert when spend crosses 80% threshold (once per month, deduped via Redis).
+    budget = settings.llm_monthly_budget_usd
+    if budget > 0 and spent >= 0.8 * budget:
+        alert_key = f"pathforge:llm_budget_alert:80pct:{_budget_key()}"
+        try:
+            if not await r.exists(alert_key):
+                await r.set(alert_key, "1", ex=40 * 86400)
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_message(
+                        f"LLM monthly budget at {spent / budget * 100:.0f}%"
+                        f" — ${spent:.2f} of ${budget:.2f} spent.",
+                        level="warning",
+                    )
+                except Exception:
+                    pass  # Sentry not configured — log and continue
+                logger.warning(
+                    "LLM budget warning: %.0f%% spent ($%.2f / $%.2f)",
+                    spent / budget * 100, spent, budget,
+                )
+        except Exception:
+            pass  # Redis hiccup — skip alert, don't block the call
 
     return spent
 

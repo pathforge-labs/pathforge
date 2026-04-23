@@ -17,7 +17,9 @@ from typing import Any
 import voyageai
 
 from app.ai.schemas import ParsedResume
+from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
 from app.core.config import settings
+from app.core.redis_ssl import resolve_redis_url
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,14 @@ class EmbeddingService:
                 "Set VOYAGE_API_KEY env var to enable embeddings."
             )
         self._client: Any = None
+        self._breaker = CircuitBreaker(
+            name="voyage",
+            redis_url=resolve_redis_url(
+                settings.redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            ),
+        )
 
     def _get_client(self) -> Any:
         """Lazy-initialize the Voyage AI client."""
@@ -70,13 +80,16 @@ class EmbeddingService:
 
         start = time.monotonic()
         client = self._get_client()
-        # Run sync Voyage SDK call off the event loop
-        result = await asyncio.to_thread(
-            client.embed,
-            texts=[text],
-            model=self._model,
-            input_type="document",
-        )
+        try:
+            async with self._breaker:
+                result = await asyncio.to_thread(
+                    client.embed,
+                    texts=[text],
+                    model=self._model,
+                    input_type="document",
+                )
+        except CircuitOpenError as exc:
+            raise RuntimeError(f"Voyage AI embedding service unavailable: {exc}") from exc
         elapsed = time.monotonic() - start
         dim = len(result.embeddings[0])
         logger.info("Embedded 1 text (%d dims) in %.2fs", dim, elapsed)
@@ -102,16 +115,19 @@ class EmbeddingService:
         client = self._get_client()
         start = time.monotonic()
 
-        for i in range(0, len(texts), self._batch_size):
-            chunk = texts[i : i + self._batch_size]
-            # Run sync Voyage SDK call off the event loop
-            result = await asyncio.to_thread(
-                client.embed,
-                texts=chunk,
-                model=self._model,
-                input_type="document",
-            )
-            all_embeddings.extend(result.embeddings)
+        try:
+            for i in range(0, len(texts), self._batch_size):
+                chunk = texts[i : i + self._batch_size]
+                async with self._breaker:
+                    result = await asyncio.to_thread(
+                        client.embed,
+                        texts=chunk,
+                        model=self._model,
+                        input_type="document",
+                    )
+                all_embeddings.extend(result.embeddings)
+        except CircuitOpenError as exc:
+            raise RuntimeError(f"Voyage AI embedding service unavailable: {exc}") from exc
 
         elapsed = time.monotonic() - start
         logger.info(

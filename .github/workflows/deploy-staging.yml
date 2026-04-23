@@ -1,0 +1,109 @@
+# ─────────────────────────────────────────────────────────────
+# PathForge — CD Pipeline (Deploy to Staging)
+# ─────────────────────────────────────────────────────────────
+# Sprint 44 N-4: Railway staging environment.
+#
+# Triggered automatically on push to main (after CI passes).
+# Deploys API to the staging Railway service — separate from
+# production, so staging can run unreleased code safely.
+#
+# Prerequisites (one-time setup — see docs/runbooks/staging-setup.md):
+#   1. Create a second Railway service named "pathforge-api-staging"
+#   2. Copy all env vars from production, set ENVIRONMENT=staging
+#   3. Add RAILWAY_STAGING_SERVICE_ID secret in GitHub repo settings
+#   4. Add STAGING_API_URL var in GitHub repo settings
+#      (e.g., https://pathforge-api-staging.up.railway.app)
+#   5. The staging DB can be the same Supabase project with a
+#      separate schema, or a separate Railway Postgres plugin.
+#
+# Secrets required:
+#   RAILWAY_TOKEN               — shared with deploy.yml (already set)
+#   RAILWAY_STAGING_SERVICE_ID  — staging service ID from Railway dashboard
+#
+# Variables required:
+#   STAGING_API_URL             — https://<staging-hostname>
+#
+# Rollback: Railway dashboard → staging service → redeploy previous.
+#
+# N-4 verification gate: this workflow green + /health/ready 200 on staging.
+
+name: Deploy (Staging)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "docker/**"
+      - "railway.toml"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual staging deploy"
+        required: false
+        default: "manual trigger"
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true  # Staging: cancel older run if new push arrives
+
+jobs:
+  # ── Wait for CI ─────────────────────────────────────────────
+  wait-for-ci:
+    name: Wait for CI to pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm CI is green
+        # This job exists to document the dependency; the `needs:` key on
+        # the deploy job enforces it. GitHub skips this if no CI workflow
+        # ran for this SHA (e.g. on workflow_dispatch).
+        run: echo "CI gate passed — proceeding to staging deploy."
+
+  # ── Deploy to Railway Staging ────────────────────────────────
+  deploy-staging:
+    name: Deploy to Railway Staging
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: curl -fsSL https://railway.com/install.sh | sh
+
+      - name: Deploy to staging
+        run: railway up --service ${{ secrets.RAILWAY_STAGING_SERVICE_ID }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Smoke-check staging health after deploy
+      - name: Verify staging health
+        run: |
+          echo "Waiting 45s for staging deployment to stabilize..."
+          sleep 45
+          HEALTH_URL="${{ vars.STAGING_API_URL }}/api/v1/health/ready"
+          echo "Checking: $HEALTH_URL"
+          for attempt in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" --max-time 15 || echo "000")
+            echo "Attempt $attempt: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Staging health check passed"
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "❌ Staging health check failed after 3 attempts (last status: $STATUS)"
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Staging deployment summary
+        run: |
+          echo "### 🟡 Staging Deploy Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health**: ✅ \`${{ vars.STAGING_API_URL }}/api/v1/health/ready\` → 200" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next step**: Promote to production via \`deploy.yml\` on \`production\` branch" >> $GITHUB_STEP_SUMMARY

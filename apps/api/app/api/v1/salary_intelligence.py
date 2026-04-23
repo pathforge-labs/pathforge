@@ -27,6 +27,7 @@ from starlette.requests import Request
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -66,10 +67,17 @@ async def get_salary_dashboard(
     db: AsyncSession = Depends(get_db),
 ) -> SalaryDashboardResponse:
     """Full Salary Intelligence Engine™ dashboard with all components."""
+    cache_key = ic_cache.key(current_user.id, "salary_dashboard")
+    cached = await ic_cache.get(cache_key)
+    if cached is not None:
+        return SalaryDashboardResponse.model_validate(cached)
+
     data: dict[str, Any] = await SalaryIntelligenceService.get_dashboard(
         db, user_id=current_user.id,
     )
-    return SalaryDashboardResponse(**data)
+    result = SalaryDashboardResponse(**data)
+    await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_SALARY)
+    return result
 
 
 # ── Full Scan ──────────────────────────────────────────────────
@@ -109,6 +117,9 @@ async def run_salary_scan(
     # C2: Record usage after successful scan
     if settings.billing_enabled:
         await BillingService.record_usage(db, current_user, "salary_intelligence")
+
+    await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
 
     return SalaryScanResponse(
         status=data.get("status", "completed"),

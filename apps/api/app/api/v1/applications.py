@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -134,7 +134,7 @@ async def create_app_endpoint(
         # Re-fetch to load relationships
         refetched = await get_application(db, app.id, current_user.id)
         if refetched is None:
-            raise HTTPException(status_code=404, detail="Application not found after creation")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after creation")
         return _to_response(refetched)
     except (BlacklistViolation, RateLimitViolation, InvalidTransition, ApplicationError) as exc:
         await db.rollback()
@@ -170,7 +170,7 @@ async def get_app_endpoint(
     """Get a specific application by ID."""
     app = await get_application(db, application_id, current_user.id)
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     return _to_response(app)
 
 
@@ -197,7 +197,7 @@ async def update_app_status_endpoint(
         await db.commit()
         refetched = await get_application(db, app.id, current_user.id)
         if refetched is None:
-            raise HTTPException(status_code=404, detail="Application not found after update")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after update")
         return _to_response(refetched)
     except (InvalidTransition, RateLimitViolation, ApplicationError) as exc:
         await db.rollback()
@@ -213,5 +213,5 @@ async def delete_app_endpoint(
     """Delete an application."""
     deleted = await delete_application(db, application_id, current_user.id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Application not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     await db.commit()

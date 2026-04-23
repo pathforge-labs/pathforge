@@ -29,7 +29,7 @@ import re
 # ── Compiled Regex Patterns ───────────────────────────────────
 
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    # Email addresses: user@domain.tld
+    # Email addresses: user@domain.tld (most specific — must run first)
     (
         re.compile(
             r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
@@ -37,34 +37,24 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "[EMAIL]",
     ),
-    # Phone numbers: international and local formats
-    # Matches: +31 6 1234 5678, (555) 123-4567, 06-12345678, +1-800-555-0199
-    (
-        re.compile(
-            r"(?:\+?\d{1,3}[\s\-.]?)?"  # Optional country code
-            r"(?:\(?\d{1,4}\)?[\s\-.]?)"  # Area code
-            r"(?:\d[\s\-.]?){6,12}",  # Subscriber number
-        ),
-        "[PHONE]",
-    ),
-    # US SSN: 123-45-6789 or 123 45 6789
+    # US SSN: 123-45-6789 or 123 45 6789 (before phone — more specific)
     (
         re.compile(r"\b\d{3}[\-\s]\d{2}[\-\s]\d{4}\b"),
         "[SSN]",
     ),
-    # Dutch BSN: 9 digits (basic pattern)
+    # Dutch BSN: 9 digits (before phone — more specific)
     (
         re.compile(r"\b\d{9}\b"),
         "[BSN]",
     ),
-    # Credit card numbers: 13-19 digits with optional separators
+    # Credit card numbers: 13-19 digits with optional separators (before phone)
     (
         re.compile(
             r"\b(?:\d[\s\-]?){13,19}\b",
         ),
         "[CC]",
     ),
-    # IPv4 addresses: 192.168.1.1
+    # IPv4 addresses: 192.168.1.1 (before phone — dots distinguish from digits)
     (
         re.compile(
             r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
@@ -80,6 +70,16 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
             re.IGNORECASE,
         ),
         "[URL_TOKEN]",
+    ),
+    # Phone numbers: international and local formats (most general — runs last)
+    # Matches: +31 6 1234 5678, (555) 123-4567, 06-12345678, +1-800-555-0199
+    (
+        re.compile(
+            r"(?:\+?\d{1,3}[\s\-.]?)?"  # Optional country code
+            r"(?:\(?\d{1,4}\)?[\s\-.]?)"  # Area code
+            r"(?:\d[\s\-.]?){6,12}",  # Subscriber number
+        ),
+        "[PHONE]",
     ),
 ]
 

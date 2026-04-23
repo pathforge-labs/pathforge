@@ -125,6 +125,7 @@ from app.models.transition_pathways import (
     TransitionPreference,
 )
 from app.models.user import User, UserRole
+from app.models.user_activity import UserActivityLog
 from app.models.user_profile import DataExportRequest, UserProfile
 from app.models.waitlist import WaitlistEntry, WaitlistStatus
 from app.models.workflow_automation import (
@@ -229,6 +230,7 @@ __all__ = [
     "TransitionPreference",
     "UsageRecord",
     "User",
+    "UserActivityLog",
     "UserProfile",
     "UserRole",
     "ValuesProfile",

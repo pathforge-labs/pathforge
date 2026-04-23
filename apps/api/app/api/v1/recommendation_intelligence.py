@@ -29,6 +29,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.recommendation_intelligence import (
@@ -75,6 +76,11 @@ async def get_dashboard(
 ) -> RecommendationDashboardResponse:
     """Get Recommendation Intelligence dashboard."""
     try:
+        cache_key = ic_cache.key(current_user.id, "rec_dashboard")
+        cached = await ic_cache.get(cache_key)
+        if cached is not None:
+            return RecommendationDashboardResponse.model_validate(cached)
+
         data = await RecommendationIntelligenceService.get_dashboard(
             database, user_id=current_user.id,
         )
@@ -83,7 +89,7 @@ async def get_dashboard(
         recent_recs = data["recent_recommendations"]
         preferences = data["preferences"]
 
-        return RecommendationDashboardResponse(
+        result = RecommendationDashboardResponse(
             latest_batch=(
                 RecommendationBatchResponse.model_validate(latest_batch)
                 if latest_batch else None
@@ -109,6 +115,8 @@ async def get_dashboard(
                 if preferences else None
             ),
         )
+        await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_RECOMMENDATIONS)
+        return result
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -157,6 +165,7 @@ async def generate_recommendations(
         if settings.billing_enabled:
             await BillingService.record_usage(database, current_user, "recommendation_intelligence")
 
+        await ic_cache.invalidate_user(current_user.id)
         return RecommendationBatchResponse.model_validate(batch)
     except ValueError as exc:
         raise HTTPException(
@@ -278,6 +287,7 @@ async def update_recommendation_status(
             recommendation_id=recommendation_id,
             new_status=body.status,
         )
+        await ic_cache.invalidate_user(current_user.id)
         return CrossEngineRecommendationResponse.model_validate(rec)
     except ValueError as exc:
         raise HTTPException(
