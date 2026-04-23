@@ -1012,16 +1012,17 @@
 > Sprint 42: Post-launch hardening. Token rotation and Sentry verification elevated to Sprint 41 by Tier-1 audit. Remaining items: coverage, secret rotation docs, circuit breaker fallback, N+1 analysis.
 
 - [-] P2-1: Refresh token rotation — **completed in Sprint 41**
+- [ ] **N-1b: Redis SSL secure-by-default** — parallel ADR-0001 hardening for `redis_ssl`. Auto-derive in production, fail boot on explicit downgrade, DSN sanitizer, `/health/ready` attestation. **Same threat model as DB: token blacklist + rate-limit + circuit-breaker state travels this channel.** Code can land before OPS-4; hardening activates automatically when Redis is provisioned.
 - [ ] Send welcome email on successful email verification
 - [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41**
-- [ ] Add `--cov` to pytest CI step + coverage threshold (≥80%)
+- [ ] N-2: Add `--cov=app --cov-fail-under=80` to pytest CI step
 - [ ] Review error response formats for consistency
 - [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`
 - [ ] P2-3: Circuit breaker in-memory fallback when Redis is down
 - [ ] P2-4: N+1 query analysis — enable `warn_on_unnested_lazy_load`, profile top 10 endpoints
 - [ ] P2-8: Review ignored CVEs (`CVE-2025-69873`, `CVE-2025-09073`) — document justification
 
-> **Sprint 42 Verification Gates**: Welcome email delivered · Coverage ≥80% · Secret rotation documented · CVE review complete
+> **Sprint 42 Verification Gates**: N-1b landed · Welcome email delivered · Coverage ≥80% · Secret rotation documented · CVE review complete
 
 ---
 

@@ -18,6 +18,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.errors import ConfigurationError
+
 _config_logger = logging.getLogger(__name__)
 
 # ── Module Constants (compile-time, not runtime-configurable) ────────
@@ -62,7 +64,13 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
     # ── Redis ───────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
-    redis_ssl: bool = False
+    # ADR-0002: same secure-by-default posture as `database_ssl`.
+    # Leave unset (None) to auto-derive from environment — True in
+    # production, False elsewhere. Explicit False in production fails
+    # fast at Settings() construction. Also reconciled against the
+    # REDIS_URL scheme — conflicting `rediss://` + False in production
+    # fails boot.
+    redis_ssl: bool | None = None
     redis_max_connections: int = 50
     redis_socket_timeout: int = 5
 
@@ -241,22 +249,30 @@ class Settings(BaseSettings):  # type: ignore[misc]
     def _post_init_guards(self) -> "Settings":
         """All post-initialisation invariants, run in an explicit order.
 
-        Ordering matters: the URL sanitiser strips SSL params *before* the
-        SSL resolver inspects state, and the production-downgrade guard
-        runs before the SSL default is auto-derived so it cannot be masked
-        by a fresh True. Collapsed into a single method so the order is
-        locked in source and not subject to Pydantic's validator-dispatch
-        heuristics.
+        Ordering matters: URL sanitisers/reconcilers mutate fields *before*
+        the downgrade guards inspect the result, and the resolvers run
+        last so a production downgrade cannot be masked by a fresh True.
+        Collapsed into a single method so the order is locked in source
+        and not subject to Pydantic's validator-dispatch heuristics.
 
         Sub-steps (do not reorder without an ADR):
-        1. Strip SSL/TLS query params from `database_url`.
-        2. Enforce the production-TLS-downgrade guard.
-        3. Auto-derive `database_ssl` default from environment.
-        4. Enforce JWT-secret production guards.
+        1. Strip SSL/TLS query params from `database_url`.        (ADR-0001)
+        2. Guard production TLS downgrade — DB.                    (ADR-0001)
+        3. Auto-derive `database_ssl` default.                     (ADR-0001)
+        4. Reconcile `REDIS_URL` scheme against `redis_ssl`.       (ADR-0002)
+        5. Guard production TLS downgrade — Redis.                 (ADR-0002)
+        6. Auto-derive `redis_ssl` default.                        (ADR-0002)
+        7. Validate JWT secrets.                                   (Sprint 38 H3)
         """
+        # ADR-0001 — Database SSL posture.
         self._sanitise_database_url_ssl_params()
         self._guard_production_tls_downgrade()
         self._resolve_database_ssl_default()
+        # ADR-0002 — Redis SSL posture.
+        self._reconcile_redis_url_scheme()
+        self._guard_production_redis_downgrade()
+        self._resolve_redis_ssl_default()
+        # JWT secrets — always last.
         self._validate_jwt_secrets()
         return self
 
@@ -297,7 +313,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
                 "ENVIRONMENT=production. Supabase connections must use TLS. "
                 "Remove the override or set it to true (ADR-0001)."
             )
-            raise ValueError(msg)
+            raise ConfigurationError(msg)
 
     def _resolve_database_ssl_default(self) -> None:
         """ADR-0001: auto-derive from environment when unset."""
@@ -306,6 +322,58 @@ class Settings(BaseSettings):  # type: ignore[misc]
             object.__setattr__(self, "database_ssl", resolved)
             _config_logger.info(
                 "database_ssl auto-resolved to %s (environment=%s)",
+                resolved, self.environment,
+            )
+
+    # ── ADR-0002: Redis URL scheme / flag reconciliation ──────
+    # The Redis URL scheme (`redis://` vs `rediss://`) and `redis_ssl`
+    # are two control surfaces that can disagree. Upgrade-only:
+    #   - `redis://` + True  → upgrade scheme, warn (static log).
+    #   - `rediss://` + False in prod → raise (scheme is stricter, and a
+    #     production downgrade is a configuration bug).
+    #   - `rediss://` + False elsewhere → scheme wins, warn, flag upgraded
+    #     in the resolver step below.
+    def _reconcile_redis_url_scheme(self) -> None:
+        from app.core.redis_ssl import resolve_redis_url
+
+        # If `redis_ssl` is still None (unset), reconcile against its
+        # would-be resolved default; otherwise reconcile against the
+        # explicit value. The resolver step will narrow None later.
+        effective_ssl = (
+            self.redis_ssl if self.redis_ssl is not None else self.is_production
+        )
+        reconciled = resolve_redis_url(
+            self.redis_url, effective_ssl, self.environment,
+        )
+        if reconciled != self.redis_url:
+            object.__setattr__(self, "redis_url", reconciled)
+        # If the scheme ended up `rediss://`, the flag must also be True
+        # post-validation (scheme-wins-in-non-prod rule). Covers both
+        # `redis_ssl=False` (explicit conflict in dev) and
+        # `redis_ssl=None` (unset + rediss:// URL — dev/test shouldn't
+        # auto-derive to False when the URL already carries TLS).
+        if reconciled.startswith("rediss://") and self.redis_ssl is not True:
+            object.__setattr__(self, "redis_ssl", True)
+
+    def _guard_production_redis_downgrade(self) -> None:
+        """ADR-0002: explicit False in production is a configuration bug."""
+        if self.redis_ssl is False and self.is_production:
+            msg = (
+                "FATAL: REDIS_SSL=false is forbidden when "
+                "ENVIRONMENT=production. Redis carries authentication "
+                "state (token blacklist), rate-limit counters, and ARQ "
+                "job payloads — all require TLS. Remove the override or "
+                "set it to true (ADR-0002)."
+            )
+            raise ConfigurationError(msg)
+
+    def _resolve_redis_ssl_default(self) -> None:
+        """ADR-0002: auto-derive from environment when unset."""
+        if self.redis_ssl is None:
+            resolved = self.is_production
+            object.__setattr__(self, "redis_ssl", resolved)
+            _config_logger.info(
+                "redis_ssl auto-resolved to %s (environment=%s)",
                 resolved, self.environment,
             )
 
@@ -320,7 +388,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
                         f"Set a strong, unique secret via environment variable "
                         f"before deploying to production."
                     )
-                    raise ValueError(msg)
+                    raise ConfigurationError(msg)
                 _config_logger.warning(
                     "⚠️  %s uses insecure default — acceptable for %s only",
                     field_name,
@@ -332,7 +400,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
                     "FATAL: jwt_secret and jwt_refresh_secret must differ. "
                     "Using identical secrets compromises token security."
                 )
-                raise ValueError(msg)
+                raise ConfigurationError(msg)
             _config_logger.warning(
                 "⚠️  jwt_secret and jwt_refresh_secret are identical — fix before production",
             )
@@ -341,21 +409,32 @@ class Settings(BaseSettings):  # type: ignore[misc]
     def is_production(self) -> bool:
         return self.environment == "production"
 
+    def _require_resolved_bool(self, field: str) -> bool:
+        """Narrow a `bool | None` SSL field to `bool` with an invariant check.
+
+        Shared between `database_ssl_enabled` (ADR-0001) and
+        `redis_ssl_enabled` (ADR-0002) — both fields accept `None` as an
+        auto-derive sentinel, and the post-init validator guarantees that
+        each is a concrete `bool` by the time callers read it. This
+        helper fails loudly if that invariant is ever broken, rather
+        than silently coercing `None` to `False` (the unsafe direction).
+        """
+        value: bool | None = getattr(self, field)
+        assert value is not None, (
+            f"Settings did not complete post-init validation — {field} "
+            f"is still None. This indicates a Pydantic configuration bug."
+        )
+        return value
+
     @property
     def database_ssl_enabled(self) -> bool:
-        """Validated `database_ssl`, narrowed to `bool` (ADR-0001).
+        """Validated `database_ssl`, narrowed to `bool` (ADR-0001)."""
+        return self._require_resolved_bool("database_ssl")
 
-        The declared type is `bool | None` to accept unset as a sentinel
-        for auto-derivation. Post-validation the value is always a bool;
-        this property asserts the invariant so callers get a concrete
-        `bool` without silent coercion that could fail open.
-        """
-        assert self.database_ssl is not None, (
-            "Settings did not complete post-init validation — "
-            "database_ssl is still None. This indicates a Pydantic "
-            "configuration bug."
-        )
-        return self.database_ssl
+    @property
+    def redis_ssl_enabled(self) -> bool:
+        """Validated `redis_ssl`, narrowed to `bool` (ADR-0002)."""
+        return self._require_resolved_bool("redis_ssl")
 
     @property
     def effective_cors_origins(self) -> list[str]:

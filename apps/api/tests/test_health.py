@@ -61,6 +61,15 @@ async def test_readiness_check(client: AsyncClient):
     assert "ssl_version" in data["db"]
     assert data["db"]["ssl_attested"] is False
 
+    # ADR-0002: structured redis_detail block with client-side TLS
+    # introspection. Tests run without a live Redis connection, so
+    # ssl_attested is False and ssl falls back to the config-derived value.
+    assert isinstance(data["redis_detail"], dict)
+    assert "status" in data["redis_detail"]
+    assert isinstance(data["redis_detail"]["ssl"], bool)
+    assert data["redis_detail"]["ssl_attested"] is False
+    assert "scheme" in data["redis_detail"]
+
 
 # ── ADR-0001 security-review follow-ups ─────────────────────────────
 

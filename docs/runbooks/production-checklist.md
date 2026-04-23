@@ -13,7 +13,8 @@ must be verified before go-live.
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string (Supabase). Do **not** include `?sslmode=require` — it is stripped at boot (ADR-0001). |
 | `DATABASE_SSL` | No | Auto-derives `true` when `ENVIRONMENT=production` (ADR-0001). Setting explicitly to `true` is redundant-but-safe. Explicit `false` is rejected at boot. |
-| `REDIS_URL` | Yes | Token blacklist, rate limiting |
+| `REDIS_URL` | Yes | Token blacklist, rate limiting. Use the `rediss://` scheme for any TLS-enforcing provider (Upstash, TLS-enabled Railway plugin). A `redis://` scheme with production default `REDIS_SSL=true` is upgraded automatically but the provider must accept TLS on the wire (ADR-0002). |
+| `REDIS_SSL` | No | Auto-derives `true` when `ENVIRONMENT=production` (ADR-0002). Setting explicitly to `true` is redundant-but-safe. Explicit `false` in production is rejected at boot, as is `REDIS_URL=rediss://...` + `REDIS_SSL=false` (conflicting TLS directives). |
 | `JWT_SECRET` | Yes | ≥ 32 bytes, HMAC-SHA256 |
 | `JWT_REFRESH_SECRET` | Yes | ≥ 32 bytes, separate from JWT_SECRET |
 | `SENTRY_DSN` | Yes | Backend error tracking (P0-2) |
@@ -53,6 +54,9 @@ must be verified before go-live.
 ## 3. Redis
 
 - [ ] Confirm `REDIS_URL` connects successfully
+- [ ] **TLS provider chosen** — Upstash or TLS-enabled Railway Redis (ADR-0002).
+- [ ] **`REDIS_URL` scheme** — use `rediss://` for TLS providers. A plaintext `redis://` URL is auto-upgraded in production but the provider must accept the TLS handshake.
+- [ ] Verify via readiness probe: `curl <api>/api/v1/health/ready | jq .redis_detail` shows `ssl: true, ssl_attested: true, scheme: "rediss"`.
 - [ ] Token blacklist fail mode set to `closed` (production default)
 - [ ] Rate limiter storage backend configured
 - [ ] Verify `PING` returns `PONG`

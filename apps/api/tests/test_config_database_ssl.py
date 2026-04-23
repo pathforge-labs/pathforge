@@ -18,24 +18,13 @@ import logging
 import pytest
 
 from app.core.config import Settings
+from app.core.errors import ConfigurationError
 
-
-@pytest.fixture(autouse=True)
-def _scrub_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Strip every env var this module exercises so ambient process state
-    (developer shells with `DATABASE_URL=…?sslmode=require` exported, or
-    CI running under `ENVIRONMENT=testing`) cannot silently shadow the
-    kwargs each test passes. Without this, a matrix test that omits e.g.
-    `database_url` would inherit whatever is in the environment.
-    """
-    for name in (
-        "DATABASE_URL",
-        "DATABASE_SSL",
-        "ENVIRONMENT",
-        "JWT_SECRET",
-        "JWT_REFRESH_SECRET",
-    ):
-        monkeypatch.delenv(name, raising=False)
+# Strip ambient env vars (developer shells, `.env` files) so kwargs passed
+# to `Settings(...)` below are the sole source of truth. Shared fixture
+# definition lives in `tests/conftest.py` so new SSL surfaces (redis, etc.)
+# extend a single list rather than copy-pasting per file.
+pytestmark = pytest.mark.usefixtures("hermetic_settings_env")
 
 # Valid JWT secrets that do NOT collide with _INSECURE_JWT_DEFAULTS.
 # Using two different values so the "secrets must differ" guard is satisfied.
@@ -92,7 +81,7 @@ def test_explicit_true_honoured_in_production() -> None:
 # ── Production downgrade guard ───────────────────────────────────────
 
 def test_explicit_false_in_production_raises() -> None:
-    with pytest.raises(ValueError, match="DATABASE_SSL=false is forbidden"):
+    with pytest.raises(ConfigurationError, match="DATABASE_SSL=false is forbidden"):
         _make_settings(environment="production", database_ssl=False)
 
 
@@ -182,7 +171,7 @@ def test_ssl_resolution_matrix(
         overrides["database_ssl"] = explicit
 
     if environment == "production" and explicit is False:
-        with pytest.raises(ValueError, match="DATABASE_SSL=false is forbidden"):
+        with pytest.raises(ConfigurationError, match="DATABASE_SSL=false is forbidden"):
             _make_settings(**overrides)
         return
 
@@ -247,7 +236,7 @@ def test_prod_downgrade_guard_fires_even_with_ssl_url_param() -> None:
     boolean (not URL state), so no reordering of the validators can
     short-circuit the fail-fast behaviour.
     """
-    with pytest.raises(ValueError, match="DATABASE_SSL=false is forbidden"):
+    with pytest.raises(ConfigurationError, match="DATABASE_SSL=false is forbidden"):
         _make_settings(
             environment="production",
             database_ssl=False,

@@ -104,14 +104,39 @@ _budget_redis: aioredis.Redis | None = None
 
 
 async def _get_budget_redis() -> aioredis.Redis:
-    """Lazy Redis connection for budget tracking."""
+    """Lazy Redis connection for budget tracking.
+
+    ADR-0002: route the URL through `resolve_redis_url` so the TLS
+    posture matches every other Redis consumer in the app. Prior to
+    this change, the budget guard connected with the raw
+    `settings.redis_url` and silently traveled plaintext even when
+    `redis_ssl=True` was configured — a split-brain bug.
+    """
     global _budget_redis
     if _budget_redis is None:
+        from app.core.redis_ssl import resolve_redis_url
+
+        url = resolve_redis_url(
+            settings.redis_url,
+            settings.redis_ssl_enabled,
+            settings.environment,
+        )
         _budget_redis = cast(
             aioredis.Redis,
-            aioredis.from_url(settings.redis_url, decode_responses=True),  # type: ignore[no-untyped-call]
+            aioredis.from_url(url, decode_responses=True),  # type: ignore[no-untyped-call]  # redis-ssl-exempt: reconciled URL
         )
     return _budget_redis
+
+
+def _reset_budget_redis_for_tests() -> None:
+    """Test-only hook: clear the cached budget Redis connection so each
+    test sees a fresh `_get_budget_redis` call (and therefore the current
+    `settings.redis_ssl_enabled` / `settings.redis_url` values).
+
+    Not part of the public module API.
+    """
+    global _budget_redis
+    _budget_redis = None
 
 
 def _budget_key() -> str:

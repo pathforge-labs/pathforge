@@ -176,6 +176,38 @@ def _enable_oauth_providers() -> None:
     object.__setattr__(settings, "microsoft_oauth_client_id", "test-microsoft-client-id")
 
 
+# ── Hermetic settings environment (ADR-0001/0002) ─────────────
+# Shared opt-in fixture for tests that build fresh `Settings(...)` instances
+# and need ambient env vars (e.g. from the developer's shell or a `.env` file)
+# to NOT bleed into kwargs. Tests opt in via:
+#     pytestmark = pytest.mark.usefixtures("hermetic_settings_env")
+#
+# Intentionally NOT autouse — the vast majority of tests work with the
+# module-level `settings` singleton and do not construct new Settings.
+@pytest.fixture
+def hermetic_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Strip env vars that would shadow explicit kwargs to `Settings(...)`.
+
+    Extend this list whenever a new Settings-oriented test surface (SSL,
+    secrets, rate limits, etc.) lands. Single source of truth so future
+    additions cannot drift across per-file fixtures.
+    """
+    for name in (
+        # Core environment selector
+        "ENVIRONMENT",
+        # JWT guards (Sprint 38 H3)
+        "JWT_SECRET",
+        "JWT_REFRESH_SECRET",
+        # Database SSL (ADR-0001)
+        "DATABASE_URL",
+        "DATABASE_SSL",
+        # Redis SSL (ADR-0002)
+        "REDIS_URL",
+        "REDIS_SSL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 # ── Test Database ─────────────────────────────────────────────
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
