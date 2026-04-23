@@ -214,6 +214,29 @@ class Settings(BaseSettings):  # type: ignore[misc]
         "change-me-refresh-secret-must-differ",
     })
 
+    # ADR-0001: libpq SSL-connection parameters we strip from DATABASE_URL.
+    # Sourced from PostgreSQL 16 client-connection docs. Using an explicit
+    # whitelist (vs a naive `startswith("ssl")` prefix) avoids collateral
+    # damage on any future non-SSL driver param that happens to begin with
+    # `ssl`. @gemini-code-assist review feedback, ADR-0001 supplement.
+    _LIBPQ_SSL_PARAMS: ClassVar[frozenset[str]] = frozenset({
+        "ssl",              # asyncpg boolean form
+        "sslmode",          # disable | allow | prefer | require | verify-ca | verify-full
+        "sslcompression",
+        "sslcert",
+        "sslkey",
+        "sslpassword",
+        "sslcertmode",
+        "sslrootcert",
+        "sslcrl",
+        "sslcrldir",
+        "sslsni",
+        "requiressl",       # libpq legacy
+        "sslnegotiation",   # PG 17+
+        "ssl_min_protocol_version",
+        "ssl_max_protocol_version",
+    })
+
     @model_validator(mode="after")
     def _post_init_guards(self) -> "Settings":
         """All post-initialisation invariants, run in an explicit order.
@@ -240,23 +263,27 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ── ADR-0001: Database URL SSL-param sanitiser ─────────────
     # SSL/TLS is controlled exclusively via `database_ssl` (→ asyncpg
     # `connect_args`). If the operator pasted a DSN containing any libpq
-    # SSL directive (`ssl=`, `sslmode=`, `sslcert=`, `sslkey=`,
-    # `sslrootcert=`, `sslcrl=`, `sslnegotiation=` …), strip every key
-    # whose lowercase form starts with `ssl` and log a warning so the two
-    # SSL control surfaces can never disagree.
+    # SSL directive, strip it and warn so the two SSL control surfaces
+    # can never disagree. Uses an explicit `_LIBPQ_SSL_PARAMS` whitelist
+    # rather than a `startswith("ssl")` prefix, so future non-SSL params
+    # that coincidentally start with `ssl` are not dropped by accident
+    # (@gemini-code-assist review feedback).
     def _sanitise_database_url_ssl_params(self) -> None:
         parts = urlsplit(self.database_url)
         if not parts.query:
             return
         pairs = parse_qsl(parts.query, keep_blank_values=True)
-        kept = [(k, v) for k, v in pairs if not k.lower().startswith("ssl")]
+        kept = [
+            (k, v) for k, v in pairs
+            if k.lower() not in self._LIBPQ_SSL_PARAMS
+        ]
         if len(kept) == len(pairs):
             return
         cleaned = urlunsplit(parts._replace(query=urlencode(kept)))
         # NOTE: log ONLY a static string. Never interpolate `self.database_url`
         # or the stripped pairs — they carry credentials (user:password@host).
         _config_logger.warning(
-            "DATABASE_URL contained one or more ssl* query params; "
+            "DATABASE_URL contained one or more libpq SSL parameters; "
             "stripped. TLS is controlled exclusively by DATABASE_SSL "
             "(ADR-0001).",
         )
