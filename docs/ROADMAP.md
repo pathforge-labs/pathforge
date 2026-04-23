@@ -1037,7 +1037,7 @@
 - [ ] 🔧 MANUAL: Switch Vercel: `pk_test_` → `pk_live_`
 - [ ] Process one real €19 Pro Monthly transaction
 - [ ] Verify payout in Stripe balance → bank account
-- [ ] **N-7: pnpm-audit CVE triage** (surfaced during PR #5 CI). 27 vulnerabilities on `main` (18 high, 9 moderate) across transitive deps — `serialize-javascript` (CVE-DoS), `uuid<14` (GHSA-w5hq-g745-h8pq), and related. Most live under `@sentry/webpack-plugin`, `expo`, and `resend→svix`. Triage path: (1) attempt upstream dep bumps, (2) add pnpm `overrides` entries for patched transitives, (3) justify residual entries in SECURITY.md §"Ignored CVEs" following the P2-8 policy. **Blocks any PR that modifies `package.json`, `pnpm-lock.yaml`, `apps/web/**`, or `packages/shared/**`** until resolved — that is the web-quality path filter. Owner: security@pathforge.eu.
+- [x] **N-7: pnpm-audit CVE triage** — Resolved in Sprint 45 CI fix (2026-04-23). `next` bumped 16.1.7→16.2.3; 6 `pnpm overrides` added for 25 transitive CVEs (node-forge, @xmldom/xmldom, brace-expansion, serialize-javascript, uuid, picomatch 2.x/3.x); CVE-2026-33671/72 justified in SECURITY.md (picomatch@4.0.3 pinned by expo/cli dev toolchain). **`pnpm audit` now reports 0 vulnerabilities on `main`.**
 - [x] **N-2 ratchet**: `--cov-branch` enabled 2026-04-23; floor set to 62% (conservative Sprint 44 baseline — 1% above pre-Sprint-43 combined). Ratchet continues: Sprint 45 → 70%, Sprint 46 → 75%, Sprint 47 → 80%.
 - [x] **P2-3 decision ADR**: [ADR-0003](adr/0003-circuit-breaker-adopted-for-external-apis.md) — ADOPT. Circuit breaker wired into Adzuna, Jooble, Voyage AI with `fail_open=True`.
 
@@ -1051,12 +1051,12 @@
 
 - [/] P3-1: Resolve Playwright h1 timeout → generate VR baselines → commit to `e2e/__screenshots__/`
   - [x] **Root cause fixed 2026-04-23**: `page.clock.install()` in `visual-fixtures.ts` replaced `requestAnimationFrame` + `setTimeout`, freezing React's concurrent scheduler and preventing auth state updates from re-rendering. Fixed by switching to `page.clock.setFixedTime()` which pins `Date.now()` only, leaving timers intact. Also fixes the `waitForTimeout(300)` in `stabilizeForScreenshot` which would have hung under the frozen clock.
-  - [ ] 🔧 MANUAL: Run `update-baselines.yml` workflow on `main` to generate and commit baseline screenshots
+  - [x] `update-baselines.yml` workflow triggered on `main` 2026-04-24 via `gh workflow run` — [run #24862715804](https://github.com/pathforge-labs/pathforge/actions/runs/24862715804). Baselines will be auto-committed back to `main` on completion.
 - [-] P3-2: Set up uptime monitoring — **elevated to Sprint 41** by Tier-1 audit
 - [x] **P2-4: Mobile app launch planning** — 2026-04-23. See `docs/mobile-launch-plan.md`: Expo Go → EAS Build pipeline, App Store + Google Play submissions, ASO strategy, phased rollout. Dependencies: OPS-3 (LLM keys), push notification service (Expo), final smoke test on device.
 - [ ] Stripe webhook failure alerting (Dashboard → Webhooks → Alert settings)
 - [-] CI: Make `pip-audit` and `pnpm audit` blocking — **completed in Sprint 40 audit session**
-- [ ] P2-5: Langfuse LLM observability activation
+- [/] P2-5: Langfuse LLM observability activation — Code ready (`app/core/llm_observability.py`). `.env.example` updated with `LLM_OBSERVABILITY_ENABLED`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`. 🔧 MANUAL: Set these 4 vars in Railway (production) with keys from cloud.langfuse.com → activate by setting `LLM_OBSERVABILITY_ENABLED=true`.
 - [x] **P2-6: API staging environment (Railway preview)** — 2026-04-23. `deploy-staging.yml` workflow created: auto-deploys `main` → Railway staging service with health check; 3-retry probe; `cancel-in-progress: true`. Setup runbook: `docs/runbooks/staging-setup.md` (5 manual steps: create service, copy env vars, staging DB, RAILWAY_STAGING_SERVICE_ID secret, STAGING_API_URL var). Activation pending MANUAL steps in staging-setup.md.
 - [x] **P3-1: Canary/blue-green deployment strategy evaluation** — 2026-04-23. [ADR-0005](adr/0005-deployment-strategy-rolling-via-railway.md) — PARK. Rolling via Railway accepted for now; canary deferred until ≥500 DAU + Sentry/Langfuse live; blue-green deferred until N-4 staging env live. Revisit triggers documented.
 - [x] **P3-2: API response caching for intelligence endpoints** — 2026-04-23. All 5 dashboard GETs cached via `ic_cache` (15–60 min TTL, fail-open Redis). 20 unit tests added.
