@@ -43,7 +43,6 @@ from app.services.transition_pathways_service import (
     update_preferences,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

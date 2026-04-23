@@ -29,7 +29,6 @@ from app.models.skill_decay import SkillFreshness
 from app.models.user import User
 from app.services.skill_decay_service import SkillDecayService
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

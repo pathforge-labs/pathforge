@@ -40,7 +40,6 @@ from app.services.predictive_career_service import (
     scan_emerging_roles,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

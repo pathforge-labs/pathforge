@@ -44,7 +44,6 @@ from app.services.salary_intelligence_service import (
     _get_role_title,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 
