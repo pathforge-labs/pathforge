@@ -45,6 +45,7 @@
       "picomatch@4.0.3": ">=4.0.4"
     },
     "auditConfig": {
+      "__justifications": "SECURITY.md §'Ignored CVEs' — each entry carries owner, rationale, re-eval date.",
       "ignoreCves": [
         "CVE-2025-69873",
         "CVE-2025-09073",

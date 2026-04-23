@@ -1078,6 +1078,9 @@
   - `test_career_simulation_analyzer.py` (55 tests): 4 pure helpers (confidence, ROI, feasibility, CoL) + 4 LLM methods + 3 validators
   - `test_matching.py` (11 tests): NaN/Inf embedding guard, DB result mock, explain_match, store_match
   - **Confirmed TOTAL: 70%** (15617 stmts, 4747 missing, 1757 tests passing). Sprint 45 ratchet gate: ✅ PASS.
+- [x] **Sprint 45 CI green pass** — 2026-04-23. Resolved all CI failures on `test/sprint-45-coverage-70-percent`:
+  - **API — Lint & Test**: Fixed 40+ ruff violations across 17 test files (I001/F401/RUF001/E741/RUF059/SIM117/F841); fixed `no-untyped-call` mypy error on `aioredis.from_url` in `intelligence_cache.py`.
+  - **Web — Lint & Build**: Bumped `next` 16.1.7 → 16.2.3 (CVE patch); added 6 pnpm overrides to close 25 transitive CVEs (node-forge, @xmldom/xmldom, brace-expansion, serialize-javascript, uuid, picomatch 2.x/3.x); added CVE-2026-33671 + CVE-2026-33672 to `auditConfig.ignoreCves` (picomatch@4.0.3 exact-pinned by expo/cli — unfixable via overrides; dev-toolchain only). Justifications in `SECURITY.md §'Ignored CVEs'`.
 
 > **Sprint 44 Verification Gates**: VR baselines committed · CI VR job passes · Langfuse traces visible · Webhook alerts configured
 
