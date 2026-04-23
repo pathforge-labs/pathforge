@@ -1018,12 +1018,12 @@
 - [x] **N-2: Coverage gate** — [PR #4](https://github.com/pathforge-labs/pathforge/pull/4) (2026-04-23). `pytest --cov=app --cov-fail-under=65` on CI `api-quality` step. Baseline **66%** measured on `main` post-PR-3 (1,291 tests). Shipped as **ratchet gate**: floor = 65% now, raise by +5% every sprint (Sprint 43: 70 + enable `--cov-branch`, Sprint 44: 75, Sprint 45: 80). Target 80% is the original aspiration; staged ramp avoids a multi-sprint test-writing blocker.
   - **Escape valve**: if post-Sprint-44 measurement shows <73%, the Sprint-45 floor is relaxed to 78% pending an ADR. Protects against a long-tail of hard-to-unit-test code (worker.py, LLM glue, parsers) forcing a demoralising red-CI sprint four weeks out.
 - [ ] Review error response formats for consistency
-- [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`
-- [ ] P2-3: Circuit breaker in-memory fallback when Redis is down
+- [x] **P2-2: Secret rotation runbook** — `docs/runbooks/secret-rotation.md` (11 secrets covered with rotation cadence, blast-radius, step-by-step procedures, incident-driven path, and post-rotation verification checklist).
+- [ ] ~~P2-3: Circuit breaker in-memory fallback when Redis is down~~ — **scope under review**. `app/core/circuit_breaker.py` (209 LOC) has **zero callers** in `app/` after a full audit; adding fallback to unused infrastructure is premature. Pending decision in Sprint 43 — three options on the table: **(a) adopt** (wire it up for external-service calls — Adzuna, Jooble, Voyage — then add the fallback), **(b) park-with-trigger** (keep dormant, document the trigger condition e.g. "adopt when the next outbound third-party integration lands" so the 209 LOC isn't lost), or **(c) delete** (YAGNI, remove the module and re-add when needed). Will be resolved as a dedicated ADR in Sprint 43 planning.
 - [ ] P2-4: N+1 query analysis — enable `warn_on_unnested_lazy_load`, profile top 10 endpoints
-- [ ] P2-8: Review ignored CVEs (`CVE-2025-69873`, `CVE-2025-09073`) — document justification
+- [x] **P2-8: CVE ignore justifications** — `SECURITY.md` §"Ignored CVEs" register with rationale, dev/prod scope, and per-entry re-evaluation date. `package.json` `auditConfig` gains a `__justifications` pointer key. Policy documented: every addition to `ignoreCves` must have a matching row in SECURITY.md in the same PR.
 
-> **Sprint 42 Verification Gates**: ✅ N-1b landed · Welcome email delivered · Coverage gate landed (ratchet to 80% over Sprints 43–45) · Secret rotation documented · CVE review complete
+> **Sprint 42 Verification Gates**: ✅ N-1b landed · ✅ Coverage gate landed (ratchet to 80% over Sprints 43–45) · ✅ Secret rotation documented · ✅ CVE review complete · ⏳ Welcome email delivered · ⏳ P2-3 adopt / park / delete decision (Sprint-43 ADR)
 
 ---
 
@@ -1037,8 +1037,11 @@
 - [ ] 🔧 MANUAL: Switch Vercel: `pk_test_` → `pk_live_`
 - [ ] Process one real €19 Pro Monthly transaction
 - [ ] Verify payout in Stripe balance → bank account
+- [ ] **N-7: pnpm-audit CVE triage** (surfaced during PR #5 CI). 27 vulnerabilities on `main` (18 high, 9 moderate) across transitive deps — `serialize-javascript` (CVE-DoS), `uuid<14` (GHSA-w5hq-g745-h8pq), and related. Most live under `@sentry/webpack-plugin`, `expo`, and `resend→svix`. Triage path: (1) attempt upstream dep bumps, (2) add pnpm `overrides` entries for patched transitives, (3) justify residual entries in SECURITY.md §"Ignored CVEs" following the P2-8 policy. **Blocks any PR that modifies `package.json`, `pnpm-lock.yaml`, `apps/web/**`, or `packages/shared/**`** until resolved — that is the web-quality path filter. Owner: security@pathforge.eu.
+- [ ] **N-2 ratchet**: raise coverage floor 65 → 70 + enable `--cov-branch` (per N-2 ratchet policy landed in Sprint 42 PR #4).
+- [ ] **P2-3 decision ADR**: circuit-breaker adopt / park-with-trigger / delete (parked from Sprint 42).
 
-> **Sprint 43 Verification Gates**: Real €19 payment → Stripe balance · Webhook fires → subscription active · Customer portal works
+> **Sprint 43 Verification Gates**: Real €19 payment → Stripe balance · Webhook fires → subscription active · Customer portal works · pnpm-audit clean on `main` · Coverage floor at 70%
 
 ---
 
