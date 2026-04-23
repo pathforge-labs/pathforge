@@ -368,6 +368,9 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+          # Route API calls through localhost:3000 so the production-mode CSP
+          # doesn't block fetches to localhost:8000 (dev-only in connect-src).
+          NEXT_PUBLIC_API_URL: "http://localhost:3000"
 
       - name: Check for existing baselines
         id: baselines
@@ -390,7 +393,6 @@ jobs:
         env:
           CI: "true"
           UPDATE_SNAPSHOTS: "false"
-          NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
 
       - name: Run performance & accessibility baselines
         id: perf-tests
@@ -400,7 +402,6 @@ jobs:
         env:
           CI: "true"
           UPDATE_SNAPSHOTS: "false"
-          NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
 
       - name: Upload visual diff results
         if: always() && (steps.visual-tests.outcome == 'failure' || steps.perf-tests.outcome == 'failure')

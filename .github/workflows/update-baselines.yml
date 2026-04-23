@@ -76,6 +76,11 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+          # Route API calls to localhost:3000 (the Next.js server itself) so
+          # the production-mode CSP (which blocks localhost:8000) doesn't
+          # prevent fetch. Playwright route interceptors catch these requests
+          # before they hit the Next.js rewrite proxy.
+          NEXT_PUBLIC_API_URL: "http://localhost:3000"
 
       # Playwright webServer config auto-starts `pnpm start` on :3000
       - name: Capture visual regression baselines

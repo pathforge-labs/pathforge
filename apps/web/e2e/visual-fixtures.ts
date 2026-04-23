@@ -25,7 +25,12 @@ interface VisualFixtures {
 
 /* ── Constants ────────────────────────────────────────────── */
 
+// In local dev, API_BASE_URL defaults to http://localhost:8000 (CSP allows it).
+// In CI VR builds, NEXT_PUBLIC_API_URL=http://localhost:3000 is set so the
+// production-mode CSP ('self' only) doesn't block fetches. Both origins are
+// intercepted here so the same fixture works in both environments.
 const BACKEND_ORIGIN = "http://localhost:8000";
+const VR_CI_ORIGIN = "http://localhost:3000";
 
 /**
  * CSS injection to kill all animations and transitions.
@@ -94,9 +99,14 @@ export const test = base.extend<VisualFixtures>({
       localStorage.setItem("pathforge_refresh_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ2ci11c2VyLTAwMSIsInR5cGUiOiJyZWZyZXNoIn0.mock");
     });
 
-    // 3. Intercept ALL backend API calls (localhost:8000)
+    // 3. Intercept backend API calls.
+    //    - localhost:8000: local dev (CSP allows it in dev mode)
+    //    - localhost:3000/api/*: CI VR builds (NEXT_PUBLIC_API_URL=localhost:3000,
+    //      Playwright intercepts before Next.js rewrite proxy kicks in)
     await page.route(
-      (url) => url.origin === BACKEND_ORIGIN,
+      (url) =>
+        url.origin === BACKEND_ORIGIN ||
+        (url.origin === VR_CI_ORIGIN && url.pathname.startsWith("/api/")),
       handleApiRoute,
     );
 
