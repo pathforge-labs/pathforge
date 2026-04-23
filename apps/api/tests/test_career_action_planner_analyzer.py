@@ -22,7 +22,6 @@ from app.ai.career_action_planner_analyzer import (
 )
 from app.core.llm import LLMError
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _sanitize_passthrough(text, *, max_length, context):

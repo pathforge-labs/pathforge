@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from app.core.circuit_breaker import CircuitOpenError
 from app.jobs.providers.adzuna import AdzunaProvider, _format_salary
 from app.jobs.providers.jooble import JoobleProvider
 

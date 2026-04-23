@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.models.waitlist import WaitlistEntry, WaitlistStatus
+from app.models.waitlist import WaitlistStatus
 from app.services.waitlist_service import WaitlistService
 
 

@@ -168,10 +168,10 @@ class TestEstimateTimelineRange:
         assert opt == 14 and real == 22 and cons == 30
 
     def test_extra_skills_increase_timeline(self) -> None:
-        opt_base, real_base, cons_base = TransitionPathwaysAnalyzer.estimate_timeline_range(
+        _opt_base, real_base, _cons_base = TransitionPathwaysAnalyzer.estimate_timeline_range(
             difficulty="moderate", skills_to_acquire=3,
         )
-        opt_extra, real_extra, cons_extra = TransitionPathwaysAnalyzer.estimate_timeline_range(
+        _opt_extra, real_extra, _cons_extra = TransitionPathwaysAnalyzer.estimate_timeline_range(
             difficulty="moderate", skills_to_acquire=5,
         )
         assert real_extra > real_base

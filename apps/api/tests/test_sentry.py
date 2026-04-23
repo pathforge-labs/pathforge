@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.core.sentry import (
     _before_send,
     _categorize_llm_error,
@@ -220,7 +218,6 @@ class TestInitSentry:
         mock_sdk.init.assert_called_once()
 
     def test_import_error_logged_as_warning(self) -> None:
-        import sys
 
         with patch("app.core.sentry.settings") as s, \
              patch.dict("sys.modules", {"sentry_sdk": None}):

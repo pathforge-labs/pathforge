@@ -7,9 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.models.user import User
 from app.services.user_service import UserService
-
 
 # ── create_user ───────────────────────────────────────────────────────────────
 

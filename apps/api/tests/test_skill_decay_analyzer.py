@@ -7,8 +7,6 @@ urgency computation, and all four async LLM methods.
 
 from __future__ import annotations
 
-import math
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest

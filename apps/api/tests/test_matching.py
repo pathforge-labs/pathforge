@@ -7,7 +7,6 @@ and store_match (DB persistence).
 
 from __future__ import annotations
 
-import math
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -218,7 +217,7 @@ class TestStoreMatch:
         user_id = uuid.uuid4()
         job_id = uuid.uuid4()
 
-        result = await MatchingService.store_match(
+        await MatchingService.store_match(
             mock_db,
             user_id=user_id,
             job_id=job_id,

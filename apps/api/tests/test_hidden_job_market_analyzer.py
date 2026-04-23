@@ -183,7 +183,7 @@ class TestValidateSignalData:
     def test_zero_strength_is_valid(self) -> None:
         # strength=0 is falsy but valid
         data = {"signal_type": "funding", "title": "T", "strength": 0, "confidence": 0.5}
-        valid, error = HiddenJobMarketAnalyzer.validate_signal_data(data)
+        valid, _error = HiddenJobMarketAnalyzer.validate_signal_data(data)
         assert valid is True
 
 

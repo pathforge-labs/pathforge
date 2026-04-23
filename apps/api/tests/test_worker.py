@@ -17,6 +17,15 @@ Covers:
 from __future__ import annotations
 
 import json
+
+# ── Lazy-import support ──────────────────────────────────────────
+#
+# The worker module does `from app.services.ai_service import AIService` and
+# friends inside function bodies. Those service modules do not currently
+# exist in the codebase (they are scaffolded). We stub them into
+# sys.modules so the lazy imports resolve to MagicMock classes we control.
+import sys
+import types
 from datetime import timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,17 +34,6 @@ import pytest
 from arq.connections import RedisSettings
 
 from app import worker as worker_module
-
-
-# ── Lazy-import support ──────────────────────────────────────────
-#
-# The worker module does `from app.services.ai_service import AIService` and
-# friends inside function bodies. Those service modules do not currently
-# exist in the codebase (they are scaffolded). We stub them into
-# sys.modules so the lazy imports resolve to MagicMock classes we control.
-
-import sys
-import types
 
 
 def _install_fake_module(dotted_name: str, attrs: dict[str, Any]) -> types.ModuleType:
@@ -89,7 +87,6 @@ from app.worker import (
     startup,
     worker_health_check,
 )
-
 
 # ── worker_health_check ──────────────────────────────────────────
 
@@ -327,9 +324,8 @@ class TestGenerateEmbeddings:
         self, fake_ai_service: Any,
     ) -> None:
         fake_ai_service.generate_embeddings.side_effect = ValueError("bad")
-        with patch.object(worker_module.logger, "exception") as log_exc:
-            with pytest.raises(ValueError):
-                await generate_embeddings({}, "resume-err2")
+        with patch.object(worker_module.logger, "exception") as log_exc, pytest.raises(ValueError):
+            await generate_embeddings({}, "resume-err2")
         log_exc.assert_called_once()
 
 
@@ -385,7 +381,7 @@ class TestRunJobAggregation:
     async def test_success_returns_completed_with_result_fields(
         self, fake_jobs_ingestion: Any,
     ) -> None:
-        cls, instance = fake_jobs_ingestion
+        _cls, instance = fake_jobs_ingestion
         instance.aggregate_jobs.return_value = {"processed": 5, "errors": 0}
 
         result = await run_job_aggregation({})
@@ -399,7 +395,7 @@ class TestRunJobAggregation:
     async def test_uses_configured_batch_size(
         self, fake_jobs_ingestion: Any,
     ) -> None:
-        cls, instance = fake_jobs_ingestion
+        _cls, instance = fake_jobs_ingestion
         instance.aggregate_jobs.return_value = {"processed": 0}
 
         fake_settings = MagicMock()
@@ -413,7 +409,7 @@ class TestRunJobAggregation:
     async def test_reraises_on_failure(
         self, fake_jobs_ingestion: Any,
     ) -> None:
-        cls, instance = fake_jobs_ingestion
+        _cls, instance = fake_jobs_ingestion
         instance.aggregate_jobs.side_effect = RuntimeError("agg failed")
         with pytest.raises(RuntimeError, match="agg failed"):
             await run_job_aggregation({})
@@ -421,7 +417,7 @@ class TestRunJobAggregation:
     async def test_handles_missing_processed_key(
         self, fake_jobs_ingestion: Any,
     ) -> None:
-        cls, instance = fake_jobs_ingestion
+        _cls, instance = fake_jobs_ingestion
         instance.aggregate_jobs.return_value = {}
         result = await run_job_aggregation({})
         assert result["status"] == "completed"
@@ -454,14 +450,13 @@ class TestRecalculateIntelligence:
         with patch(
             "app.core.database.async_session_factory",
             return_value=_FakeAsyncSessionCM(session),
-        ):
-            with patch(
-                "app.services.career_dna_service.CareerDNAService.generate_full_profile",
-                new_callable=AsyncMock,
-                return_value=career_dna,
-            ) as mock_gen:
-                user_id = "11111111-1111-1111-1111-111111111111"
-                result = await recalculate_intelligence({}, user_id)
+        ), patch(
+            "app.services.career_dna_service.CareerDNAService.generate_full_profile",
+            new_callable=AsyncMock,
+            return_value=career_dna,
+        ) as mock_gen:
+            user_id = "11111111-1111-1111-1111-111111111111"
+            result = await recalculate_intelligence({}, user_id)
 
         assert result["status"] == "completed"
         assert result["user_id"] == user_id
@@ -477,14 +472,13 @@ class TestRecalculateIntelligence:
         with patch(
             "app.core.database.async_session_factory",
             return_value=_FakeAsyncSessionCM(session),
+        ), patch(
+            "app.services.career_dna_service.CareerDNAService.generate_full_profile",
+            new_callable=AsyncMock,
+            return_value=None,
         ):
-            with patch(
-                "app.services.career_dna_service.CareerDNAService.generate_full_profile",
-                new_callable=AsyncMock,
-                return_value=None,
-            ):
-                user_id = "22222222-2222-2222-2222-222222222222"
-                result = await recalculate_intelligence({}, user_id)
+            user_id = "22222222-2222-2222-2222-222222222222"
+            result = await recalculate_intelligence({}, user_id)
         assert result["result"]["version"] == 0
 
     async def test_invalid_uuid_raises(self) -> None:
@@ -498,15 +492,14 @@ class TestRecalculateIntelligence:
         with patch(
             "app.core.database.async_session_factory",
             return_value=_FakeAsyncSessionCM(session),
+        ), patch(
+            "app.services.career_dna_service.CareerDNAService.generate_full_profile",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("service failed"),
         ):
-            with patch(
-                "app.services.career_dna_service.CareerDNAService.generate_full_profile",
-                new_callable=AsyncMock,
-                side_effect=RuntimeError("service failed"),
-            ):
-                user_id = "33333333-3333-3333-3333-333333333333"
-                with pytest.raises(RuntimeError, match="service failed"):
-                    await recalculate_intelligence({}, user_id)
+            user_id = "33333333-3333-3333-3333-333333333333"
+            with pytest.raises(RuntimeError, match="service failed"):
+                await recalculate_intelligence({}, user_id)
 
 
 # ── WorkerSettings class-level configuration ─────────────────────

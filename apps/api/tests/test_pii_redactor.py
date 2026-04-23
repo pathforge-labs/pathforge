@@ -7,8 +7,6 @@ clean text passes through unmodified.
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.pii_redactor import redact_pii
 
 # ── Email ───────────────────────────────────────────────────────

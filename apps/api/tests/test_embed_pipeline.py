@@ -28,7 +28,7 @@ def _make_job(**kwargs: Any) -> MagicMock:
     job.company = kwargs.get("company", "Acme Corp")
     job.location = kwargs.get("location", "Amsterdam, NL")
     job.work_type = kwargs.get("work_type", "remote")
-    job.salary_info = kwargs.get("salary_info", "€80k–€100k")
+    job.salary_info = kwargs.get("salary_info", "€80k-€100k")
     job.description = kwargs.get("description", "Build great things.")
     return job
 
@@ -53,7 +53,7 @@ class TestJobToCanonical:
         assert "Company: Acme Corp" in text
         assert "Location: Amsterdam, NL" in text
         assert "Type: remote" in text
-        assert "Salary: €80k–€100k" in text
+        assert "Salary: €80k-€100k" in text
         assert "Description: Build great things." in text
 
     def test_no_location(self) -> None:
@@ -82,7 +82,7 @@ class TestJobToCanonical:
         job = _make_job(description=long_desc)
         text = job_to_canonical(job)
         # The embedded description must not exceed 2000 chars
-        desc_line = next(l for l in text.splitlines() if l.startswith("Description:"))
+        desc_line = next(ln for ln in text.splitlines() if ln.startswith("Description:"))
         embedded_desc = desc_line[len("Description: "):]
         assert len(embedded_desc) == 2000
 
