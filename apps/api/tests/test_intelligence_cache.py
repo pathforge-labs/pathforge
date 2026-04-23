@@ -21,16 +21,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.intelligence_cache import (
-    IntelligenceCache,
     TTL_CAREER_DNA,
-    TTL_THREAT_RADAR,
+    TTL_COLLECTIVE,
+    TTL_DEFAULT,
+    TTL_RECOMMENDATIONS,
     TTL_SALARY,
     TTL_SKILL_DECAY,
-    TTL_COLLECTIVE,
-    TTL_RECOMMENDATIONS,
-    TTL_DEFAULT,
+    TTL_THREAT_RADAR,
+    IntelligenceCache,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

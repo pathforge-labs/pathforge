@@ -29,6 +29,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.recommendation_intelligence import (
@@ -42,7 +43,6 @@ from app.schemas.recommendation_intelligence import (
     RecommendationSummary,
     UpdateRecommendationStatusRequest,
 )
-from app.core.intelligence_cache import ic_cache
 from app.services.billing_service import BillingService
 from app.services.recommendation_intelligence_service import (
     RecommendationIntelligenceService,

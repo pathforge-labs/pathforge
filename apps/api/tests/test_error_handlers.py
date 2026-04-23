@@ -20,7 +20,6 @@ from app.core.error_handlers import (
 )
 from app.core.llm import LLMError
 
-
 # ── Helpers ──────────────────────────────────────────────────────
 
 _FAKE_REQUEST_ID = "test-request-id-123"

@@ -17,7 +17,6 @@ import pytest
 
 from app.jobs.embed_pipeline import job_to_canonical
 
-
 # ── Helpers ─────────────────────────────────────────────────────
 
 

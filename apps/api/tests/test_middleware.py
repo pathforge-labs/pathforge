@@ -22,7 +22,6 @@ from app.core.middleware import (
     get_request_id,
 )
 
-
 # ── App factories ─────────────────────────────────────────────────
 
 

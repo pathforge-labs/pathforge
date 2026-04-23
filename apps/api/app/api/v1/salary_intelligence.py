@@ -27,6 +27,7 @@ from starlette.requests import Request
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -44,7 +45,6 @@ from app.schemas.salary_intelligence import (
     SkillSalaryImpactResponse,
     SkillWhatIfRequest,
 )
-from app.core.intelligence_cache import ic_cache
 from app.services.billing_service import BillingService
 from app.services.salary_intelligence_service import SalaryIntelligenceService
 

@@ -11,7 +11,6 @@ import pytest
 
 from app.core.prompt_sanitizer import sanitize_user_text
 
-
 # ── Helpers ─────────────────────────────────────────────────────
 
 

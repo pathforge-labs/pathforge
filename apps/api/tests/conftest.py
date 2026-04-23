@@ -22,13 +22,13 @@ from httpx import ASGITransport, AsyncClient
 # pgvector's Vector type
 from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import event
-from sqlalchemy.orm import ORMExecuteState
-from sqlalchemy.orm import Session as _SyncSession
 from sqlalchemy.dialects.postgresql import ARRAY, JSON
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import ORMExecuteState
+from sqlalchemy.orm import Session as _SyncSession
 from sqlalchemy.sql.type_api import TypeEngine
 
 if TYPE_CHECKING:

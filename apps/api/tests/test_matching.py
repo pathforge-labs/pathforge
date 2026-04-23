@@ -13,8 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.ai.schemas import ParsedResume, ParsedSkill, ParsedExperience
-
+from app.ai.schemas import ParsedExperience, ParsedResume, ParsedSkill
 
 # ── Helpers ───────────────────────────────────────────────────────
 

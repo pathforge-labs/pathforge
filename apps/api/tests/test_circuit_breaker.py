@@ -18,7 +18,6 @@ import pytest
 
 from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
 
-
 # ── In-memory Redis stub ─────────────────────────────────────────────────────
 
 

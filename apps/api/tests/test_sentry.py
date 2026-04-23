@@ -19,7 +19,6 @@ from app.core.sentry import (
     init_sentry,
 )
 
-
 # ── _is_llm_error ─────────────────────────────────────────────────
 
 

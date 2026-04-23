@@ -14,7 +14,6 @@ import pytest
 
 from app.core.llm import LLMError
 
-
 # ── Helpers ───────────────────────────────────────────────────────
 
 
@@ -667,7 +666,10 @@ class TestClampRecommendations:
         assert recs[0]["title"] == "Untitled recommendation"
 
     def test_weeks_clamped_above_max(self) -> None:
-        from app.ai.career_simulation_analyzer import _clamp_recommendations, MAX_RECOMMENDATION_WEEKS
+        from app.ai.career_simulation_analyzer import (
+            MAX_RECOMMENDATION_WEEKS,
+            _clamp_recommendations,
+        )
 
         recs = [{"priority": "high", "title": "Test", "estimated_weeks": 9999}]
         _clamp_recommendations(recs)

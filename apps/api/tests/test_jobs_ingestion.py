@@ -304,8 +304,8 @@ class TestDedupeAndInsert:
     async def test_all_existing_returns_zero_new(self) -> None:
         from unittest.mock import MagicMock
 
-        from app.jobs.ingestion import _dedupe_and_insert
         from app.jobs.dedup import compute_fingerprint
+        from app.jobs.ingestion import _dedupe_and_insert
 
         listing = _make_raw_listing(title="Dev", company="Acme", location="Amsterdam")
         fp = compute_fingerprint(listing.title, listing.company, listing.location)

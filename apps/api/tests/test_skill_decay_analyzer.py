@@ -15,7 +15,6 @@ import pytest
 
 from app.core.llm import LLMError
 
-
 # ── Helpers ───────────────────────────────────────────────────────
 
 
@@ -58,7 +57,7 @@ class TestComputeBaseFreshness:
         assert abs(result - 25.0) < 0.1
 
     def test_invalid_half_life_uses_default(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, DEFAULT_HALF_LIFE_DAYS
+        from app.ai.skill_decay_analyzer import DEFAULT_HALF_LIFE_DAYS, SkillDecayAnalyzer
 
         result_default = SkillDecayAnalyzer.compute_base_freshness(
             days_since_active=1000, half_life_days=0
@@ -90,32 +89,32 @@ class TestComputeBaseFreshness:
 
 class TestGetHalfLifeForCategory:
     def test_technical_category(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, HALF_LIFE_BY_CATEGORY
+        from app.ai.skill_decay_analyzer import HALF_LIFE_BY_CATEGORY, SkillDecayAnalyzer
 
         assert SkillDecayAnalyzer.get_half_life_for_category("technical") == HALF_LIFE_BY_CATEGORY["technical"]
 
     def test_soft_category(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, HALF_LIFE_BY_CATEGORY
+        from app.ai.skill_decay_analyzer import HALF_LIFE_BY_CATEGORY, SkillDecayAnalyzer
 
         assert SkillDecayAnalyzer.get_half_life_for_category("soft") == HALF_LIFE_BY_CATEGORY["soft"]
 
     def test_language_category(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, HALF_LIFE_BY_CATEGORY
+        from app.ai.skill_decay_analyzer import HALF_LIFE_BY_CATEGORY, SkillDecayAnalyzer
 
         assert SkillDecayAnalyzer.get_half_life_for_category("language") == HALF_LIFE_BY_CATEGORY["language"]
 
     def test_unknown_category_uses_default(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, DEFAULT_HALF_LIFE_DAYS
+        from app.ai.skill_decay_analyzer import DEFAULT_HALF_LIFE_DAYS, SkillDecayAnalyzer
 
         assert SkillDecayAnalyzer.get_half_life_for_category("unknown_xyz") == DEFAULT_HALF_LIFE_DAYS
 
     def test_case_insensitive(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, HALF_LIFE_BY_CATEGORY
+        from app.ai.skill_decay_analyzer import HALF_LIFE_BY_CATEGORY, SkillDecayAnalyzer
 
         assert SkillDecayAnalyzer.get_half_life_for_category("TECHNICAL") == HALF_LIFE_BY_CATEGORY["technical"]
 
     def test_all_known_categories_return_nonzero(self) -> None:
-        from app.ai.skill_decay_analyzer import SkillDecayAnalyzer, HALF_LIFE_BY_CATEGORY
+        from app.ai.skill_decay_analyzer import HALF_LIFE_BY_CATEGORY, SkillDecayAnalyzer
 
         for category in HALF_LIFE_BY_CATEGORY:
             assert SkillDecayAnalyzer.get_half_life_for_category(category) > 0
