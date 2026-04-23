@@ -74,3 +74,4 @@ Links to code, tests, runbooks, external docs.
 | # | Title | Status |
 |:--|:--|:--|
 | [0001](0001-database-ssl-secure-by-default.md) | Database SSL secure-by-default with production guard | Accepted |
+| [0002](0002-redis-ssl-secure-by-default.md) | Redis SSL secure-by-default with production guard and scheme reconciliation | Accepted |
