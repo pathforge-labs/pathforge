@@ -83,13 +83,50 @@ jobs:
         working-directory: apps/api
         run: python -m mypy app/ --ignore-missing-imports
 
-      - name: Test (pytest)
+      # Sprint 42 N-2: coverage gate with ratchet policy.
+      #
+      # Floor = 65%. Baseline measured 2026-04-23 on `main` post-PR-3: 66%
+      # (line coverage, full suite 1,291 tests). Floor set 1% below
+      # baseline as a safety margin for CI flakes.
+      #
+      # Ratchet policy (do not lower without an ADR):
+      #   Sprint 42 (this PR) → 65%  line coverage  (baseline lock)
+      #   Sprint 43           → 70%  line + enable --cov-branch
+      #   Sprint 44           → 75%
+      #   Sprint 45           → 80%  (original N-2 target)
+      #
+      # Each ratchet PR must include tests proving the new floor is
+      # sustainable (full suite green with `--cov-fail-under=N` set to
+      # the new floor on at least three consecutive green CI runs).
+      #
+      # Branch coverage (`--cov-branch`) intentionally deferred to Sprint 43
+      # so this PR lands one change (the gate itself), not two. Measured
+      # 2026-04-23: line 66% vs line+branch 61%.
+      - name: Test (pytest + coverage gate)
         working-directory: apps/api
-        run: python -m pytest tests/ -v --tb=short -q --timeout=120
+        run: |
+          python -m pytest tests/ -v --tb=short -q --timeout=120 \
+            --cov=app \
+            --cov-report=term \
+            --cov-report=xml \
+            --cov-fail-under=65
         env:
           ENVIRONMENT: testing
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-xml
+          path: apps/api/coverage.xml
+          retention-days: 30
+          # Degrade to a warning instead of a red step when pytest
+          # crashed before writing coverage.xml (import/collection
+          # error, segfault, etc.). The gate itself still fails the
+          # build via the prior step.
+          if-no-files-found: warn
 
       - name: Migration SQL validation (Sprint 36 WS-2)
         run: python scripts/alembic_verify.py --sql-only

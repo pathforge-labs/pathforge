@@ -1,10 +1,10 @@
 # PathForge — Master Production Readiness (SSOT)
 
 > **Status**: Single-source production launch checklist consolidating the prior Tier-1 audit (2026-03-19) and roadmap (2026-02-24) with a fresh `/preflight` full-scan on the current worktree.
-> **Generated**: 2026-04-22 · **Branch**: `main` · **Head**: `40f70c1` (PR #2 merged 2026-04-23)
+> **Generated**: 2026-04-22 · **Branch**: `main` · **Head**: `5067554` (PR #3 merged 2026-04-23)
 > **Prior audits superseded**: `TIER1_PRODUCTION_READINESS_AUDIT.md`, `PRODUCTION_READINESS_ROADMAP.md` (deleted).
 > **Stack of record**: Python 3.12 + FastAPI · Next.js 15 · React Native Expo SDK 52 · PostgreSQL 16 + pgvector (Supabase) · Redis · Stripe · Railway + Vercel.
-> **Last revision**: 2026-04-23 — N-1/OPS-5 closed via [ADR-0001](adr/0001-database-ssl-secure-by-default.md). D5/D6/D8/D10 re-scored; composite 72.4 → 75.0.
+> **Last revision**: 2026-04-23 — N-1b closed via [ADR-0002](adr/0002-redis-ssl-secure-by-default.md) (parallel Redis TLS hardening + closes latent plaintext bug in LLM budget guard). Current test coverage baseline: **66% · 1,291 tests**. D3/D5/D6/D8/D10 re-scored; composite 75.0 → 76.9 (+1.9).
 
 ---
 
@@ -12,11 +12,11 @@
 
 | Question | Answer |
 | :--- | :--- |
-| **Composite Score** | **75.0 / 100** (↑ from 72.4 after ADR-0001) |
+| **Composite Score** | **76.9 / 100** (↑ 1.9 from 75.0 after ADR-0002; 72.4 at pre-ADR baseline) |
 | **Verdict** | **CONDITIONAL GO** — code freeze eligible; launch gated on **manual operational setup** (Sprint 40 + Sprint 41 manual tasks). |
-| **Code Readiness** | ✅ GO — remediation sprints 39→41 landed + ADR-0001 DB TLS hardening. All prior P0 code gaps closed. |
+| **Code Readiness** | ✅ GO — remediation sprints 39→41 landed + ADR-0001 DB TLS + ADR-0002 Redis TLS hardening. All prior P0 code gaps closed; one latent plaintext bug (LLM budget guard) closed. |
 | **Ops Readiness** | ❌ NOT READY — Sentry DSN empty, no Stripe account, no LLM keys, Redis not provisioned, no uptime monitor. (DB SSL now auto-enables in prod, no action needed.) |
-| **Blocker Rules** | Zero-Domain: PASS · Security Floor ≥50%: PASS (D5=82) · Quality Floor ≥50%: PASS (D4=82). |
+| **Blocker Rules** | Zero-Domain: PASS · Security Floor ≥50%: PASS (D5=86) · Quality Floor ≥50%: PASS (D4=82). |
 | **Est. remaining effort to GO** | ~1–2 sessions of manual browser/dashboard work across Stripe/Railway/Vercel/UptimeRobot/Sentry + 1 smoke-test session. |
 
 ---
@@ -27,22 +27,22 @@
 | :-- | :--- | :--: | :--: | :--- | :--- |
 | D1 | Task Tracking & Completion | 10 | 8 | 🟢 | 44 sprints tracked in `docs/ROADMAP.md`; SSOT discipline is strong. Sprint 40/41 manual tasks are the only open blockers. |
 | D2 | User Journeys (UX + A11y) | 10 | 7 | 🟡 | 18 dashboard routes + 10 marketing pages + 14 Playwright E2E specs. Axe-core wired. VR baselines still empty. |
-| D3 | Implementation (Tests) | 10 | 8 | 🟢 | 1,087+ backend tests, 232+ web tests, 69+ mobile tests, ~28 E2E. No coverage gate in CI yet. |
+| D3 | Implementation (Tests) | 10 | 8.3 | 🟢 | **1,291** backend tests (+83 since pre-ADR-0001), 232+ web, 69+ mobile, ~28 E2E. **Coverage baseline measured: 66%** (full scan). Gate landing in Sprint 42 (N-2) with ratchet policy. |
 | D4 | Code Quality | 10 | 8.2 | 🟢 | Ruff/mypy/ESLint/TSC all 0-error; 0 Dependabot vulns after 26-alert sweep. 3 services >24 KB (monitor, not block). |
-| D5 | Security | 15 | 12.3 | 🟢 | OAuth JWKS, refresh rotation + replay detect, fail-closed blacklist, 8-layer prompt sanitizer, Stripe webhook HMAC. **DB TLS secure-by-default + production downgrade guard + Alembic TLS parity + probe-error redaction (ADR-0001).** JWT still in localStorage (accepted trade-off). |
-| D6 | Configuration / Secrets | 10 | 8 | 🟢 | Production-mode guards block insecure defaults at boot; ADR-0001 established layered secure-by-default pattern + DSN sanitizer + CI config-guards job. 100+ settings in one `Settings` class (refactor deferred). No vault; rotation undocumented. |
+| D5 | Security | 15 | 12.9 | 🟢 | OAuth JWKS, refresh rotation + replay detect, fail-closed blacklist, 8-layer prompt sanitizer, Stripe webhook HMAC. **DB TLS secure-by-default + prod downgrade guard + Alembic TLS parity + probe-error redaction (ADR-0001).** **Redis TLS secure-by-default + upgrade-only scheme reconciliation + ARQ `ssl_check_hostname=True` + latent-bug closure in LLM budget guard (ADR-0002).** `ConfigurationError(RuntimeError)` pattern prevents DSN leak via Pydantic `ValidationError`. JWT still in localStorage (accepted trade-off). |
+| D6 | Configuration / Secrets | 10 | 8.5 | 🟢 | Production-mode guards block insecure defaults at boot; ADR-0001/0002 established layered secure-by-default pattern + 7-step ordered validator + CI config-guards job (8 scenarios). 100+ settings in one `Settings` class (refactor deferred). No vault; rotation undocumented. |
 | D7 | Performance | 10 | 7 | 🟡 | pgvector HNSW, tier-routed LLM, WebP/AVIF, Next.js server components. No N+1 sweep, no response caching on compute-heavy endpoints, no load test. |
-| D8 | Documentation | 5 | 4.5 | 🟢 | 5 incident runbooks + production checklist + **ADR directory bootstrapped (ADR-0001)**. README accurate. API docs auto-generated (disabled in prod). |
+| D8 | Documentation | 5 | 4.7 | 🟢 | 5 incident runbooks + production checklist + **ADR directory bootstrapped (ADR-0001, ADR-0002)**. README accurate. API docs auto-generated (disabled in prod). |
 | D9 | Infrastructure / CI-CD | 10 | 7 | 🟡 | CI green; `pip-audit` + `pnpm audit` now blocking. `deploy.yml` gated by manual `deploy` confirmation. No staging env. |
-| D10 | Observability | 10 | 5 | 🔴 | Structured logging + Sentry SDK integrated backend+web+mobile. **`/health/ready` exposes structured `db.ssl`/`ssl_cipher`/`ssl_version`/`ssl_attested`; Sentry `db.ssl` tag on all events.** `SENTRY_DSN` empty → zero prod error visibility until OPS-1. Langfuse off. No external uptime monitor. |
-| | **Total** | **100** | **75.0** | 🟡 | ↑ 2.6 from ADR-0001 (D5 +0.6 · D6 +1 · D8 +0.5 · D10 +0.5) |
+| D10 | Observability | 10 | 5.3 | 🔴 | Structured logging + Sentry SDK integrated backend+web+mobile. **`/health/ready` exposes structured `db` + `redis_detail` blocks with TLS attestation; Sentry `db.ssl` + `redis.ssl` global tags on all events.** `SENTRY_DSN` empty → zero prod error visibility until OPS-1. Langfuse off. No external uptime monitor. |
+| | **Total** | **100** | **76.9** | 🟡 | ↑ 1.9 from ADR-0002 (D3 +0.3 · D5 +0.6 · D6 +0.5 · D8 +0.2 · D10 +0.3 · tests +64) |
 
 **Blocker Rule Precedence** (evaluated in order, none tripped):
 
 | Rule | Result | Evidence |
 | :--- | :--: | :--- |
-| Zero-Domain | PASS | lowest domain = D10 @ 5/10 (>0) |
-| Security Floor (D5 ≥ 50%) | PASS | D5 = 82% |
+| Zero-Domain | PASS | lowest domain = D10 @ 5.3/10 (>0) |
+| Security Floor (D5 ≥ 50%) | PASS | D5 = 86% |
 | Quality Floor (D4 ≥ 50%) | PASS | D4 = 82% |
 
 ---
@@ -50,11 +50,12 @@
 ## 3. Remediation State (from prior audit, re-verified)
 
 ### 3.1 Code-side P0/P1 — all closed ✅
-Evidence walked on current worktree (`40f70c1`, post-PR #2 merge):
+Evidence walked on current worktree (`5067554`, post-PR #3 merge):
 
 | Prior finding | Status | Evidence |
 | :--- | :--: | :--- |
 | N-1 Database SSL secure-by-default | ✅ Done | [ADR-0001](adr/0001-database-ssl-secure-by-default.md) · PR #2 (2026-04-23). Auto-derives in production, fails boot on explicit downgrade, Alembic shares TLS context, readiness attests server-side cipher, Sentry tags every event. 46 new tests. Also closes **OPS-5**. |
+| N-1b Redis SSL secure-by-default | ✅ Done | [ADR-0002](adr/0002-redis-ssl-secure-by-default.md) · PR #3 (2026-04-23). Parallel Redis TLS hardening; consolidates 5 call sites (token blacklist, rate limiter, ARQ worker, LLM budget guard, circuit breaker) onto shared helper; upgrade-only scheme reconciliation; ARQ `ssl_check_hostname=True` closes MITM vector; `ConfigurationError(RuntimeError)` prevents DSN leak via Pydantic `ValidationError`; **closes latent plaintext bug** in `app/core/llm.py:112` (LLM budget guard was ignoring `redis_ssl`). 70 new tests. |
 | P0-1 GDPR full account deletion | ✅ Done | `apps/api/app/services/account_deletion_service.py`, `apps/api/tests/test_account_deletion.py` (5 tests), `DELETE /api/v1/users/me` wired. |
 | P0-2 Sentry SDK integrated | ✅ Code / ❌ Activation | `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`, `apps/api/app/core/sentry.py`. DSN empty. |
 | P0-7 Pricing SSOT | ✅ Done | Sprint 39. |

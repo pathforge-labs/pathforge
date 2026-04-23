@@ -48,6 +48,11 @@ yarn-debug.log*
 coverage/
 htmlcov/
 .nyc_output/
+# Python coverage.py artefacts (ADR-0002 companion, Sprint 42 N-2)
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
 
 # ── Docker ──────────────────────────────────────────
 docker-compose.override.yml

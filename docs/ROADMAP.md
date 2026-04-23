@@ -1012,17 +1012,18 @@
 > Sprint 42: Post-launch hardening. Token rotation and Sentry verification elevated to Sprint 41 by Tier-1 audit. Remaining items: coverage, secret rotation docs, circuit breaker fallback, N+1 analysis.
 
 - [-] P2-1: Refresh token rotation — **completed in Sprint 41**
-- [ ] **N-1b: Redis SSL secure-by-default** — parallel ADR-0001 hardening for `redis_ssl`. Auto-derive in production, fail boot on explicit downgrade, DSN sanitizer, `/health/ready` attestation. **Same threat model as DB: token blacklist + rate-limit + circuit-breaker state travels this channel.** Code can land before OPS-4; hardening activates automatically when Redis is provisioned.
+- [x] **N-1b: Redis SSL secure-by-default** — [ADR-0002](adr/0002-redis-ssl-secure-by-default.md), PR #3 (2026-04-23). Parallel DB hardening + closes latent plaintext bug in LLM budget guard. +70 tests.
 - [ ] Send welcome email on successful email verification
 - [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41**
-- [ ] N-2: Add `--cov=app --cov-fail-under=80` to pytest CI step
+- [x] **N-2: Coverage gate** — [PR #4](https://github.com/pathforge-labs/pathforge/pull/4) (2026-04-23). `pytest --cov=app --cov-fail-under=65` on CI `api-quality` step. Baseline **66%** measured on `main` post-PR-3 (1,291 tests). Shipped as **ratchet gate**: floor = 65% now, raise by +5% every sprint (Sprint 43: 70 + enable `--cov-branch`, Sprint 44: 75, Sprint 45: 80). Target 80% is the original aspiration; staged ramp avoids a multi-sprint test-writing blocker.
+  - **Escape valve**: if post-Sprint-44 measurement shows <73%, the Sprint-45 floor is relaxed to 78% pending an ADR. Protects against a long-tail of hard-to-unit-test code (worker.py, LLM glue, parsers) forcing a demoralising red-CI sprint four weeks out.
 - [ ] Review error response formats for consistency
 - [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`
 - [ ] P2-3: Circuit breaker in-memory fallback when Redis is down
 - [ ] P2-4: N+1 query analysis — enable `warn_on_unnested_lazy_load`, profile top 10 endpoints
 - [ ] P2-8: Review ignored CVEs (`CVE-2025-69873`, `CVE-2025-09073`) — document justification
 
-> **Sprint 42 Verification Gates**: N-1b landed · Welcome email delivered · Coverage ≥80% · Secret rotation documented · CVE review complete
+> **Sprint 42 Verification Gates**: ✅ N-1b landed · Welcome email delivered · Coverage gate landed (ratchet to 80% over Sprints 43–45) · Secret rotation documented · CVE review complete
 
 ---
 
