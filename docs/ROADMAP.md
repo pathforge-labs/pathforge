@@ -1078,6 +1078,20 @@
   - `test_career_simulation_analyzer.py` (55 tests): 4 pure helpers (confidence, ROI, feasibility, CoL) + 4 LLM methods + 3 validators
   - `test_matching.py` (11 tests): NaN/Inf embedding guard, DB result mock, explain_match, store_match
   - **Confirmed TOTAL: 70%** (15617 stmts, 4747 missing, 1757 tests passing). Sprint 45 ratchet gate: ✅ PASS.
+- [x] **Sprint 46 ratchet: 75% cleared** — 2026-04-23 (session 3). 113 new service-layer tests across 5 modules:
+  - `test_predictive_career_service.py` (24 tests): all 7 service functions + 2 pure helpers; `predictive_career_service.py` 13%→~70%+
+  - `test_salary_intelligence_service.py` (36 tests): 8 pure helpers + run_full_scan/dashboard/accessors/scenario/preferences; `salary_intelligence_service.py` 18%→~70%+
+  - `test_transition_pathways_service.py` (22 tests): 3 pure helpers + explore_transition/dashboard/CRUD/delete/preferences; `transition_pathways_service.py` 20%→~70%+
+  - `test_skill_decay_service.py` (17 tests): run_full_scan/dashboard/accessors/refresh_skill/preferences; `skill_decay_service.py` 23%→~70%+
+  - `test_preference_service.py` (14 tests): PreferenceService get/upsert + BlacklistService add/remove; `preference_service.py` 30%→100%
+  - **Confirmed TOTAL: 77%** (15622 stmts, 3551 missing, 2494+ tests passing). Sprint 46 ratchet gate: ✅ PASS (target was 75%).
+- [x] **Sprint 47 ratchet: 80% cleared** — 2026-04-24 (session 4). 97 new service-layer tests across 5 modules:
+  - `test_threat_radar_service.py` (27 tests): `_compute_crs` (5 factors, all industry stability branches) + `_compute_moat_score` + `run_full_scan`/`get_overview`/`get_alerts`/`update_alert_status`/preferences; `threat_radar_service.py` 40%→higher
+  - `test_collective_intelligence_service.py` (20 tests): `_format_skills_for_prompt`/`_get_years_experience`/`_get_skills_count` + `get_ci_dashboard`/`get_industry_snapshot`/`get_salary_benchmark`/`get_or_update_preferences`; `collective_intelligence_service.py` 16%→higher
+  - `test_interview_intelligence_service.py` (22 tests): 8 pure helpers (`_format_skills`, `_get_years`, `_get_career_summary`, `_get_experience_text`, `_get_growth_text`, `_get_values_text`, `_default_company_analysis`, `_store_*`) + `create_interview_prep`/`get_dashboard`/preferences; `interview_intelligence_service.py` 15%→higher
+  - `test_career_action_planner_service.py` (14 tests): `_format_skills_for_prompt`/`_get_skill_names` + `get_dashboard`/`generate_plan` (invalid type, no DNA, happy path) + preferences; `career_action_planner_service.py` 16%→higher
+  - `test_career_passport_service.py` (14 tests): 4 pure helpers + `get_dashboard`/`map_credential`/preferences CRUD; `career_passport_service.py` 16%→higher
+  - **Confirmed TOTAL: 80.1%** (15622 stmts, 3106 missing, 2578 tests passing). Sprint 47 ratchet gate: ✅ PASS (target was 80%).
 - [x] **Sprint 45 CI green pass** — 2026-04-23. Resolved all CI failures on `test/sprint-45-coverage-70-percent`:
   - **API — Lint & Test**: Fixed 40+ ruff violations across 17 test files (I001/F401/RUF001/E741/RUF059/SIM117/F841); fixed `no-untyped-call` mypy error on `aioredis.from_url` in `intelligence_cache.py`.
   - **Web — Lint & Build**: Bumped `next` 16.1.7 → 16.2.3 (CVE patch); added 6 pnpm overrides to close 25 transitive CVEs (node-forge, @xmldom/xmldom, brace-expansion, serialize-javascript, uuid, picomatch 2.x/3.x); added CVE-2026-33671 + CVE-2026-33672 to `auditConfig.ignoreCves` (picomatch@4.0.3 exact-pinned by expo/cli — unfixable via overrides; dev-toolchain only). Justifications in `SECURITY.md §'Ignored CVEs'`.
