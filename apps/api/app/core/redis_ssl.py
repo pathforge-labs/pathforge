@@ -25,9 +25,13 @@ def resolve_redis_url(url: str, ssl_enabled: bool, environment: str) -> str:
 
     - `redis://` + True  → upgrade scheme to `rediss://` (+ WARN log).
     - `rediss://` + False:
-        - `environment == "production"` → raise `ValueError`.
+        - `environment == "production"` → raise `ConfigurationError`.
           Scheme is the stricter control surface; a production downgrade
-          is treated as a configuration bug, not a preference.
+          is treated as a configuration bug, not a preference. A
+          `ConfigurationError` (RuntimeError subclass) is used rather
+          than `ValueError` so Pydantic v2 does NOT wrap the exception
+          into `ValidationError` whose `.errors()` payload would leak the
+          full DSN — see `app/core/errors.py` for rationale.
         - Otherwise → scheme wins (WARN log). Flag should be considered
           upgraded by the caller; `Settings` handles this automatically.
     - Concordant cases return `url` unchanged.
