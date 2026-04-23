@@ -14,6 +14,7 @@ import time
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import cast
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -196,7 +197,11 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     redis_ssl_attested: bool = False
     redis_scheme: str | None = None
     if settings.redis_url:
-        redis_scheme = settings.redis_url.split("://", 1)[0] or None
+        # Use urlsplit for robust scheme extraction — consistent with
+        # app/core/redis_ssl.py and safe on malformed/unscheme'd URLs
+        # (returns empty string → normalised to None). @gemini-code-assist
+        # PR #3 review feedback.
+        redis_scheme = urlsplit(settings.redis_url).scheme or None
         try:
             from app.core.token_blacklist import token_blacklist
 
