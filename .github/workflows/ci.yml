@@ -99,12 +99,13 @@ jobs:
       #   Sprint 44           → 62%  line+branch  (--cov-branch enabled;
       #                               floor set conservatively at 62% —
       #                               1% above last combined measurement.)
-      #   Sprint 45 (current) → 70%  line+branch  (confirmed locally: 1757
-      #                               tests, TOTAL=70%, 2026-04-23.
-      #                               177 new tests: threat_radar, skill_decay,
-      #                               career_simulation, cv_tailor, matching.)
-      #   Sprint 46           → 75%  line+branch
-      #   Sprint 47           → 80%  line+branch  (original N-2 target)
+      #   Sprint 45           → 70%  line+branch  (confirmed: 1757 tests,
+      #                               TOTAL=70%, 2026-04-23. PR #6 merged.)
+      #   Sprint 46           → 77%  line+branch  (confirmed: 2494+ tests,
+      #                               TOTAL=77%, 2026-04-23. PR #7 merged.)
+      #   Sprint 47 (current) → 80%  line+branch  (confirmed: 2578 tests,
+      #                               TOTAL=80.1%, 2026-04-24. PR #7 merged.
+      #                               Original N-2 target achieved.)
       #
       # Each ratchet PR must include tests proving the new floor is
       # sustainable (full suite green with `--cov-fail-under=N` set to
@@ -117,7 +118,7 @@ jobs:
             --cov-branch \
             --cov-report=term \
             --cov-report=xml \
-            --cov-fail-under=70
+            --cov-fail-under=80
         env:
           ENVIRONMENT: testing
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
