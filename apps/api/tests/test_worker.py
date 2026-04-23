@@ -389,7 +389,7 @@ class TestRunJobAggregation:
         assert result["status"] == "completed"
         assert result["processed"] == 5
         assert result["errors"] == 0
-        cls.assert_called_once_with()
+        _cls.assert_called_once_with()
         instance.aggregate_jobs.assert_awaited_once()
 
     async def test_uses_configured_batch_size(
