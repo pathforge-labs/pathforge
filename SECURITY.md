@@ -67,6 +67,13 @@ new addition to the ignore list MUST include a matching row here in the
 same PR (enforced by code review; a future improvement is a pre-commit
 hook).
 
+> **Discoverability**: engineers hitting a `CVE-20XX-…` in `package.json`
+> can find the rationale by grepping the CVE ID in the repo — every
+> entry is enumerated here. We intentionally do NOT put a `"//"`
+> comment-key pointer in `package.json` because any change to that file
+> triggers the `web` CI path filter, which runs `pnpm audit` and can
+> fail on pre-existing CVEs unrelated to a docs-hygiene PR.
+
 Re-evaluation runs every sprint boundary. An entry that is still valid
 keeps its row; an entry whose upstream fix has landed is removed from
 the ignore list AND struck through here with the removal commit.

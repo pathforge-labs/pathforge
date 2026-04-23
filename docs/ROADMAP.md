@@ -1037,8 +1037,11 @@
 - [ ] 🔧 MANUAL: Switch Vercel: `pk_test_` → `pk_live_`
 - [ ] Process one real €19 Pro Monthly transaction
 - [ ] Verify payout in Stripe balance → bank account
+- [ ] **N-7: pnpm-audit CVE triage** (surfaced during PR #5 CI). 27 vulnerabilities on `main` (18 high, 9 moderate) across transitive deps — `serialize-javascript` (CVE-DoS), `uuid<14` (GHSA-w5hq-g745-h8pq), and related. Most live under `@sentry/webpack-plugin`, `expo`, and `resend→svix`. Triage path: (1) attempt upstream dep bumps, (2) add pnpm `overrides` entries for patched transitives, (3) justify residual entries in SECURITY.md §"Ignored CVEs" following the P2-8 policy. **Blocks any PR that modifies `package.json`, `pnpm-lock.yaml`, `apps/web/**`, or `packages/shared/**`** until resolved — that is the web-quality path filter. Owner: security@pathforge.eu.
+- [ ] **N-2 ratchet**: raise coverage floor 65 → 70 + enable `--cov-branch` (per N-2 ratchet policy landed in Sprint 42 PR #4).
+- [ ] **P2-3 decision ADR**: circuit-breaker adopt / park-with-trigger / delete (parked from Sprint 42).
 
-> **Sprint 43 Verification Gates**: Real €19 payment → Stripe balance · Webhook fires → subscription active · Customer portal works
+> **Sprint 43 Verification Gates**: Real €19 payment → Stripe balance · Webhook fires → subscription active · Customer portal works · pnpm-audit clean on `main` · Coverage floor at 70%
 
 ---
 

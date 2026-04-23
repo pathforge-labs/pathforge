@@ -37,7 +37,6 @@
       "serialize-javascript@<=7.0.2": ">=7.0.3"
     },
     "auditConfig": {
-      "//": "See SECURITY.md §'Ignored CVEs' for per-entry rationale + re-evaluation dates. Every CVE listed below must have a matching row there (P2-8 policy).",
       "ignoreCves": [
         "CVE-2025-69873",
         "CVE-2025-09073"
