@@ -969,10 +969,11 @@
 - [ ] 🔧 MANUAL: Set `RATELIMIT_STORAGE_URI=redis://...` and `REDIS_URL` in Railway
 - [ ] Verify rate limiting persists across deploys
 
-**Database SSL (P1-2)**
+**Database SSL (P1-2)** — closed by ADR-0001
 
-- [ ] 🔧 MANUAL: Set `DATABASE_SSL=true` in Railway
-- [ ] Verify API connects to Supabase with SSL
+- [x] Auto-derives `DATABASE_SSL=true` in production (no manual env var required).
+- [x] `/api/v1/health/ready` exposes `db.ssl` + `ssl_cipher` for live verification.
+- [ ] Post-deploy: confirm `SELECT ssl_is_used()` → `t` on Railway shell.
 
 **Full Env Var Audit (P1-5)**
 

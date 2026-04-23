@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.core.config import settings
+from app.core.db_ssl import build_connect_args
 from app.models import Base
 
 # Alembic Config object
@@ -50,11 +51,16 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations() -> None:
-    """Create an async engine and run migrations."""
+    """Create an async engine and run migrations.
+
+    TLS is negotiated via the shared `build_connect_args` helper so the
+    migration path matches the runtime engine (ADR-0001).
+    """
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=build_connect_args(settings.database_ssl_enabled),
     )
 
     async with connectable.connect() as connection:

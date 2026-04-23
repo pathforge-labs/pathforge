@@ -11,8 +11,8 @@ must be verified before go-live.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string (Supabase) |
-| `DATABASE_SSL` | Yes | Set `true` for production |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Supabase). Do **not** include `?sslmode=require` — it is stripped at boot (ADR-0001). |
+| `DATABASE_SSL` | No | Auto-derives `true` when `ENVIRONMENT=production` (ADR-0001). Setting explicitly to `true` is redundant-but-safe. Explicit `false` is rejected at boot. |
 | `REDIS_URL` | Yes | Token blacklist, rate limiting |
 | `JWT_SECRET` | Yes | ≥ 32 bytes, HMAC-SHA256 |
 | `JWT_REFRESH_SECRET` | Yes | ≥ 32 bytes, separate from JWT_SECRET |
@@ -41,8 +41,9 @@ must be verified before go-live.
 
 ## 2. Database
 
-- [ ] Run Alembic migrations: `alembic upgrade head`
-- [ ] Verify SSL connection (`DATABASE_SSL=true`)
+- [ ] Run Alembic migrations: `alembic upgrade head` (TLS-negotiated, ADR-0001)
+- [ ] Verify server-side TLS: `SELECT ssl_is_used();` returns `t`
+- [ ] Verify via readiness probe: `curl <api>/api/v1/health/ready | jq .db.ssl` is `true`
 - [ ] Confirm connection pool settings (min=2, max=10 for Railway)
 - [ ] Enable pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector`
 - [ ] Verify row-level security policies on Supabase dashboard
