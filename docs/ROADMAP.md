@@ -807,7 +807,7 @@
 - [x] WS-5: Pricing page title fix — removed `pageTitle()` import, set simple `"Pricing"` string, eliminated duplicate title
 - [x] WS-6: Worker production implementation — replaced stub with `CareerDNAService.generate_full_profile(dimensions=["growth_vector"])` + `uuid.UUID()` conversion
 - [x] WS-7: CI `continue-on-error` cleanup — removed 4 directives (MyPy, VR job, VR tests, perf tests), kept 2 intentional (pip-audit, pnpm audit)
-- [ ] WS-8: Full CI green verification — deferred to post-push (VR baselines require workflow dispatch)
+- [x] WS-8: Full CI green verification — **COMPLETE 2026-04-24**. CI green (80% coverage, 2578 tests). VR baselines captured and committed (14 screenshots). Staging deploy skip-guard in place until Railway configured. All quality gates pass.
 - [x] WS-9: MyPy compliance — 17→0 errors across 10 files (removed 7 stale `type: ignore`, added 4 `type: ignore[misc]`, added 2 explicit casts)
 - [x] WS-10: Gemini Code Assist enhancements — O1: Alembic ignore pattern, O2: error handling patterns, O3: branch conventions
 - [x] Bonus: `skeleton.tsx` ESLint warning fix (unused `ref` in React 19)
@@ -1049,9 +1049,11 @@
 
 > Sprint 44: Post-launch stability, VR baselines, mobile planning. **Note**: Uptime monitoring and security scan blocking elevated to Sprint 41 by Tier-1 audit.
 
-- [/] P3-1: Resolve Playwright h1 timeout → generate VR baselines → commit to `e2e/__screenshots__/`
-  - [x] **Root cause fixed 2026-04-23**: `page.clock.install()` in `visual-fixtures.ts` replaced `requestAnimationFrame` + `setTimeout`, freezing React's concurrent scheduler and preventing auth state updates from re-rendering. Fixed by switching to `page.clock.setFixedTime()` which pins `Date.now()` only, leaving timers intact. Also fixes the `waitForTimeout(300)` in `stabilizeForScreenshot` which would have hung under the frozen clock.
-  - [x] `update-baselines.yml` workflow triggered on `main` 2026-04-24 via `gh workflow run` — [run #24862715804](https://github.com/pathforge-labs/pathforge/actions/runs/24862715804). Baselines will be auto-committed back to `main` on completion.
+- [x] P3-1: Resolve Playwright h1 timeout → generate VR baselines → commit to `e2e/__screenshots__/` — **COMPLETE 2026-04-24**
+  - [x] **Root cause 1 fixed**: `page.clock.install()` → `page.clock.setFixedTime()` (Sprint 44)
+  - [x] **Root cause 2 fixed**: CSP in production mode blocked `localhost:8000` fetches → auth failed → dashboard redirected to login → `h1` never visible. Fix: `NEXT_PUBLIC_API_URL=http://localhost:3000` at build time + interceptor updated for `localhost:3000/api/*`.
+  - [x] **Root cause 3 fixed**: Mobile test still used `clock.install()` and missed `localhost:3000` interceptor — both fixed.
+  - [x] **14 baseline screenshots committed** to `apps/web/e2e/__screenshots__/` via [run #24863832445](https://github.com/pathforge-labs/pathforge/actions/runs/24863832445): 6 desktop pages × 2 themes + 2 mobile.
 - [-] P3-2: Set up uptime monitoring — **elevated to Sprint 41** by Tier-1 audit
 - [x] **P2-4: Mobile app launch planning** — 2026-04-23. See `docs/mobile-launch-plan.md`: Expo Go → EAS Build pipeline, App Store + Google Play submissions, ASO strategy, phased rollout. Dependencies: OPS-3 (LLM keys), push notification service (Expo), final smoke test on device.
 - [ ] Stripe webhook failure alerting (Dashboard → Webhooks → Alert settings)
