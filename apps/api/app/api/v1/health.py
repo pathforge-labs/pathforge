@@ -64,13 +64,28 @@ def _reset_attest_cache_for_tests() -> None:
     _attest_cache = None
 
 
+def _is_postgres_session(db: AsyncSession) -> bool:
+    """True when the session's engine is a PostgreSQL dialect.
+
+    Cheap attribute lookup (no DB round-trip). Used to short-circuit the
+    `pg_stat_ssl` attestation on SQLite tests and other non-PG backends,
+    avoiding a round-trip + exception + debug log on every /health/ready
+    hit in those environments (addresses @gemini-code-assist review
+    feedback on ADR-0001).
+    """
+    try:
+        return db.bind.dialect.name == "postgresql"  # type: ignore[union-attr]
+    except AttributeError:
+        return False
+
+
 async def _attest_db_ssl(db: AsyncSession) -> _AttestEntry | None:
     """Return a cached or freshly-measured pg_stat_ssl attestation.
 
-    Returns None when the backend does not expose `pg_stat_ssl` (SQLite,
-    pgbouncer transaction-pool mode, revoked grants). Exceptions are
-    logged at DEBUG only — the endpoint must remain healthy when
-    attestation is unavailable.
+    Returns None when the backend is not PostgreSQL (SQLite in tests) or
+    when the query genuinely fails (pgbouncer transaction-pool mode,
+    revoked grants, cold-start). The dialect guard avoids a DB round-trip
+    + exception handling on every call in non-PG environments.
     """
     global _attest_cache
     now = time.monotonic()
@@ -79,6 +94,8 @@ async def _attest_db_ssl(db: AsyncSession) -> _AttestEntry | None:
         and (now - _attest_cache.attested_at) < _ATTEST_CACHE_TTL_SECONDS
     ):
         return _attest_cache
+    if not _is_postgres_session(db):
+        return None
     try:
         result = await db.execute(
             text(

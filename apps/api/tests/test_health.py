@@ -137,7 +137,12 @@ async def test_attestation_cache_short_circuits_second_query() -> None:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    with patch.object(AsyncSession, "execute", side_effect=_fake_execute):
+    # Also bypass the dialect guard — the test uses a bare AsyncSession
+    # without a bound engine, which would normally short-circuit.
+    with (
+        patch.object(AsyncSession, "execute", side_effect=_fake_execute),
+        patch.object(health_module, "_is_postgres_session", return_value=True),
+    ):
         db = AsyncSession.__new__(AsyncSession)
         first = await health_module._attest_db_ssl(db)  # type: ignore[arg-type]
         second = await health_module._attest_db_ssl(db)  # type: ignore[arg-type]
@@ -151,6 +156,41 @@ async def test_attestation_cache_short_circuits_second_query() -> None:
     assert first is third
     # Only one database round-trip, not three.
     assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_attestation_short_circuits_on_non_postgres_dialect() -> None:
+    """@gemini-code-assist regression: non-PostgreSQL backends must not
+    issue the `pg_stat_ssl` query at all. Previously the query ran and
+    raised, logging a DEBUG line on every `/health/ready` hit under
+    SQLite (test-mode) — cheap but noisy and needlessly exercised the
+    exception path. The dialect guard skips the round-trip.
+    """
+    from app.api.v1 import health as health_module
+
+    health_module._reset_attest_cache_for_tests()
+
+    execute_calls = 0
+
+    async def _should_not_be_called(*_args: object, **_kwargs: object) -> object:
+        nonlocal execute_calls
+        execute_calls += 1
+        raise AssertionError("attestation query reached a non-Postgres session")
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    with (
+        patch.object(AsyncSession, "execute", side_effect=_should_not_be_called),
+        patch.object(health_module, "_is_postgres_session", return_value=False),
+    ):
+        db = AsyncSession.__new__(AsyncSession)
+        entry = await health_module._attest_db_ssl(db)  # type: ignore[arg-type]
+
+    assert entry is None
+    assert execute_calls == 0, (
+        "Dialect guard failed: pg_stat_ssl query executed against a "
+        "non-Postgres session"
+    )
 
 
 @pytest.mark.asyncio
@@ -183,7 +223,10 @@ async def test_attestation_cache_does_not_cache_failures() -> None:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    with patch.object(AsyncSession, "execute", side_effect=_toggle):
+    with (
+        patch.object(AsyncSession, "execute", side_effect=_toggle),
+        patch.object(health_module, "_is_postgres_session", return_value=True),
+    ):
         db = AsyncSession.__new__(AsyncSession)
         first = await health_module._attest_db_ssl(db)  # type: ignore[arg-type]
         assert first is None
