@@ -11,10 +11,21 @@ States:
     OPEN    → Service is down. Calls are rejected immediately (CircuitOpenError).
     HALF_OPEN → Recovery probe. One call is allowed through to test recovery.
 
-Usage:
-    from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
+Usage (ADR-0002: route the URL through the shared reconciliation helper
+so the circuit breaker's Redis TLS posture matches every other consumer):
 
-    breaker = CircuitBreaker(name="adzuna", redis_url=settings.redis_url)
+    from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
+    from app.core.config import settings
+    from app.core.redis_ssl import resolve_redis_url
+
+    breaker = CircuitBreaker(
+        name="adzuna",
+        redis_url=resolve_redis_url(
+            settings.redis_url,
+            settings.redis_ssl_enabled,
+            settings.environment,
+        ),
+    )
 
     async with breaker:
         response = await httpx.get("https://api.adzuna.com/...")
@@ -74,11 +85,17 @@ class CircuitBreaker:
         self._redis: aioredis.Redis | None = None
 
     async def _get_redis(self) -> aioredis.Redis:
-        """Lazy Redis connection."""
+        """Lazy Redis connection.
+
+        `self._redis_url` is expected to already be reconciled by the
+        caller via `app.core.redis_ssl.resolve_redis_url(...)` — see the
+        module docstring for the idiomatic construction pattern
+        (ADR-0002).
+        """
         if self._redis is None:
             self._redis = cast(
                 aioredis.Redis,
-                aioredis.from_url(self._redis_url, decode_responses=True),  # type: ignore[no-untyped-call]
+                aioredis.from_url(self._redis_url, decode_responses=True),  # type: ignore[no-untyped-call]  # redis-ssl-exempt: url reconciled by caller
             )
         return self._redis
 

@@ -232,16 +232,31 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 def _parse_redis_settings() -> RedisSettings:
-    """Parse the Redis URL from application settings into ARQ RedisSettings."""
+    """Parse the Redis URL from application settings into ARQ RedisSettings.
+
+    Uses the reconciled `redis_ssl_enabled` property (ADR-0002) so the
+    ARQ worker's TLS posture matches the runtime API's, and
+    `arq_ssl_flag` for explicit naming at the call site.
+
+    ARQ's `RedisSettings` defaults `ssl_check_hostname=False`, which
+    leaves a MITM vector — an attacker with a valid certificate for any
+    hostname can impersonate the server. Explicitly enable hostname
+    verification when TLS is on. `ssl_cert_reqs='required'` is already
+    the redis-py default and we rely on that.
+    """
     from urllib.parse import urlparse
 
+    from app.core.redis_ssl import arq_ssl_flag
+
     parsed = urlparse(settings.redis_url)
+    tls = arq_ssl_flag(settings.redis_ssl_enabled)
     return RedisSettings(
         host=parsed.hostname or "localhost",
         port=parsed.port or 6379,
         database=int(parsed.path.lstrip("/") or "0"),
         password=parsed.password,
-        ssl=settings.redis_ssl,
+        ssl=tls,
+        ssl_check_hostname=tls,
         conn_timeout=settings.redis_socket_timeout,
     )
 

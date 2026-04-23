@@ -66,11 +66,15 @@ def _resolve_storage_uri() -> str:
             # Validate Redis connectivity before committing
             import redis as redis_lib
 
-            parsed_url = redis_url
-            if settings.redis_ssl and not parsed_url.startswith("rediss://"):
-                parsed_url = parsed_url.replace("redis://", "rediss://", 1)
+            from app.core.redis_ssl import resolve_redis_url
 
-            client = redis_lib.Redis.from_url(
+            parsed_url = resolve_redis_url(
+                redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            )
+
+            client = redis_lib.Redis.from_url(  # redis-ssl-exempt: reconciled URL
                 parsed_url,
                 socket_connect_timeout=2,
             )

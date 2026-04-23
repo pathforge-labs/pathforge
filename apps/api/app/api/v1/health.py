@@ -186,14 +186,41 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
         db_status = "error"
 
     # ── Redis check (Audit C1) ─────────────────────────────────
+    # ADR-0002: structured `redis` block adds client-side TLS
+    # introspection. `ssl_attested` is True when the bound connection
+    # pool is an `SSLConnection` class — zero additional round-trips,
+    # in contrast to the DB's server-side `pg_stat_ssl` query. Different
+    # attestation layer, same observability intent.
     redis_status = "not_configured"
+    redis_ssl_enabled: bool = settings.redis_ssl_enabled
+    redis_ssl_attested: bool = False
+    redis_scheme: str | None = None
     if settings.redis_url:
+        redis_scheme = settings.redis_url.split("://", 1)[0] or None
         try:
             from app.core.token_blacklist import token_blacklist
 
             if token_blacklist._redis is not None:
                 await cast("Awaitable[bool]", token_blacklist._redis.ping())
                 redis_status = "connected"
+                # Client-side TLS introspection — no round-trip.
+                try:
+                    from redis.asyncio.connection import SSLConnection
+
+                    pool = token_blacklist._redis.connection_pool
+                    conn_class = getattr(pool, "connection_class", None)
+                    if isinstance(conn_class, type) and issubclass(
+                        conn_class, SSLConnection,
+                    ):
+                        redis_ssl_enabled = True
+                        redis_ssl_attested = True
+                    else:
+                        redis_ssl_enabled = False
+                        redis_ssl_attested = True
+                except Exception as attest_exc:
+                    logger.debug(
+                        "Redis TLS introspection unavailable: %s", attest_exc,
+                    )
             else:
                 redis_status = "not_initialized"
         except Exception:
@@ -227,6 +254,12 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
             "ssl_version": db_ssl_version,
         },
         "redis": redis_status,
+        "redis_detail": {
+            "status": redis_status,
+            "ssl": redis_ssl_enabled,
+            "ssl_attested": redis_ssl_attested,
+            "scheme": redis_scheme,
+        },
         "rate_limiting": rate_limit_status,
         "app": settings.app_name,
         "version": settings.app_version,

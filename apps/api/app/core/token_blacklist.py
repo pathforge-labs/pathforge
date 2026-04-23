@@ -36,12 +36,23 @@ class TokenBlacklist:
 
     @classmethod
     async def get_redis(cls) -> Redis:
-        """Lazily initialize and return the Redis connection."""
+        """Lazily initialize and return the Redis connection.
+
+        Routes through `app.core.redis_ssl.resolve_redis_url` so the TLS
+        posture is reconciled by a single shared helper (ADR-0002). Any
+        direct `Redis.from_url(settings.redis_url, ...)` call would
+        bypass the reconciliation and reopen the split-brain bug pattern
+        the ADR closed.
+        """
         if cls._redis is None:
-            url = settings.redis_url
-            if settings.redis_ssl and not url.startswith("rediss://"):
-                url = url.replace("redis://", "rediss://", 1)
-            cls._redis = Redis.from_url(
+            from app.core.redis_ssl import resolve_redis_url
+
+            url = resolve_redis_url(
+                settings.redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            )
+            cls._redis = Redis.from_url(  # redis-ssl-exempt: reconciled URL
                 url,
                 decode_responses=True,
                 socket_connect_timeout=5,

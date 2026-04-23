@@ -161,6 +161,56 @@ jobs:
           "
           echo "::endgroup::"
 
+          # ADR-0002: boot-time Redis config-guards.
+          echo "::group::prod + unset REDIS_SSL → auto-enables TLS"
+          ENVIRONMENT=production python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.redis_ssl_enabled is True, f'expected True, got {s.redis_ssl_enabled!r}'
+          print('OK: redis_ssl auto-resolved to True in production')
+          "
+          echo "::endgroup::"
+
+          echo "::group::prod + REDIS_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production REDIS_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised ValueError"
+            exit 1
+          fi
+          echo "OK: Redis production downgrade correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::prod + REDIS_URL=rediss:// + REDIS_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production REDIS_URL='rediss://h:6379/0' REDIS_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised on scheme/flag conflict"
+            exit 1
+          fi
+          echo "OK: Redis scheme/flag conflict correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::dev + redis:// + REDIS_SSL=true → scheme upgraded"
+          ENVIRONMENT=development REDIS_URL='redis://h:6379/0' REDIS_SSL=true python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.redis_url.startswith('rediss://'), f'expected rediss://, got {s.redis_url!r}'
+          assert s.redis_ssl_enabled is True
+          print('OK: REDIS_URL scheme upgraded to rediss://')
+          "
+          echo "::endgroup::"
+
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
     name: Web — Lint & Build

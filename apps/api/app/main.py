@@ -82,21 +82,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.core.sentry import init_sentry
     init_sentry()
 
-    # ADR-0001: Tag every event with the effective DB TLS posture so
-    # post-mortem queries can filter "errors where TLS was off" in one
-    # click. This is intentionally a process-global tag (isolation scope)
-    # because TLS posture is a lifecycle invariant, not request-scoped.
-    # No-op when Sentry is not initialised — we gate on the active client
-    # rather than the DSN string because `init_sentry()` may have failed
-    # (ImportError, invalid DSN, etc.) even when the DSN is set.
+    # ADR-0001 / ADR-0002: Tag every event with the effective DB and
+    # Redis TLS posture so post-mortem queries can filter "errors while
+    # TLS was off" in one click. Intentionally process-global (isolation
+    # scope) because TLS posture is a lifecycle invariant, not
+    # request-scoped. Gated on the active Sentry client (not DSN string)
+    # so a failed `init_sentry()` doesn't leave a dangling tag attempt.
     try:
         import sentry_sdk
         if sentry_sdk.Hub.current.client is not None:
             sentry_sdk.set_tag(
                 "db.ssl", str(settings.database_ssl_enabled).lower(),
             )
+            sentry_sdk.set_tag(
+                "redis.ssl", str(settings.redis_ssl_enabled).lower(),
+            )
     except Exception:
-        logger.warning("Failed to set Sentry db.ssl tag", exc_info=True)
+        logger.warning("Failed to set Sentry TLS-posture tags", exc_info=True)
 
     # Sprint 34: Pin Stripe API version (F15)
     try:
