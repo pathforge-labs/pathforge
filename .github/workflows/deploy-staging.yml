@@ -65,9 +65,6 @@ jobs:
     needs: wait-for-ci
     runs-on: ubuntu-latest
     environment: staging
-    # Skip entirely if the staging service secret is not yet configured.
-    # Set RAILWAY_STAGING_SERVICE_ID in repo Settings → Secrets to activate.
-    if: ${{ secrets.RAILWAY_STAGING_SERVICE_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -76,16 +73,26 @@ jobs:
         run: curl -fsSL https://railway.com/install.sh | sh
 
       - name: Deploy to staging
-        run: railway up --service ${{ secrets.RAILWAY_STAGING_SERVICE_ID }}
+        run: |
+          if [ -z "$RAILWAY_STAGING_SERVICE_ID" ]; then
+            echo "::notice::RAILWAY_STAGING_SERVICE_ID not configured — staging deploy skipped. See docs/runbooks/staging-setup.md."
+            exit 0
+          fi
+          railway up --service "$RAILWAY_STAGING_SERVICE_ID"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_STAGING_SERVICE_ID: ${{ secrets.RAILWAY_STAGING_SERVICE_ID }}
 
       # Smoke-check staging health after deploy
       - name: Verify staging health
         run: |
+          if [ -z "$STAGING_API_URL" ]; then
+            echo "::notice::STAGING_API_URL not configured — health check skipped."
+            exit 0
+          fi
           echo "Waiting 45s for staging deployment to stabilize..."
           sleep 45
-          HEALTH_URL="${{ vars.STAGING_API_URL }}/api/v1/health/ready"
+          HEALTH_URL="${STAGING_API_URL}/api/v1/health/ready"
           echo "Checking: $HEALTH_URL"
           for attempt in 1 2 3; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" --max-time 15 || echo "000")
@@ -100,6 +107,8 @@ jobs:
             fi
             sleep 20
           done
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
 
       - name: Staging deployment summary
         run: |
