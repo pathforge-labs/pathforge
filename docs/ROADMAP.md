@@ -1015,7 +1015,7 @@
 - [x] **N-1b: Redis SSL secure-by-default** — [ADR-0002](adr/0002-redis-ssl-secure-by-default.md), PR #3 (2026-04-23). Parallel DB hardening + closes latent plaintext bug in LLM budget guard. +70 tests.
 - [ ] Send welcome email on successful email verification
 - [-] Verify Sentry captures errors with synthetic test — **elevated to Sprint 41**
-- [ ] **N-2: Coverage gate** — add `pytest --cov=app --cov-fail-under=N` to CI. Baseline **66%** measured 2026-04-23 on `main` post-PR-3 (1,291 tests). Shipping as **ratchet gate**: floor = 65% now, raise by +5% every sprint (Sprint 43: 70, Sprint 44: 75, Sprint 45: 80). Target 80% is the original aspiration; staged ramp avoids a multi-sprint test-writing blocker. Policy documented in CI step.
+- [x] **N-2: Coverage gate** — [PR #4](https://github.com/pathforge-labs/pathforge/pull/4) (2026-04-23). `pytest --cov=app --cov-fail-under=65` on CI `api-quality` step. Baseline **66%** measured on `main` post-PR-3 (1,291 tests). Shipped as **ratchet gate**: floor = 65% now, raise by +5% every sprint (Sprint 43: 70 + enable `--cov-branch`, Sprint 44: 75, Sprint 45: 80). Target 80% is the original aspiration; staged ramp avoids a multi-sprint test-writing blocker.
   - **Escape valve**: if post-Sprint-44 measurement shows <73%, the Sprint-45 floor is relaxed to 78% pending an ADR. Protects against a long-tail of hard-to-unit-test code (worker.py, LLM glue, parsers) forcing a demoralising red-CI sprint four weeks out.
 - [ ] Review error response formats for consistency
 - [ ] P2-2: Document secret rotation procedure in `docs/runbooks/secret-rotation.md`
