@@ -65,6 +65,9 @@ jobs:
     needs: wait-for-ci
     runs-on: ubuntu-latest
     environment: staging
+    # Skip entirely if the staging service secret is not yet configured.
+    # Set RAILWAY_STAGING_SERVICE_ID in repo Settings → Secrets to activate.
+    if: ${{ secrets.RAILWAY_STAGING_SERVICE_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
