@@ -131,10 +131,13 @@ test.describe("Visual Regression — Mobile", () => {
         localStorage.setItem("pathforge_refresh_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ2ci11c2VyLTAwMSIsInR5cGUiOiJyZWZyZXNoIn0.mock");
       });
 
-      // Intercept API calls
+      // Intercept API calls — match both localhost:8000 (local dev) and
+      // localhost:3000/api/* (CI builds where NEXT_PUBLIC_API_URL=localhost:3000)
       const { API_ROUTE_MAP } = await import("./fixtures/mock-api-data");
       await mobilePage.route(
-        (url) => url.origin === "http://localhost:8000",
+        (url) =>
+          url.origin === "http://localhost:8000" ||
+          (url.origin === "http://localhost:3000" && url.pathname.startsWith("/api/")),
         async (route) => {
           const pathname = new URL(route.request().url()).pathname;
           const mock = API_ROUTE_MAP[pathname];
@@ -146,8 +149,10 @@ test.describe("Visual Regression — Mobile", () => {
         },
       );
 
-      // Freeze clock
-      await mobilePage.clock.install({ time: new Date("2026-01-15T10:00:00Z") });
+      // Pin Date.now() without freezing RAF/setTimeout (same as visualPage fixture).
+      // clock.install() freezes requestAnimationFrame which breaks React's concurrent
+      // scheduler and prevents auth state updates from re-rendering.
+      await mobilePage.clock.setFixedTime(new Date("2026-01-15T10:00:00Z"));
 
       // Navigate and wait
       await navigateAndWait(mobilePage, page.path, page.contentSelector);
