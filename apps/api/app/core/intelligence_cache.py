@@ -103,7 +103,7 @@ class IntelligenceCache:
             )
             self._redis = cast(
                 aioredis.Redis,
-                aioredis.from_url(url, decode_responses=True),  # redis-ssl-exempt: url already resolved by resolve_redis_url above
+                aioredis.from_url(url, decode_responses=True),  # type: ignore[no-untyped-call]  # redis-ssl-exempt: url already resolved by resolve_redis_url above
             )
             return self._redis
         except Exception as exc:
