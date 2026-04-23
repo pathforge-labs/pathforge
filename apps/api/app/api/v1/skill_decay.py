@@ -39,6 +39,7 @@ from app.schemas.skill_decay import (
     SkillRefreshRequest,
     SkillVelocityEntryResponse,
 )
+from app.core.intelligence_cache import ic_cache
 from app.services.billing_service import BillingService
 from app.services.skill_decay_service import SkillDecayService
 
@@ -67,6 +68,11 @@ async def get_skill_decay_dashboard(
     db: AsyncSession = Depends(get_db),
 ) -> SkillDecayDashboardResponse:
     """Full Skill Decay & Growth Tracker dashboard with all components."""
+    cache_key = ic_cache.key(current_user.id, "skill_decay_dashboard")
+    cached = await ic_cache.get(cache_key)
+    if cached is not None:
+        return SkillDecayDashboardResponse.model_validate(cached)
+
     data = await SkillDecayService.get_dashboard(
         db, user_id=current_user.id,
     )
@@ -86,7 +92,7 @@ async def get_skill_decay_dashboard(
             reskilling_pathways=[],
         )
 
-    return SkillDecayDashboardResponse(
+    result = SkillDecayDashboardResponse(
         freshness=[
             _freshness_response(entry)
             for entry in data.get("freshness", [])
@@ -110,6 +116,8 @@ async def get_skill_decay_dashboard(
         ),
         last_scan_at=data.get("last_scan_at"),
     )
+    await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_SKILL_DECAY)
+    return result
 
 
 # ── Full Scan ──────────────────────────────────────────────────
@@ -152,6 +160,7 @@ async def trigger_skill_decay_scan(
         await BillingService.record_usage(db, current_user, "skill_decay")
 
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
 
     return SkillDecayScanResponse(
         status="completed",
@@ -276,6 +285,7 @@ async def refresh_skill(
             detail=f"Skill '{payload.skill_name}' not found in freshness data.",
         )
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
     return _freshness_response(entry)
 
 

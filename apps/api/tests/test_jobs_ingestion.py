@@ -222,3 +222,121 @@ class TestIngestJobsEndpoint:
             json={"keywords": "python developer"},
         )
         assert response.status_code == 401
+
+
+# ── IngestionResult.to_dict ────────────────────────────────────
+
+
+class TestIngestionResultToDict:
+    def test_to_dict_includes_all_totals(self) -> None:
+        from app.jobs.ingestion import IngestionResult, IngestionStats
+
+        result = IngestionResult(providers=[
+            IngestionStats(provider="adzuna", fetched=10, new=4, duplicates=6),
+            IngestionStats(provider="jooble", fetched=5, new=2, duplicates=3),
+        ])
+        d = result.to_dict()
+        assert d["total_fetched"] == 15
+        assert d["total_new"] == 6
+        assert d["total_duplicates"] == 9
+
+    def test_to_dict_providers_list(self) -> None:
+        from app.jobs.ingestion import IngestionResult, IngestionStats
+
+        result = IngestionResult(providers=[
+            IngestionStats(provider="adzuna", fetched=3, new=2, duplicates=1),
+        ])
+        d = result.to_dict()
+        assert len(d["providers"]) == 1
+        assert d["providers"][0]["provider"] == "adzuna"
+
+    def test_to_dict_empty_result(self) -> None:
+        from app.jobs.ingestion import IngestionResult
+
+        d = IngestionResult().to_dict()
+        assert d["total_fetched"] == 0
+        assert d["total_new"] == 0
+        assert d["total_duplicates"] == 0
+        assert d["providers"] == []
+
+
+# ── _dedupe_and_insert ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+class TestDedupeAndInsert:
+    """Direct tests for the private _dedupe_and_insert helper."""
+
+    def _make_session(self, existing_fingerprints: list[str] | None = None) -> AsyncMock:
+        """Return a mock AsyncSession that reports given fingerprints as existing."""
+        from unittest.mock import MagicMock
+
+        session = AsyncMock()
+        existing = existing_fingerprints or []
+
+        # fetchall() is synchronous on CursorResult — use MagicMock, not AsyncMock
+        fp_result = MagicMock()
+        fp_result.fetchall.return_value = [(fp,) for fp in existing]
+
+        # INSERT result
+        insert_result = MagicMock()
+
+        session.execute.side_effect = [fp_result, insert_result]
+        return session
+
+    async def test_all_new_listings_inserted(self) -> None:
+        from app.jobs.ingestion import _dedupe_and_insert
+
+        listings = [_make_raw_listing(title=f"Job {i}", company="Acme") for i in range(3)]
+        session = self._make_session(existing_fingerprints=[])
+
+        with patch("app.jobs.ingestion.pg_insert") as mock_insert:
+            mock_stmt = AsyncMock()
+            mock_insert.return_value.values.return_value.on_conflict_do_nothing.return_value = mock_stmt
+            new_count, dup_count = await _dedupe_and_insert(
+                session=session, listings=listings
+            )
+
+        assert new_count == 3
+        assert dup_count == 0
+        session.commit.assert_called_once()
+
+    async def test_all_existing_returns_zero_new(self) -> None:
+        from unittest.mock import MagicMock
+
+        from app.jobs.ingestion import _dedupe_and_insert
+        from app.jobs.dedup import compute_fingerprint
+
+        listing = _make_raw_listing(title="Dev", company="Acme", location="Amsterdam")
+        fp = compute_fingerprint(listing.title, listing.company, listing.location)
+
+        session = AsyncMock()
+        fp_result = MagicMock()
+        fp_result.fetchall.return_value = [(fp,)]
+        session.execute.return_value = fp_result
+
+        new_count, dup_count = await _dedupe_and_insert(
+            session=session, listings=[listing]
+        )
+
+        assert new_count == 0
+        assert dup_count == 1
+        session.commit.assert_not_called()
+
+    async def test_batch_internal_duplicates_counted(self) -> None:
+        from app.jobs.ingestion import _dedupe_and_insert
+
+        # Same job twice in the batch
+        listing = _make_raw_listing(title="Dev", company="Acme", location="NL")
+        session = self._make_session(existing_fingerprints=[])
+
+        with patch("app.jobs.ingestion.pg_insert") as mock_insert:
+            mock_stmt = AsyncMock()
+            mock_insert.return_value.values.return_value.on_conflict_do_nothing.return_value = mock_stmt
+            new_count, dup_count = await _dedupe_and_insert(
+                session=session, listings=[listing, listing]
+            )
+
+        # 1 unique fingerprint → 1 new, 1 batch-internal dup
+        assert new_count == 1
+        assert dup_count == 1

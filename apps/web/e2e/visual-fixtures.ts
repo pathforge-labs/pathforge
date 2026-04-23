@@ -100,8 +100,12 @@ export const test = base.extend<VisualFixtures>({
       handleApiRoute,
     );
 
-    // 4. Freeze clock to eliminate timestamp drift
-    await page.clock.install({ time: new Date("2026-01-15T10:00:00Z") });
+    // 4. Fix Date.now() to eliminate timestamp drift in rendered UI.
+    //    setFixedTime pins Date/Date.now() without replacing setTimeout or
+    //    requestAnimationFrame — those are needed by React's concurrent
+    //    scheduler. Using clock.install() would freeze rAF and break
+    //    React state updates, causing waitForSelector("h1") to time out.
+    await page.clock.setFixedTime(new Date("2026-01-15T10:00:00Z"));
 
     // 5. Pass page to test — auth + API interception active
     await use(page);

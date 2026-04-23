@@ -15,7 +15,9 @@ from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitOpenError
 from app.core.config import settings
+from app.core.redis_ssl import resolve_redis_url
 from app.jobs.providers.base import RawJobListing
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,14 @@ class JoobleProvider:
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key or settings.jooble_api_key
         self._client: httpx.AsyncClient | None = None
+        self._breaker = CircuitBreaker(
+            name="jooble",
+            redis_url=resolve_redis_url(
+                settings.redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            ),
+        )
 
     @property
     def name(self) -> str:
@@ -79,19 +89,25 @@ class JoobleProvider:
 
         client = self._get_client()
         try:
-            response = await client.post(url, json=body)
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error("Jooble API error %d: %s", e.response.status_code, str(e)[:200])
+            async with self._breaker:
+                response = await client.post(url, json=body)
+                if 400 <= response.status_code < 500:
+                    logger.error("Jooble API client error %d", response.status_code)
+                    return []
+                response.raise_for_status()  # 5xx propagates → trips breaker
+                data = response.json()
+        except CircuitOpenError as exc:
+            logger.warning("Jooble circuit open, skipping search: %s", exc)
             return []
-        except httpx.RequestError as e:
-            logger.error("Jooble request failed: %s", str(e)[:200])
+        except httpx.HTTPStatusError as exc:
+            logger.error("Jooble API server error %d: %s", exc.response.status_code, str(exc)[:200])
+            return []
+        except httpx.RequestError as exc:
+            logger.error("Jooble request failed: %s", str(exc)[:200])
             return []
 
         jobs = data.get("jobs", [])
         logger.info("Jooble returned %d results for '%s'", len(jobs), keywords)
-
         return [self._map_result(r) for r in jobs]
 
     @staticmethod

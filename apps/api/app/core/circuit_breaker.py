@@ -76,6 +76,7 @@ class CircuitBreaker:
         redis_url: str,
         failure_threshold: int = 3,
         recovery_timeout: int = 300,
+        fail_open: bool = True,
     ) -> None:
         self.name = name
         self.failure_threshold = failure_threshold
@@ -83,6 +84,7 @@ class CircuitBreaker:
         self._key_prefix = f"pathforge:circuit:{name}"
         self._redis_url = redis_url
         self._redis: aioredis.Redis | None = None
+        self._fail_open = fail_open
 
     async def _get_redis(self) -> aioredis.Redis:
         """Lazy Redis connection.
@@ -129,7 +131,16 @@ class CircuitBreaker:
 
     async def check(self) -> None:
         """Check if the circuit allows a call. Raises CircuitOpenError if not."""
-        current = await self._get_state()
+        try:
+            current = await self._get_state()
+        except Exception as exc:
+            if self._fail_open:
+                logger.warning(
+                    "Circuit '%s': Redis unavailable (%s), failing open",
+                    self.name, type(exc).__name__,
+                )
+                return
+            raise
         state = current["state"]
 
         if state == self.STATE_CLOSED:
@@ -155,14 +166,32 @@ class CircuitBreaker:
 
     async def record_success(self) -> None:
         """Record a successful call. Resets the circuit to CLOSED."""
-        current = await self._get_state()
-        if current["state"] != self.STATE_CLOSED:
-            logger.info("Circuit '%s' → CLOSED (recovered)", self.name)
-        await self._set_state(state=self.STATE_CLOSED, failures=0)
+        try:
+            current = await self._get_state()
+            if current["state"] != self.STATE_CLOSED:
+                logger.info("Circuit '%s' → CLOSED (recovered)", self.name)
+            await self._set_state(state=self.STATE_CLOSED, failures=0)
+        except Exception as exc:
+            if self._fail_open:
+                logger.warning(
+                    "Circuit '%s': Redis unavailable (%s), skipping state update",
+                    self.name, type(exc).__name__,
+                )
+                return
+            raise
 
     async def record_failure(self) -> None:
         """Record a failed call. May transition to OPEN."""
-        current = await self._get_state()
+        try:
+            current = await self._get_state()
+        except Exception as exc:
+            if self._fail_open:
+                logger.warning(
+                    "Circuit '%s': Redis unavailable (%s), skipping failure record",
+                    self.name, type(exc).__name__,
+                )
+                return
+            raise
         new_failures = current["failures"] + 1
 
         if current["state"] == self.STATE_HALF_OPEN:

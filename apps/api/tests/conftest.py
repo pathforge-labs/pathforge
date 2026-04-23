@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid as _uuid
-from collections.abc import AsyncGenerator
+import warnings
+from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -21,6 +22,8 @@ from httpx import ASGITransport, AsyncClient
 # pgvector's Vector type
 from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import event
+from sqlalchemy.orm import ORMExecuteState
+from sqlalchemy.orm import Session as _SyncSession
 from sqlalchemy.dialects.postgresql import ARRAY, JSON
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine.interfaces import Dialect
@@ -495,4 +498,38 @@ async def inactive_user(db_session: AsyncSession) -> User:
     await db_session.flush()
     await db_session.refresh(user)
     return user
+
+
+# ── P2-4: N+1 Lazy Load Detector ─────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def warn_on_lazy_load() -> Generator[None, None, None]:
+    """Emit a warning for every SQLAlchemy lazy relationship load in tests.
+
+    Detects N+1 patterns early: if a relationship is accessed without an
+    explicit selectinload() or joinedload() in the parent query, SQLAlchemy
+    will issue an additional SELECT.  This fixture surfaces those as
+    UserWarning so they appear in pytest's warning summary.
+
+    Runs automatically for every test.  To suppress for a specific test
+    that intentionally uses lazy loading, use:
+        @pytest.mark.filterwarnings("ignore:N+1 risk")
+    """
+    def _listener(orm_execute_state: ORMExecuteState) -> None:
+        if (
+            orm_execute_state.is_relationship_load
+            and orm_execute_state.lazy_loaded_from is not None
+        ):
+            cls_name = orm_execute_state.lazy_loaded_from.mapper.class_.__name__
+            warnings.warn(
+                f"N+1 risk: lazy relationship load triggered from "
+                f"{cls_name}. Add selectinload() or joinedload() to "
+                "the parent query to prevent N+1 queries.",
+                stacklevel=10,
+            )
+
+    event.listen(_SyncSession, "do_orm_execute", _listener, propagate=True)
+    yield
+    event.remove(_SyncSession, "do_orm_execute", _listener)
 

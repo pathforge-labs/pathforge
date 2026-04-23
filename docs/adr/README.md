@@ -75,3 +75,6 @@ Links to code, tests, runbooks, external docs.
 |:--|:--|:--|
 | [0001](0001-database-ssl-secure-by-default.md) | Database SSL secure-by-default with production guard | Accepted |
 | [0002](0002-redis-ssl-secure-by-default.md) | Redis SSL secure-by-default with production guard and scheme reconciliation | Accepted |
+| [0003](0003-circuit-breaker-adopted-for-external-apis.md) | Circuit breaker adopted for Adzuna, Jooble, and Voyage AI external calls | Accepted |
+| [0004](0004-intelligence-response-cache.md) | Redis-backed intelligence response cache with fail-open semantics | Accepted |
+| [0005](0005-deployment-strategy-rolling-via-railway.md) | Rolling deployment via Railway; canary/blue-green deferred until ≥500 DAU + observability live | Accepted |
