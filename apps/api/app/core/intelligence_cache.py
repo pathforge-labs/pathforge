@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 
@@ -101,7 +101,10 @@ class IntelligenceCache:
                 settings.redis_ssl_enabled,
                 settings.environment,
             )
-            self._redis = aioredis.from_url(url, decode_responses=True)  # type: ignore[no-untyped-call]
+            self._redis = cast(
+                aioredis.Redis,
+                aioredis.from_url(url, decode_responses=True),  # redis-ssl-exempt: url already resolved by resolve_redis_url above
+            )
             return self._redis
         except Exception as exc:
             logger.warning(

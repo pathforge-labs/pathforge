@@ -157,8 +157,14 @@ async def _check_budget() -> float:
     if settings.llm_monthly_budget_usd <= 0:
         return 0.0  # Budget guard disabled
 
-    r = await _get_budget_redis()
-    spent_raw = await r.get(_budget_key())
+    try:
+        r = await _get_budget_redis()
+        spent_raw = await r.get(_budget_key())
+    except Exception as exc:
+        # Redis unavailable — fail-open: allow LLM call, skip budget enforcement.
+        logger.warning("Budget check skipped (Redis unavailable): %s", type(exc).__name__)
+        return 0.0
+
     spent = float(spent_raw) if spent_raw else 0.0
 
     if spent >= settings.llm_monthly_budget_usd:

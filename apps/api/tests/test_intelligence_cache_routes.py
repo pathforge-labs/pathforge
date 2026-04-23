@@ -213,17 +213,28 @@ async def test_threat_radar_cache_miss_calls_set(
     from app.core.intelligence_cache import TTL_THREAT_RADAR
 
     mock_set = _async_noop()
+    # Service returns non-empty dict so the route reaches ic_cache.set.
+    mock_overview = AsyncMock(return_value={
+        "total_unread_alerts": 0,
+        "industry_trends": [],
+        "recent_alerts": [],
+        "snapshot": None,
+        "automation_risk": None,
+        "shield_entries": [],
+    })
 
     with (
         patch("app.api.v1.threat_radar.ic_cache.get", new=_async_none()),
         patch("app.api.v1.threat_radar.ic_cache.set", new=mock_set),
+        patch("app.api.v1.threat_radar.ThreatRadarService.get_overview", new=mock_overview),
     ):
         response = await auth_client.get("/api/v1/threat-radar")
 
     assert response.status_code == 200
     mock_set.assert_called_once()
-    _key, _data, _ttl = mock_set.call_args[0]  # positional args
-    assert _ttl == TTL_THREAT_RADAR
+    args, kwargs = mock_set.call_args
+    ttl_val = args[2] if len(args) > 2 else kwargs["ttl"]
+    assert ttl_val == TTL_THREAT_RADAR
 
 
 @pytest.mark.asyncio
@@ -243,8 +254,9 @@ async def test_salary_cache_miss_calls_set(
 
     assert response.status_code == 200
     mock_set.assert_called_once()
-    _key, _data, _ttl = mock_set.call_args[0]
-    assert _ttl == TTL_SALARY
+    args, kwargs = mock_set.call_args
+    ttl_val = args[2] if len(args) > 2 else kwargs["ttl"]
+    assert ttl_val == TTL_SALARY
 
 
 # ── Invalidation: POST scan / generate endpoints ───────────────────────────────

@@ -104,7 +104,7 @@ class TestIPRedaction:
         assert "[IP]" in result
         assert "192.168.1.1" not in result
 
-    def test_localhost_not_redacted(self) -> None:
+    def test_localhost_is_redacted(self) -> None:
         # 127.0.0.1 is a valid IP and SHOULD be redacted
         result = redact_pii("localhost 127.0.0.1")
         assert "[IP]" in result
