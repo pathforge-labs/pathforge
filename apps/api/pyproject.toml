@@ -127,3 +127,25 @@ filterwarnings = [
     "ignore::DeprecationWarning:pytest_asyncio.plugin",
     "ignore::jwt.warnings.InsecureKeyLengthWarning",
 ]
+
+# ── Coverage (Sprint 42 N-2) ──────────────────────────────────────
+# Minimal config: make industry-standard exclusions explicit.
+# Deliberately NOT adding an `omit` list — that would artificially
+# inflate the baseline. The ratchet policy (65 → 70 → 75 → 80 across
+# Sprints 42–45) is documented in .github/workflows/ci.yml and
+# docs/ROADMAP.md. Enable branch coverage + raise floor together in
+# the Sprint 43 ratchet PR.
+[tool.coverage.run]
+branch = false
+source = ["app"]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == ['\"]__main__['\"]:",
+    "@(abc\\.)?abstractmethod",
+]
