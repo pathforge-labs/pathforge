@@ -617,3 +617,105 @@ async def _call_with_retry(
 
 class LLMError(Exception):
     """Raised when LLM completion fails after all retries and fallbacks."""
+
+
+async def complete_vision(
+    *,
+    image_bytes: bytes,
+    image_mime: str,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.FAST,
+    temperature: float = 0.0,
+    max_tokens: int = 4096,
+) -> str:
+    """
+    Send an image + text prompt to a vision-capable model.
+
+    Uses the same budget guard, RPM check, and fallback chain as
+    ``complete()``. Image bytes are base64-encoded and sent as a
+    multimodal ``image_url`` message block.
+
+    Args:
+        image_bytes: Raw bytes of the image.
+        image_mime: MIME type (e.g. "image/jpeg", "image/png").
+        prompt: Text instruction accompanying the image.
+        system_prompt: Optional system-level instructions.
+        tier: Which model tier to use.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+
+    Returns:
+        The model's text response.
+
+    Raises:
+        LLMError: If all tiers fail.
+    """
+    import base64
+
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    data_url = f"data:{image_mime};base64,{b64}"
+
+    content: list[dict[str, Any]] = [
+        {
+            "type": "image_url",
+            "image_url": {"url": data_url},
+        },
+        {"type": "text", "text": prompt},
+    ]
+
+    messages: list[dict[str, Any]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": content})
+
+    await _check_budget()
+
+    tiers_to_try = [tier, *_FALLBACK_CHAIN.get(tier, [])]
+    last_error: Exception | None = None
+
+    for attempt_tier in tiers_to_try:
+        model = _resolve_model(attempt_tier)
+        try:
+            _check_rpm(attempt_tier)
+
+            start = time.monotonic()
+            response = await litellm.acompletion(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=settings.llm_timeout,
+            )
+            elapsed = time.monotonic() - start
+
+            content_text: str = response.choices[0].message.content or ""
+
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+            logger.info(
+                "LLM Vision [%s] %d prompt + %d completion tokens, %.2fs",
+                model, prompt_tokens, completion_tokens, elapsed,
+            )
+
+            get_collector().record_call(
+                model=model,
+                tier=attempt_tier.value,
+                latency_seconds=elapsed,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                success=True,
+            )
+
+            return content_text
+
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "LLM Vision tier %s failed: %s", attempt_tier.value, str(exc)[:200]
+            )
+
+    raise LLMError(
+        f"Vision LLM: all tiers exhausted. Last error: {last_error}"
+    ) from last_error

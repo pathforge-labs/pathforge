@@ -1,7 +1,7 @@
 """
 PathForge — Document Parser
 ==============================
-Secure document parsing for resume uploads (PDF, DOCX, TXT).
+Secure document parsing for resume uploads (PDF, DOCX, TXT, and images).
 
 Security features (Sprint 29):
 - File size limit: 10 MB
@@ -11,10 +11,13 @@ Security features (Sprint 29):
 - Macro-enabled DOCX rejection
 - Sandboxed parsing via asyncio.to_thread()
 
+Sprint 50: Added image support (JPEG, PNG, WebP, GIF) via OCR service.
+
 Usage:
     from app.services.document_parser import parse_document
 
     text = await parse_document(file_bytes=content, filename="resume.pdf")
+    text = await parse_document(file_bytes=content, filename="resume.jpg")
 """
 
 from __future__ import annotations
@@ -31,9 +34,15 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10 MB
 MAX_PAGES: int = 100  # Memory guard (audit H3)
 
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".txt", ".pdf", ".docx"})
+# Document formats
+_DOC_EXTENSIONS: frozenset[str] = frozenset({".txt", ".pdf", ".docx"})
 
-# MIME types validated against actual file content
+# Image formats (routed through OCR service)
+_IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
+
+SUPPORTED_EXTENSIONS: frozenset[str] = _DOC_EXTENSIONS | _IMAGE_EXTENSIONS
+
+# MIME types validated against actual file content (documents only)
 EXPECTED_MIMES: dict[str, str] = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -102,14 +111,53 @@ async def parse_document(*, file_bytes: bytes, filename: str) -> str:
     if extension in EXPECTED_MIMES:
         _verify_mime(file_bytes, extension)
 
-    # 4. Dispatch to format-specific parser (in thread)
+    # 4. Dispatch to format-specific parser
     if extension == ".txt":
         return _parse_txt(file_bytes)
+
+    if extension in _IMAGE_EXTENSIONS:
+        return await _parse_image(file_bytes, extension)
 
     return await asyncio.to_thread(_parse_in_thread, file_bytes, extension)
 
 
 # ── Internal Parsers ──────────────────────────────────────────
+
+
+async def _parse_image(file_bytes: bytes, extension: str) -> str:
+    """Extract text from an image via the OCR service (Claude Vision).
+
+    Args:
+        file_bytes: Raw image bytes.
+        extension: Lowercase file extension including dot (e.g. ".jpg").
+
+    Returns:
+        Extracted text content (may be empty for non-text images).
+
+    Raises:
+        DocumentParseError: If the image format is unsupported or OCR fails.
+    """
+    from app.services.ocr_service import (
+        ImageTextExtractionError,
+        UnsupportedImageFormatError,
+        extract_text_from_image,
+        get_image_mime,
+    )
+
+    image_mime = get_image_mime(extension)
+    if image_mime is None:
+        raise UnsupportedFormatError(
+            f"No image MIME mapping for '{extension}'"
+        )
+
+    try:
+        return await extract_text_from_image(
+            image_bytes=file_bytes, image_mime=image_mime
+        )
+    except UnsupportedImageFormatError as exc:
+        raise UnsupportedFormatError(str(exc)) from exc
+    except ImageTextExtractionError as exc:
+        raise DocumentParseError(f"OCR failed: {exc}") from exc
 
 
 def _verify_mime(file_bytes: bytes, extension: str) -> None:
