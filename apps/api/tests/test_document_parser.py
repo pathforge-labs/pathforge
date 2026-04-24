@@ -1,340 +1,477 @@
-"""
-PathForge — Document Parser Unit Tests
-=========================================
-Tests for all parsing paths, security guards, and error cases
-in app/services/document_parser.py.
+"""Tests for app.services.document_parser.
+
+Covers exception hierarchy, size/extension validation, MIME verification,
+and format-specific parsers (TXT, PDF, DOCX, image dispatch) with mocks
+for external dependencies.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.document_parser import (
     MAX_FILE_SIZE,
     MAX_PAGES,
+    SUPPORTED_EXTENSIONS,
     DocumentParseError,
     FileTooLargeError,
     MaliciousDocumentError,
     MimeMismatchError,
     UnsupportedFormatError,
     _parse_docx,
+    _parse_image,
     _parse_in_thread,
     _parse_pdf,
     _parse_txt,
     _verify_mime,
     parse_document,
 )
+from app.services.ocr_service import (
+    ImageTextExtractionError as RealImageTextExtractionError,
+)
+from app.services.ocr_service import (
+    UnsupportedImageFormatError as RealUnsupportedImageFormatError,
+)
 
-# ── Helpers ───────────────────────────────────────────────────
-
-_TXT_BYTES = b"Hello, World!\nLine two."
-_BIG_BYTES = b"x" * (MAX_FILE_SIZE + 1)
-
-# Minimal valid PDF magic bytes (%%PDF-1.4 header)
-_PDF_MAGIC = b"%PDF-1.4\n"
-# Minimal valid DOCX magic bytes (PK ZIP signature)
-_DOCX_MAGIC = b"PK\x03\x04"
+# ── Exception Hierarchy ───────────────────────────────────────
 
 
-# ── parse_document: size guard ────────────────────────────────
+def test_file_too_large_subclass_of_document_parse_error() -> None:
+    assert issubclass(FileTooLargeError, DocumentParseError)
+
+
+def test_unsupported_format_subclass_of_document_parse_error() -> None:
+    assert issubclass(UnsupportedFormatError, DocumentParseError)
+
+
+def test_mime_mismatch_subclass_of_document_parse_error() -> None:
+    assert issubclass(MimeMismatchError, DocumentParseError)
+
+
+def test_malicious_document_subclass_of_document_parse_error() -> None:
+    assert issubclass(MaliciousDocumentError, DocumentParseError)
+
+
+def test_document_parse_error_subclass_of_exception() -> None:
+    assert issubclass(DocumentParseError, Exception)
+
+
+# ── Constants ─────────────────────────────────────────────────
+
+
+def test_supported_extensions_contains_expected() -> None:
+    expected = {".txt", ".pdf", ".docx", ".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    assert expected == SUPPORTED_EXTENSIONS
+
+
+def test_max_file_size_is_10mb() -> None:
+    assert MAX_FILE_SIZE == 10 * 1024 * 1024
+
+
+def test_max_pages_is_100() -> None:
+    assert MAX_PAGES == 100
+
+
+# ── parse_document validation ─────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_parse_document_too_large() -> None:
-    with pytest.raises(FileTooLargeError, match="exceeds limit"):
-        await parse_document(file_bytes=_BIG_BYTES, filename="big.txt")
-
-
-# ── parse_document: extension guard ──────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_parse_document_unsupported_extension() -> None:
-    with pytest.raises(UnsupportedFormatError, match="Unsupported format"):
-        await parse_document(file_bytes=b"data", filename="resume.xls")
+async def test_parse_document_rejects_oversized_file() -> None:
+    oversized = b"x" * (MAX_FILE_SIZE + 1)
+    with pytest.raises(FileTooLargeError):
+        await parse_document(file_bytes=oversized, filename="big.txt")
 
 
 @pytest.mark.asyncio
-async def test_parse_document_no_extension() -> None:
+async def test_parse_document_rejects_unsupported_extension() -> None:
     with pytest.raises(UnsupportedFormatError):
-        await parse_document(file_bytes=b"data", filename="resume")
-
-
-# ── parse_document: TXT happy path ───────────────────────────
+        await parse_document(file_bytes=b"data", filename="file.exe")
 
 
 @pytest.mark.asyncio
-async def test_parse_document_txt() -> None:
-    result = await parse_document(file_bytes=_TXT_BYTES, filename="resume.txt")
-    assert "Hello, World!" in result
+async def test_parse_document_rejects_missing_extension() -> None:
+    with pytest.raises(UnsupportedFormatError):
+        await parse_document(file_bytes=b"data", filename="noextension")
 
 
 @pytest.mark.asyncio
-async def test_parse_document_txt_uppercase_extension() -> None:
-    result = await parse_document(file_bytes=_TXT_BYTES, filename="RESUME.TXT")
-    assert "Hello" in result
+async def test_parse_document_txt_success() -> None:
+    content = b"  hello world  "
+    result = await parse_document(file_bytes=content, filename="test.txt")
+    assert result == "hello world"
 
 
-# ── parse_document: PDF via mime check ───────────────────────
+# ── TXT parsing ───────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
-async def test_parse_document_pdf_happy_path() -> None:
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "Software Engineer"
-
-    mock_pdf = MagicMock()
-    mock_pdf.pages = [mock_page]
-    mock_pdf.__enter__ = MagicMock(return_value=mock_pdf)
-    mock_pdf.__exit__ = MagicMock(return_value=False)
-
-    mock_kind = MagicMock()
-    mock_kind.mime = "application/pdf"
-
-    with patch("filetype.guess", return_value=mock_kind), \
-         patch("pdfplumber.open", return_value=mock_pdf):
-        result = await parse_document(file_bytes=_PDF_MAGIC, filename="cv.pdf")
-
-    assert "Software Engineer" in result
+def test_parse_txt_utf8_decodes_and_strips() -> None:
+    assert _parse_txt(b"  hello  ") == "hello"
 
 
-@pytest.mark.asyncio
-async def test_parse_document_pdf_mime_mismatch() -> None:
-    mock_kind = MagicMock()
-    mock_kind.mime = "image/jpeg"
-
-    with patch("filetype.guess", return_value=mock_kind), \
-         pytest.raises(MimeMismatchError, match="MIME mismatch"):
-        await parse_document(file_bytes=b"jpeg_data", filename="resume.pdf")
-
-
-@pytest.mark.asyncio
-async def test_parse_document_pdf_unknown_mime() -> None:
-    with patch("filetype.guess", return_value=None), \
-         pytest.raises(MimeMismatchError, match="Cannot determine"):
-        await parse_document(file_bytes=b"garbage", filename="resume.pdf")
-
-
-# ── parse_document: DOCX via mime check ──────────────────────
-
-
-@pytest.mark.asyncio
-async def test_parse_document_docx_happy_path() -> None:
-    mock_para = MagicMock()
-    mock_para.text = "My career summary"
-
-    mock_doc = MagicMock()
-    mock_doc.paragraphs = [mock_para]
-
-    mock_kind = MagicMock()
-    mock_kind.mime = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-
-    with patch("filetype.guess", return_value=mock_kind), \
-         patch("docx.Document", return_value=mock_doc):
-        result = await parse_document(file_bytes=_DOCX_MAGIC, filename="cv.docx")
-
-    assert "My career summary" in result
-
-
-@pytest.mark.asyncio
-async def test_parse_document_docx_mime_mismatch() -> None:
-    mock_kind = MagicMock()
-    mock_kind.mime = "application/zip"
-
-    with patch("filetype.guess", return_value=mock_kind), pytest.raises(MimeMismatchError):
-        await parse_document(file_bytes=b"zip_data", filename="resume.docx")
-
-
-# ── _verify_mime ──────────────────────────────────────────────
-
-
-def test_verify_mime_missing_filetype_package() -> None:
-    import builtins
-
-    original_import = builtins.__import__
-
-    def _no_filetype(name: str, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if name == "filetype":
-            raise ImportError("no module filetype")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=_no_filetype), \
-         pytest.raises(DocumentParseError, match="filetype package not installed"):
-        _verify_mime(b"data", ".pdf")
-
-
-# ── _parse_txt ────────────────────────────────────────────────
-
-
-def test_parse_txt_utf8() -> None:
-    result = _parse_txt("Héllo Wörld".encode())
-    assert "Héllo" in result
+def test_parse_txt_utf8_unicode_content() -> None:
+    assert _parse_txt("café résumé".encode()) == "café résumé"
 
 
 def test_parse_txt_latin1_fallback() -> None:
-    result = _parse_txt(b"\xe9l\xe8ve")  # latin-1 "élève"
-    assert len(result) > 0
-
-
-def test_parse_txt_strips_whitespace() -> None:
-    result = _parse_txt(b"   hello   \n")
-    assert result == "hello"
+    # 0xff is invalid UTF-8 start byte but valid latin-1 (ÿ)
+    result = _parse_txt(b"\xffhello")
+    assert result == "ÿhello"
 
 
 def test_parse_txt_empty() -> None:
-    result = _parse_txt(b"   ")
-    assert result == ""
+    assert _parse_txt(b"") == ""
 
 
-# ── _parse_in_thread ──────────────────────────────────────────
+def test_parse_txt_only_whitespace() -> None:
+    assert _parse_txt(b"   \n\t  ") == ""
 
 
-def test_parse_in_thread_unsupported() -> None:
-    with pytest.raises(UnsupportedFormatError):
-        _parse_in_thread(b"data", ".xyz")
+# ── MIME verification ─────────────────────────────────────────
 
 
-def test_parse_in_thread_dispatches_pdf() -> None:
-    with patch(
-        "app.services.document_parser._parse_pdf", return_value="pdf text"
-    ) as mock_pdf:
-        result = _parse_in_thread(b"pdf", ".pdf")
-    assert result == "pdf text"
-    mock_pdf.assert_called_once()
+def test_verify_mime_none_raises_mismatch() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = None
+    with patch.dict("sys.modules", {"filetype": mock_filetype}), pytest.raises(MimeMismatchError):
+        _verify_mime(b"garbage", ".pdf")
 
 
-def test_parse_in_thread_dispatches_docx() -> None:
-    with patch(
-        "app.services.document_parser._parse_docx", return_value="docx text"
-    ) as mock_docx:
-        result = _parse_in_thread(b"docx", ".docx")
-    assert result == "docx text"
-    mock_docx.assert_called_once()
+def test_verify_mime_wrong_type_raises_mismatch() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(mime="image/png")
+    with patch.dict("sys.modules", {"filetype": mock_filetype}), pytest.raises(MimeMismatchError):
+        _verify_mime(b"not-a-pdf", ".pdf")
 
 
-# ── _parse_pdf ────────────────────────────────────────────────
+def test_verify_mime_correct_type_passes() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(mime="application/pdf")
+    with patch.dict("sys.modules", {"filetype": mock_filetype}):
+        # No exception should be raised
+        _verify_mime(b"%PDF-1.4", ".pdf")
 
 
-def test_parse_pdf_encrypted_raises() -> None:
-    with patch("pdfplumber.open", side_effect=Exception("Password required to decrypt")), \
-         pytest.raises(MaliciousDocumentError, match="Encrypted"):
-        _parse_pdf(b"encrypted_pdf")
+def test_verify_mime_correct_docx_mime_passes() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    with patch.dict("sys.modules", {"filetype": mock_filetype}):
+        _verify_mime(b"PK\x03\x04", ".docx")
 
 
-def test_parse_pdf_generic_open_error() -> None:
-    with patch("pdfplumber.open", side_effect=Exception("corrupt file")), \
-         pytest.raises(DocumentParseError, match="Failed to open PDF"):
-        _parse_pdf(b"bad_pdf")
+def test_verify_mime_raises_when_filetype_not_installed() -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "filetype":
+            raise ImportError("No module named 'filetype'")
+        return real_import(name, *args, **kwargs)
+
+    with patch.object(builtins, "__import__", side_effect=fake_import), pytest.raises(DocumentParseError):
+        _verify_mime(b"data", ".pdf")
 
 
-def test_parse_pdf_truncates_at_max_pages() -> None:
-    pages = [MagicMock() for _ in range(MAX_PAGES + 5)]
-    for i, p in enumerate(pages):
-        p.extract_text.return_value = f"Page {i}"
+# ── PDF parsing ───────────────────────────────────────────────
 
-    mock_pdf = MagicMock()
-    mock_pdf.pages = pages
-    mock_pdf.close = MagicMock()
-    mock_pdf.__len__ = lambda self: len(pages)
 
-    with patch("pdfplumber.open", return_value=mock_pdf):
-        _parse_pdf(b"big_pdf")
+def _make_fake_pdf(page_texts: list[str | None]) -> MagicMock:
+    """Create a mock pdfplumber PDF object with the given page texts."""
+    pages = []
+    for text in page_texts:
+        page = MagicMock()
+        page.extract_text.return_value = text
+        pages.append(page)
+    pdf = MagicMock()
+    pdf.pages = pages
+    return pdf
 
-    # Only MAX_PAGES pages should be extracted
-    assert sum(p.extract_text.call_count for p in pages[:MAX_PAGES]) == MAX_PAGES
-    for page in pages[MAX_PAGES:]:
-        page.extract_text.assert_not_called()
+
+def test_parse_pdf_happy_path_two_pages() -> None:
+    fake_pdf = _make_fake_pdf(["Page one content", "Page two content"])
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}):
+        result = _parse_pdf(b"%PDF-1.4 fake")
+    assert result == "Page one content\n\nPage two content"
 
 
 def test_parse_pdf_skips_empty_pages() -> None:
-    page1 = MagicMock()
-    page1.extract_text.return_value = "Content"
-    page2 = MagicMock()
-    page2.extract_text.return_value = None  # empty page
-
-    mock_pdf = MagicMock()
-    mock_pdf.pages = [page1, page2]
-    mock_pdf.close = MagicMock()
-
-    with patch("pdfplumber.open", return_value=mock_pdf):
-        result = _parse_pdf(b"pdf")
-
-    assert result == "Content"
+    fake_pdf = _make_fake_pdf(["Real page", None, "", "Another"])
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}):
+        result = _parse_pdf(b"%PDF-1.4")
+    assert result == "Real page\n\nAnother"
 
 
-def test_parse_pdf_missing_pdfplumber() -> None:
-    import builtins
-
-    original = builtins.__import__
-
-    def _no_pdfplumber(name: str, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if name == "pdfplumber":
-            raise ImportError("no pdfplumber")
-        return original(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=_no_pdfplumber), \
-         pytest.raises(DocumentParseError, match="pdfplumber package"):
-        _parse_pdf(b"pdf")
+def test_parse_pdf_encrypted_raises_malicious() -> None:
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.side_effect = Exception("PDF requires a password to open")
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}), pytest.raises(MaliciousDocumentError):
+        _parse_pdf(b"encrypted pdf bytes")
 
 
-def test_parse_pdf_pdf_close_called_on_success() -> None:
+def test_parse_pdf_encrypt_keyword_raises_malicious() -> None:
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.side_effect = Exception("File is encrypted")
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}), pytest.raises(MaliciousDocumentError):
+        _parse_pdf(b"encrypted bytes")
+
+
+def test_parse_pdf_corrupt_raises_document_parse_error() -> None:
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.side_effect = Exception("Malformed xref table")
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}), pytest.raises(DocumentParseError) as exc_info:
+        _parse_pdf(b"garbage pdf")
+    assert not isinstance(exc_info.value, MaliciousDocumentError)
+
+
+def test_parse_pdf_truncates_to_max_pages() -> None:
+    texts: list[str | None] = [f"Page {i}" for i in range(MAX_PAGES + 10)]
+    fake_pdf = _make_fake_pdf(texts)
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}):
+        result = _parse_pdf(b"%PDF")
+    # Last included page should be Page {MAX_PAGES - 1}
+    assert f"Page {MAX_PAGES - 1}" in result
+    assert f"Page {MAX_PAGES}" not in result
+
+
+def test_parse_pdf_close_called_even_on_extraction_failure() -> None:
+    fake_pdf = MagicMock()
     page = MagicMock()
-    page.extract_text.return_value = "text"
-
-    mock_pdf = MagicMock()
-    mock_pdf.pages = [page]
-    mock_pdf.close = MagicMock()
-
-    with patch("pdfplumber.open", return_value=mock_pdf):
-        _parse_pdf(b"pdf")
-
-    mock_pdf.close.assert_called_once()
+    page.extract_text.side_effect = RuntimeError("extraction boom")
+    fake_pdf.pages = [page]
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}), pytest.raises(RuntimeError):
+        _parse_pdf(b"%PDF")
+    fake_pdf.close.assert_called_once()
 
 
-# ── _parse_docx ───────────────────────────────────────────────
+def test_parse_pdf_close_called_on_success() -> None:
+    fake_pdf = _make_fake_pdf(["hello"])
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}):
+        _parse_pdf(b"%PDF")
+    fake_pdf.close.assert_called_once()
 
 
-def test_parse_docx_strips_empty_paragraphs() -> None:
-    para1 = MagicMock()
-    para1.text = "Real content"
-    para2 = MagicMock()
-    para2.text = "   "  # blank
-
-    mock_doc = MagicMock()
-    mock_doc.paragraphs = [para1, para2]
-
-    with patch("docx.Document", return_value=mock_doc):
-        result = _parse_docx(b"docx")
-
-    assert result == "Real content"
-
-
-def test_parse_docx_macro_raises() -> None:
-    with patch("docx.Document", side_effect=Exception("vba macros not supported")), \
-         pytest.raises(MaliciousDocumentError, match="Macro-enabled"):
-        _parse_docx(b"macro_docx")
-
-
-def test_parse_docx_generic_open_error() -> None:
-    with patch("docx.Document", side_effect=Exception("corrupted file")), \
-         pytest.raises(DocumentParseError, match="Failed to open DOCX"):
-        _parse_docx(b"bad_docx")
-
-
-def test_parse_docx_missing_python_docx() -> None:
+def test_parse_pdf_raises_when_pdfplumber_not_installed() -> None:
     import builtins
 
-    original = builtins.__import__
+    real_import = builtins.__import__
 
-    def _no_docx(name: str, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "pdfplumber":
+            raise ImportError("No module named 'pdfplumber'")
+        return real_import(name, *args, **kwargs)
+
+    with patch.object(builtins, "__import__", side_effect=fake_import), pytest.raises(DocumentParseError):
+        _parse_pdf(b"%PDF")
+
+
+# ── DOCX parsing ──────────────────────────────────────────────
+
+
+def _make_fake_docx(paragraph_texts: list[str]) -> MagicMock:
+    paragraphs = []
+    for text in paragraph_texts:
+        p = MagicMock()
+        p.text = text
+        paragraphs.append(p)
+    doc = MagicMock()
+    doc.paragraphs = paragraphs
+    return doc
+
+
+def test_parse_docx_happy_path() -> None:
+    fake_doc = _make_fake_docx(["First paragraph", "Second paragraph"])
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.return_value = fake_doc
+    with patch.dict("sys.modules", {"docx": mock_docx_module}):
+        result = _parse_docx(b"PK\x03\x04 docx")
+    assert result == "First paragraph\n\nSecond paragraph"
+
+
+def test_parse_docx_filters_empty_paragraphs() -> None:
+    fake_doc = _make_fake_docx(["Real", "   ", "", "Another"])
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.return_value = fake_doc
+    with patch.dict("sys.modules", {"docx": mock_docx_module}):
+        result = _parse_docx(b"PK")
+    assert result == "Real\n\nAnother"
+
+
+def test_parse_docx_macro_raises_malicious() -> None:
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.side_effect = Exception("Document contains macro VBA project")
+    with patch.dict("sys.modules", {"docx": mock_docx_module}), pytest.raises(MaliciousDocumentError):
+        _parse_docx(b"malicious")
+
+
+def test_parse_docx_vba_raises_malicious() -> None:
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.side_effect = Exception("VBA payload detected")
+    with patch.dict("sys.modules", {"docx": mock_docx_module}), pytest.raises(MaliciousDocumentError):
+        _parse_docx(b"malicious")
+
+
+def test_parse_docx_failed_open_raises_document_parse_error() -> None:
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.side_effect = Exception("Not a zip file")
+    with patch.dict("sys.modules", {"docx": mock_docx_module}), pytest.raises(DocumentParseError) as exc_info:
+        _parse_docx(b"garbage")
+    assert not isinstance(exc_info.value, MaliciousDocumentError)
+
+
+def test_parse_docx_raises_when_python_docx_not_installed() -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
         if name == "docx":
-            raise ImportError("no python-docx")
-        return original(name, *args, **kwargs)
+            raise ImportError("No module named 'docx'")
+        return real_import(name, *args, **kwargs)
 
-    with patch("builtins.__import__", side_effect=_no_docx), \
-         pytest.raises(DocumentParseError, match="python-docx"):
-        _parse_docx(b"docx")
+    with patch.object(builtins, "__import__", side_effect=fake_import), pytest.raises(DocumentParseError):
+        _parse_docx(b"PK")
+
+
+# ── Dispatcher ────────────────────────────────────────────────
+
+
+def test_parse_in_thread_unknown_extension() -> None:
+    with pytest.raises(UnsupportedFormatError):
+        _parse_in_thread(b"data", ".unknown")
+
+
+def test_parse_in_thread_dispatches_pdf() -> None:
+    fake_pdf = _make_fake_pdf(["dispatched"])
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"pdfplumber": mock_pdfplumber}):
+        result = _parse_in_thread(b"%PDF", ".pdf")
+    assert result == "dispatched"
+
+
+def test_parse_in_thread_dispatches_docx() -> None:
+    fake_doc = _make_fake_docx(["dispatched"])
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.return_value = fake_doc
+    with patch.dict("sys.modules", {"docx": mock_docx_module}):
+        result = _parse_in_thread(b"PK", ".docx")
+    assert result == "dispatched"
+
+
+# ── Image dispatch ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_parse_document_jpg_dispatches_to_image_parser() -> None:
+    mock_extract = AsyncMock(return_value="ocr text")
+    mock_get_mime = MagicMock(return_value="image/jpeg")
+    with (
+        patch("app.services.document_parser.extract_text_from_image", new=mock_extract),
+        patch("app.services.document_parser.get_image_mime", new=mock_get_mime),
+    ):
+        result = await parse_document(file_bytes=b"\xff\xd8\xff fake jpg", filename="photo.jpg")
+    assert result == "ocr text"
+    mock_extract.assert_awaited_once()
+    mock_get_mime.assert_called_once_with(".jpg")
+
+
+@pytest.mark.asyncio
+async def test_parse_image_maps_extension_to_mime() -> None:
+    mock_extract = AsyncMock(return_value="png text")
+    mock_get_mime = MagicMock(return_value="image/png")
+    with (
+        patch("app.services.document_parser.extract_text_from_image", new=mock_extract),
+        patch("app.services.document_parser.get_image_mime", new=mock_get_mime),
+    ):
+        result = await _parse_image(b"png bytes", ".png")
+    assert result == "png text"
+    mock_extract.assert_awaited_once_with(image_bytes=b"png bytes", image_mime="image/png")
+
+
+@pytest.mark.asyncio
+async def test_parse_image_unknown_mime_raises_unsupported() -> None:
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value=None),
+        patch("app.services.document_parser.extract_text_from_image", new=AsyncMock()),
+        pytest.raises(UnsupportedFormatError),
+    ):
+        await _parse_image(b"bytes", ".bmp")
+
+
+@pytest.mark.asyncio
+async def test_parse_image_unsupported_image_format_error_reraised() -> None:
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value="image/webp"),
+        patch(
+            "app.services.document_parser.extract_text_from_image",
+            new=AsyncMock(side_effect=RealUnsupportedImageFormatError("bad image")),
+        ),
+        pytest.raises(UnsupportedFormatError),
+    ):
+        await _parse_image(b"bytes", ".webp")
+
+
+@pytest.mark.asyncio
+async def test_parse_image_text_extraction_error_reraised_as_parse_error() -> None:
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value="image/gif"),
+        patch(
+            "app.services.document_parser.extract_text_from_image",
+            new=AsyncMock(side_effect=RealImageTextExtractionError("OCR broke")),
+        ),
+        pytest.raises(DocumentParseError) as exc_info,
+    ):
+        await _parse_image(b"bytes", ".gif")
+    assert not isinstance(exc_info.value, UnsupportedFormatError)
+
+
+# ── parse_document end-to-end flows ───────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_parse_document_pdf_with_mime_check_and_parsing() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(mime="application/pdf")
+    fake_pdf = _make_fake_pdf(["extracted pdf text"])
+    mock_pdfplumber = MagicMock()
+    mock_pdfplumber.open.return_value = fake_pdf
+    with patch.dict("sys.modules", {"filetype": mock_filetype, "pdfplumber": mock_pdfplumber}):
+        result = await parse_document(file_bytes=b"%PDF-1.4 fake", filename="resume.pdf")
+    assert result == "extracted pdf text"
+
+
+@pytest.mark.asyncio
+async def test_parse_document_docx_with_mime_check_and_parsing() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    fake_doc = _make_fake_docx(["docx content"])
+    mock_docx_module = MagicMock()
+    mock_docx_module.Document.return_value = fake_doc
+    with patch.dict("sys.modules", {"filetype": mock_filetype, "docx": mock_docx_module}):
+        result = await parse_document(file_bytes=b"PK\x03\x04", filename="resume.docx")
+    assert result == "docx content"
+
+
+@pytest.mark.asyncio
+async def test_parse_document_pdf_mime_mismatch_raises() -> None:
+    mock_filetype = MagicMock()
+    mock_filetype.guess.return_value = SimpleNamespace(mime="image/png")
+    with patch.dict("sys.modules", {"filetype": mock_filetype}), pytest.raises(MimeMismatchError):
+        await parse_document(file_bytes=b"not a pdf", filename="resume.pdf")
