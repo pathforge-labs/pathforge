@@ -222,8 +222,10 @@ def create_app() -> FastAPI:
     #   - Content-Type         (application/json uploads)
     #   - X-PathForge-Trace    (force-trace override, Sprint 30 obs)
     #   - X-Request-ID         (correlation, optional inbound echo)
-    # Response headers exposed back to browsers stay minimal — we
-    # deliberately do not expose internal correlation IDs.
+    # Response headers exposed to JS callers are intentionally narrow:
+    # only ``X-Request-ID`` is surfaced so the SPA can show the
+    # correlation ID in error toasts and forward it when filing a bug
+    # report.
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.effective_cors_origins,
