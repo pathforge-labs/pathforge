@@ -36,3 +36,6 @@ export type * from "./workflow-automation";
 
 // ── Sprint 35: Billing & Monetization ──────────────────────
 export type * from "./billing";
+
+// ── Resumes ────────────────────────────────────────────────
+export type * from "./resumes";

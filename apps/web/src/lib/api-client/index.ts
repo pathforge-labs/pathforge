@@ -39,3 +39,6 @@ export { workflowApi } from "./workflow-automation";
 
 // ── Sprint 35: Billing & Monetization ──────────────────────
 export { billingApi } from "./billing";
+
+// ── Resumes ────────────────────────────────────────────────
+export { resumesApi } from "./resumes";

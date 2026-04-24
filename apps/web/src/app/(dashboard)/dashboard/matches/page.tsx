@@ -7,20 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MatchCard } from "@/components/match-card";
 import { tailorCV } from "@/lib/api-client/ai";
-import type { MatchCandidate, TailorCVResponse } from "@/types/api/ai";
+import { useResumes } from "@/hooks/api/use-resumes";
+import { useMatches } from "@/hooks/api/use-matches";
+import type { TailorCVResponse } from "@/types/api/ai";
 
 export default function MatchesPage() {
   const router = useRouter();
-  // TODO: Connect to API — will be upgraded to useState when API is integrated
-  const matches: MatchCandidate[] = [];
-  const loading = false;
   const [error, setError] = useState<string | null>(null);
   const [tailoringId, setTailoringId] = useState<string | null>(null);
   const [tailorResult, setTailorResult] = useState<TailorCVResponse | null>(null);
 
-  // In production, resume ID would come from user state/context
-  // For now, show the empty state with guidance
-  const resumeId: string | null = null;
+  const { data: resumes, isLoading: resumesLoading, isError: resumesError } = useResumes();
+  const resumeId = resumes?.[0]?.id ?? null;
+
+  const { data: matchData, isLoading: matchesLoading, isError: matchesError } = useMatches(resumeId);
+  const matches = matchData?.matches ?? [];
+  const loading = resumesLoading || matchesLoading;
+  const fetchError = resumesError || matchesError;
 
   const handleTailorCV = useCallback(async (jobId: string) => {
     if (!resumeId) return;
@@ -52,7 +55,14 @@ export default function MatchesPage() {
         )}
       </div>
 
-      {/* Error */}
+      {/* Fetch Error */}
+      {fetchError && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+          Failed to load matches. Please refresh the page.
+        </div>
+      )}
+
+      {/* Tailor Error */}
       {error && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-500">
           {error}
