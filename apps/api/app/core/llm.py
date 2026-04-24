@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import base64
 import collections
 import enum
 import json
@@ -651,12 +652,10 @@ async def complete_vision(
     Raises:
         LLMError: If all tiers fail.
     """
-    import base64
-
     b64 = base64.b64encode(image_bytes).decode("ascii")
     data_url = f"data:{image_mime};base64,{b64}"
 
-    content: list[dict[str, Any]] = [
+    content: list[dict[str, Any]] = [  # Multimodal content blocks (Any required for LiteLLM)
         {
             "type": "image_url",
             "image_url": {"url": data_url},
@@ -664,7 +663,7 @@ async def complete_vision(
         {"type": "text", "text": prompt},
     ]
 
-    messages: list[dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []  # Standard LiteLLM message format
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": content})
@@ -689,7 +688,7 @@ async def complete_vision(
             )
             elapsed = time.monotonic() - start
 
-            content_text: str = response.choices[0].message.content or ""
+            content_text: str = response.choices[0].message.content or "" if response.choices else ""
 
             usage = getattr(response, "usage", None)
             prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0

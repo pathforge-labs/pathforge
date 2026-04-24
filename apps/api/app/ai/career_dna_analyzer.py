@@ -90,10 +90,10 @@ class CareerDNAAnalyzer:
                 data_sources=["experience_text", "skills_list"],
             )
             skills: list[dict[str, Any]] = data.get("hidden_skills", [])
-            # Cap confidence at 0.9 for inferred skills
+            # Cap confidence at 0.85 per AI safety standards (MAX_CONFIDENCE)
             for skill in skills:
-                if skill.get("confidence", 0) > 0.9:
-                    skill["confidence"] = 0.9
+                if skill.get("confidence", 0) > 0.85:
+                    skill["confidence"] = 0.85
             logger.info(
                 "Hidden skills discovered: %d skills (%dms, confidence=%.2f)",
                 len(skills),
