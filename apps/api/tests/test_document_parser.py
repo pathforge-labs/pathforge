@@ -409,7 +409,9 @@ async def test_parse_image_unknown_mime_raises_unsupported() -> None:
 
 @pytest.mark.asyncio
 async def test_parse_image_unsupported_image_format_error_reraised() -> None:
-    from app.services.ocr_service import UnsupportedImageFormatError as RealUnsupportedImageFormatError
+    from app.services.ocr_service import (
+        UnsupportedImageFormatError as RealUnsupportedImageFormatError,
+    )
 
     with (
         patch("app.services.document_parser.get_image_mime", return_value="image/webp"),
