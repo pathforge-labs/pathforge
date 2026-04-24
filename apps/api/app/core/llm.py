@@ -673,47 +673,87 @@ async def complete_vision(
     tiers_to_try = [tier, *_FALLBACK_CHAIN.get(tier, [])]
     last_error: Exception | None = None
 
+    max_retries = settings.llm_max_retries
+
     for attempt_tier in tiers_to_try:
         model = _resolve_model(attempt_tier)
-        try:
-            _check_rpm(attempt_tier)
 
+        for attempt in range(max_retries + 1):
             start = time.monotonic()
-            response = await litellm.acompletion(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=settings.llm_timeout,
-            )
-            elapsed = time.monotonic() - start
+            try:
+                _check_rpm(attempt_tier)
 
-            content_text: str = response.choices[0].message.content or "" if response.choices else ""
+                response = await litellm.acompletion(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=settings.llm_timeout,
+                )
+                elapsed = time.monotonic() - start
 
-            usage = getattr(response, "usage", None)
-            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
-            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-            logger.info(
-                "LLM Vision [%s] %d prompt + %d completion tokens, %.2fs",
-                model, prompt_tokens, completion_tokens, elapsed,
-            )
+                content_text: str = (response.choices[0].message.content or "") if response.choices else ""
 
-            get_collector().record_call(
-                model=model,
-                tier=attempt_tier.value,
-                latency_seconds=elapsed,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                success=True,
-            )
+                usage = getattr(response, "usage", None)
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+                logger.info(
+                    "LLM Vision [%s] %d prompt + %d completion tokens, %.2fs",
+                    model, prompt_tokens, completion_tokens, elapsed,
+                )
 
-            return content_text
+                get_collector().record_call(
+                    model=model,
+                    tier=attempt_tier.value,
+                    latency_seconds=elapsed,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    success=True,
+                )
 
-        except Exception as exc:
-            last_error = exc
-            logger.warning(
-                "LLM Vision tier %s failed: %s", attempt_tier.value, str(exc)[:200]
-            )
+                # Record cost in Redis (audit C3)
+                vision_cost = getattr(
+                    getattr(response, "_hidden_params", None),
+                    "response_cost", 0.0
+                )
+                if not vision_cost:
+                    vision_cost = getattr(response, "_response_cost", 0.0) or 0.0
+                if vision_cost > 0:
+                    try:
+                        await _record_cost(vision_cost)
+                    except Exception:
+                        logger.warning("Failed to record vision LLM cost in Redis")
+
+                return content_text
+
+            except Exception as exc:
+                elapsed = time.monotonic() - start
+                last_error = exc
+
+                get_collector().record_call(
+                    model=model,
+                    tier=attempt_tier.value,
+                    latency_seconds=elapsed,
+                    success=False,
+                    error_type=type(exc).__name__,
+                )
+
+                if attempt < max_retries:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "LLM Vision retry %d/%d for %s after error: %s (wait %ds)",
+                        attempt + 1,
+                        max_retries,
+                        model,
+                        str(exc)[:100],
+                        wait,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    logger.warning(
+                        "LLM Vision tier %s exhausted retries: %s",
+                        attempt_tier.value, str(exc)[:200],
+                    )
 
     raise LLMError(
         f"Vision LLM: all tiers exhausted. Last error: {last_error}"
