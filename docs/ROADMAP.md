@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-03-20 | **Current Phase**: K (Production Launch) — Sprint 41 remediation complete ✅, Sprint 40 operational setup next
+> **Last Updated**: 2026-04-24 | **Current Phase**: K (Production Launch) — Sprint 47 complete ✅ (80.1% coverage, VR baselines, CI green). Sprint 48: A11y fixes + Growth Foundation
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -891,7 +891,7 @@
 
 ---
 
-### Sprint 40 — Stripe & LLM Operational Setup (⏳ Upcoming)
+### Sprint 40 — Stripe & LLM Operational Setup (📋 Awaiting Manual Steps)
 
 > Sprint 40: Configure external services for payments and AI features. Primarily manual/browser work with env var configuration. LLM keys enable Career DNA, Threat Radar, Salary Intelligence, and all AI-powered features.
 
@@ -929,7 +929,7 @@
 
 ---
 
-### Sprint 41 — Production Readiness Remediation (📋 In Progress)
+### Sprint 41 — Production Readiness Remediation (📋 Awaiting Manual Steps)
 
 > Sprint 41: Production environment secure and stable. **Code remediation complete** (refresh rotation, logout revocation, token separation, account deletion tests, production checklist). Remaining items are manual operational setup (Redis, SSL, Sentry, uptime).
 
@@ -1007,7 +1007,7 @@
 
 ---
 
-### Sprint 42 — Polish & Post-Launch Hardening (⏳ Upcoming)
+### Sprint 42 — Polish & Post-Launch Hardening (✅ Complete)
 
 > Sprint 42: Post-launch hardening. Token rotation and Sentry verification elevated to Sprint 41 by Tier-1 audit. Remaining items: coverage, secret rotation docs, circuit breaker fallback, N+1 analysis.
 
@@ -1019,7 +1019,7 @@
   - **Escape valve**: if post-Sprint-44 measurement shows <73%, the Sprint-45 floor is relaxed to 78% pending an ADR. Protects against a long-tail of hard-to-unit-test code (worker.py, LLM glue, parsers) forcing a demoralising red-CI sprint four weeks out.
 - [x] **Review error response formats for consistency** — 2026-04-23. Audit across 33 route files: all detail fields are strings ✅, all raw-dict returns eliminated ✅. Fixed 7 numeric status codes (`404`, `409`) in `applications.py`, `analytics.py`, `blacklist.py` → named `status.HTTP_*` constants. Also fixed semantic error: `analytics.py` was returning 404 for `ValueError` (→ corrected to 400).
 - [x] **P2-2: Secret rotation runbook** — `docs/runbooks/secret-rotation.md` (11 secrets covered with rotation cadence, blast-radius, step-by-step procedures, incident-driven path, and post-rotation verification checklist).
-- [ ] ~~P2-3: Circuit breaker in-memory fallback when Redis is down~~ — **scope under review**. `app/core/circuit_breaker.py` (209 LOC) has **zero callers** in `app/` after a full audit; adding fallback to unused infrastructure is premature. Pending decision in Sprint 43 — three options on the table: **(a) adopt** (wire it up for external-service calls — Adzuna, Jooble, Voyage — then add the fallback), **(b) park-with-trigger** (keep dormant, document the trigger condition e.g. "adopt when the next outbound third-party integration lands" so the 209 LOC isn't lost), or **(c) delete** (YAGNI, remove the module and re-add when needed). Will be resolved as a dedicated ADR in Sprint 43 planning.
+- [x] **P2-3: Circuit breaker adopt decision** — [ADR-0003](adr/0003-circuit-breaker-adopted-for-external-apis.md) — ADOPT. Wired into Adzuna, Jooble (`jobs/providers/`), and Voyage AI (`ai/embeddings.py`) with `fail_open=True`. In-memory fallback deferred; `app/core/circuit_breaker.py` now has callers.
 - [x] **P2-4: N+1 query analysis** — 2026-04-23. Static audit complete: all 34 service files use `selectinload()` or `joinedload()` for every accessed relationship (`career_dna_service`, `career_action_planner_service`, `application_service` audited — all clean). `warn_on_lazy_load` autouse fixture live in conftest.py (raises `UserWarning` on any lazy relationship load during tests). Async SQLAlchemy raises `MissingGreenlet` on unguarded lazy loads in production, so N+1 patterns are caught at test time. Endpoint profiling deferred to N-6 (needs live auth token + Redis).
 - [x] **P2-8: CVE ignore justifications** — `SECURITY.md` §"Ignored CVEs" register with rationale, dev/prod scope, and per-entry re-evaluation date. `package.json` `auditConfig` gains a `__justifications` pointer key. Policy documented: every addition to `ignoreCves` must have a matching row in SECURITY.md in the same PR.
 
@@ -1027,7 +1027,7 @@
 
 ---
 
-### Sprint 43 — Stripe Live Mode Cutover (⏳ Upcoming)
+### Sprint 43 — Stripe Live Mode Cutover (📋 Awaiting Manual Steps)
 
 > Sprint 43: Switch from Stripe test mode to live mode. Real money flows.
 
@@ -1045,7 +1045,7 @@
 
 ---
 
-### Sprint 44 — Post-Launch Polish & Monitoring (⏳ Upcoming)
+### Sprint 44 — Post-Launch Polish & Monitoring (✅ Complete — code automation done, manual steps pending)
 
 > Sprint 44: Post-launch stability, VR baselines, mobile planning. **Note**: Uptime monitoring and security scan blocking elevated to Sprint 41 by Tier-1 audit.
 
@@ -1099,6 +1099,21 @@
   - **Web — Lint & Build**: Bumped `next` 16.1.7 → 16.2.3 (CVE patch); added 6 pnpm overrides to close 25 transitive CVEs (node-forge, @xmldom/xmldom, brace-expansion, serialize-javascript, uuid, picomatch 2.x/3.x); added CVE-2026-33671 + CVE-2026-33672 to `auditConfig.ignoreCves` (picomatch@4.0.3 exact-pinned by expo/cli — unfixable via overrides; dev-toolchain only). Justifications in `SECURITY.md §'Ignored CVEs'`.
 
 > **Sprint 44 Verification Gates**: VR baselines committed · CI VR job passes · Langfuse traces visible · Webhook alerts configured
+
+---
+
+### Sprint 48 — A11y Compliance & ROADMAP Hygiene (✅ Complete — 2026-04-24)
+
+> Sprint 48: Fix WCAG 2.1 AA color-contrast violations found by axe-core in performance-baseline CI tests. Update stale sprint headers and velocity table. All fixes are backward-compatible.
+
+- [x] **A11y-1: `bg-green-600` badge contrast fix** — 2026-04-24. Dashboard `/dashboard` System Status badge: `bg-green-600` (3.06:1 with white text, fails AA) → `bg-green-700` (5.05:1). Both light + dark modes now pass WCAG AA 4.5:1 threshold.
+- [x] **A11y-2: Pricing badge gradient darkened** — 2026-04-24. `pricing-card__badge` gradient endpoint changed `oklch(0.6 0.15 195)` → `oklch(0.50 0.18 195)` so both stops have uniform L=0.50, yielding ≥5.7:1 contrast with near-white text on both gradient ends (was failing at the cyan end, ~3.7:1).
+- [x] **A11y-3: Gradient text `color` fallback** — 2026-04-24. `pricing-card--highlighted .pricing-card__amount` and `pricing-card__scans--unlimited` both had `-webkit-text-fill-color: transparent` without a `color` fallback axe-core could evaluate. Added `color: oklch(0.45 0.2 270)` (light mode, 7.4:1) and `color: oklch(0.72 0.2 270)` (dark mode, 6.5:1) as accessible fallbacks.
+- [x] **ROADMAP-1: Sprint header statuses updated** — 2026-04-24. Sprints 40/41/43 → "📋 Awaiting Manual Steps", Sprints 42/44 → "✅ Complete". P2-3 circuit breaker item marked `[x]`.
+- [x] **ROADMAP-2: Sprint velocity table** — 2026-04-24. Added rows for Sprints 40–48.
+- [x] **ROADMAP-3: Document header** — 2026-04-24. Updated "Last Updated" to 2026-04-24, current phase status to Sprint 48.
+
+> **Sprint 48 Verification Gates**: `pnpm lint` 0 errors · `pnpm tsc` 0 errors · 249 frontend tests pass · Performance-baseline axe violations = 0 · **🔧 MANUAL**: Run "Update Visual Regression Baselines" workflow to regenerate 3 affected screenshots (dashboard-light, pricing-light, pricing-dark)
 
 ---
 
@@ -1203,3 +1218,12 @@
 | 39-HN  | 7 (handoff)   | 7           | 1            | 1        |
 | Pre-40 | 4 (handoff)   | 4           | 0            | 2        |
 | Pre-40s2 | 8 (E2E)     | 6 (+2 WIP) | 1            | 1        |
+| 40       | manual      | —          | 0            | 0        |
+| 41       | manual      | —          | 2 (code)     | 1        |
+| 42       | 5           | 5          | 1            | 1        |
+| 43       | manual+2    | 2 code     | 2            | 1        |
+| 44       | 6           | 6          | 3            | 1        |
+| 45       | N-2 ratchet | 372 tests  | 2 (CI fix)   | 2        |
+| 46       | N-2 ratchet | 113 tests  | 0            | 1        |
+| 47       | N-2 ratchet | 97 tests   | 1 (VR fix)   | 1        |
+| 48       | 4           | —          | 0            | —        |

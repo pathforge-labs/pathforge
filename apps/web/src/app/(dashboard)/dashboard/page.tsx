@@ -194,7 +194,7 @@ export default function DashboardPage() {
         <CardContent>
           {apiHealth ? (
             <div className="flex items-center gap-3">
-              <Badge variant="default" className="bg-green-600">
+              <Badge variant="default" className="bg-green-700">
                 ● Connected
               </Badge>
               <span className="text-sm text-muted-foreground">

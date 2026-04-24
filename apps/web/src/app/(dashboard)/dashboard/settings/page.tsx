@@ -230,7 +230,7 @@ export default function DashboardSettingsPage() {
               <ProfileField label="GitHub" value={profile.data?.github_url} isLink />
               <ProfileField label="Website" value={profile.data?.website_url} isLink />
               {saveSuccess && (
-                <Badge variant="default" className="bg-green-600 text-xs">
+                <Badge variant="default" className="bg-green-700 text-xs">
                   ✓ Profile saved
                 </Badge>
               )}
