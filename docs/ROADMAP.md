@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-04-24 | **Current Phase**: K (Production Launch) — Sprint 51 complete ✅ (coverage ratchet 80%→85%+, 3353 tests passing, ruff/mypy clean)
+> **Last Updated**: 2026-04-24 | **Current Phase**: K (Production Launch) — Sprint 52 complete ✅ (coverage ratchet 85%→90.9%, 3763 tests passing, ruff/mypy clean)
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -1170,6 +1170,24 @@
 
 ---
 
+### Sprint 52 — N-1 Coverage Ratchet: 85% → 90%+ on 12 Modules (✅ Complete — 2026-04-24)
+
+> Sprint 52: Systematic coverage push targeting the highest-impact under-covered modules. +410 new tests (3353→3763 passing). Achieved **90.9% overall coverage** (14321/15762 statements). Target was 90%.
+
+- [x] **COV-1: `test_llm_core.py`** — 2026-04-24. 55 tests. LLMTier, budget/RPM guards, complete(), complete_json(), complete_json_with_transparency(), complete_vision(). Was 43.8%.
+- [x] **COV-2: `test_application_service.py`** — 2026-04-24. 34 tests. Error classes, blacklist/rate limit guards, CRUD operations. Was 53.0%.
+- [x] **COV-3: `test_career_action_planner_helpers.py`** — 2026-04-24. 43 tests. aggregate_intelligence, compute_stats, compute_priority_score, compare_plans. Was 45.9%.
+- [x] **COV-4: `test_push_service.py`** — 2026-04-24. 56 tests. mask_token, quiet hours (overnight wrap), daily rate limits, HTTP client lifecycle, dispatch pipeline, register/deregister token. Was 52.2%.
+- [x] **COV-5: `test_auth_routes.py`** — 2026-04-24. 65 tests. All 8 auth endpoints: register, login, refresh (replay detection), logout, forgot/reset password, email verification. Was 57.0%.
+- [x] **COV-6: `test_billing_service_extended.py`** — 2026-04-24. 74 tests. Webhook handlers, state machine transitions, Stripe mocks, checkout/portal, usage tracking. Was 57.6%.
+- [x] **COV-7: `test_users_waitlist_extended.py`** — 2026-04-24. 20 tests. delete_account (GDPR/token blacklist), waitlist position check, admin auth guards.
+- [x] **COV-8: `test_admin_routes_extended.py`** — 2026-04-24. 31 tests. require_admin dependency, 401/403 guards for all 7 endpoints, happy paths with mocked services.
+- [x] **COV-9: `test_user_profile_service_extended.py`** — 2026-04-24. 47 tests. Profile CRUD, onboarding status, GDPR export pipeline (build/process), rate limiting. Was 31.0%.
+
+> **Sprint 52 Verification Gates**: `pytest` 3763/3763 passing · `ruff check` 0 errors on all 9 new test files · **90.9% total coverage** (14321/15762 statements)
+
+---
+
 ## Ad-Hoc Work Log
 
 > Unplanned tasks that emerged during development. These are logged here and attributed to the sprint during which they occurred.
@@ -1283,3 +1301,4 @@
 | 49       | N-3 ratchet | 195 tests  | 0            | 2        |
 | 50       | 7           | 7          | 0            | 1        |
 | 51       | N-2 ratchet | 511 tests  | 0            | 1        |
+| 52       | N-1 ratchet | 410 tests  | 0            | 1        |

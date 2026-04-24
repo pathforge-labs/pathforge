@@ -7,6 +7,7 @@ Mocks ``app.core.llm.litellm.acompletion`` to avoid real API calls.
 
 from __future__ import annotations
 
+import base64
 import collections
 import json
 import time
@@ -27,6 +28,7 @@ from app.core.llm import (
     complete,
     complete_json,
     complete_json_with_transparency,
+    complete_vision,
     complete_with_transparency,
 )
 
@@ -550,6 +552,172 @@ async def test_complete_json_with_transparency_uses_json_response_format():
 
     assert mock.call_args.kwargs["response_format"] == {"type": "json_object"}
 
+
+# ── complete_vision ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_happy_path():
+    fake_response = _make_response("I see a cat")
+    image_bytes = b"\x89PNG\r\n\x1a\nfakepngdata"
+
+    with patch(
+        "app.core.llm.litellm.acompletion",
+        new=AsyncMock(return_value=fake_response),
+    ):
+        result = await complete_vision(
+            image_bytes=image_bytes,
+            image_mime="image/png",
+            prompt="What's in this image?",
+        )
+
+    assert result == "I see a cat"
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_uses_multimodal_message_format():
+    fake_response = _make_response("ok")
+    mock = AsyncMock(return_value=fake_response)
+    image_bytes = b"fakejpegbytes"
+    expected_b64 = base64.b64encode(image_bytes).decode("ascii")
+
+    with patch("app.core.llm.litellm.acompletion", new=mock):
+        await complete_vision(
+            image_bytes=image_bytes,
+            image_mime="image/jpeg",
+            prompt="describe",
+        )
+
+    messages = mock.call_args.kwargs["messages"]
+    # Single user message — no system prompt provided
+    assert len(messages) == 1
+    user_msg = messages[0]
+    assert user_msg["role"] == "user"
+    content = user_msg["content"]
+    assert isinstance(content, list)
+    assert content[0]["type"] == "image_url"
+    assert content[0]["image_url"]["url"] == (
+        f"data:image/jpeg;base64,{expected_b64}"
+    )
+    assert content[1] == {"type": "text", "text": "describe"}
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_includes_system_prompt_when_provided():
+    fake_response = _make_response("ok")
+    mock = AsyncMock(return_value=fake_response)
+
+    with patch("app.core.llm.litellm.acompletion", new=mock):
+        await complete_vision(
+            image_bytes=b"x",
+            image_mime="image/png",
+            prompt="describe",
+            system_prompt="You are a vision model",
+        )
+
+    messages = mock.call_args.kwargs["messages"]
+    assert len(messages) == 2
+    assert messages[0] == {
+        "role": "system",
+        "content": "You are a vision model",
+    }
+    assert messages[1]["role"] == "user"
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_uses_fast_tier_by_default():
+    fake_response = _make_response("ok")
+    mock = AsyncMock(return_value=fake_response)
+
+    with patch("app.core.llm.litellm.acompletion", new=mock):
+        await complete_vision(
+            image_bytes=b"x",
+            image_mime="image/png",
+            prompt="p",
+        )
+
+    assert mock.call_args.kwargs["model"] == llm_module.settings.llm_fast_model
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_all_tiers_fail_raises_llm_error():
+    mock = AsyncMock(side_effect=RuntimeError("vision down"))
+
+    with (
+        patch("app.core.llm.litellm.acompletion", new=mock),
+        pytest.raises(LLMError, match="Vision LLM"),
+    ):
+        await complete_vision(
+            image_bytes=b"x",
+            image_mime="image/png",
+            prompt="p",
+            tier=LLMTier.FAST,
+        )
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_fallback_chain_recovers():
+    """DEEP tier fails → PRIMARY succeeds on fallback."""
+    call_count = {"n": 0}
+
+    async def _flaky(*args: Any, **kwargs: Any) -> SimpleNamespace:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("deep is down")
+        return _make_response("vision fallback ok")
+
+    with patch("app.core.llm.litellm.acompletion", new=_flaky):
+        result = await complete_vision(
+            image_bytes=b"x",
+            image_mime="image/png",
+            prompt="p",
+            tier=LLMTier.DEEP,
+        )
+
+    assert result == "vision fallback ok"
+    assert call_count["n"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_respects_budget_guard(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        llm_module.settings, "llm_monthly_budget_usd", 10.0, raising=False
+    )
+
+    mock_redis = AsyncMock()
+    mock_redis.get = AsyncMock(return_value="99.0")
+
+    async def _fake_redis():
+        return mock_redis
+
+    monkeypatch.setattr(llm_module, "_get_budget_redis", _fake_redis)
+
+    with pytest.raises(BudgetExceededError):
+        await complete_vision(
+            image_bytes=b"x",
+            image_mime="image/png",
+            prompt="p",
+        )
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_base64_encodes_bytes_correctly():
+    """Verify the image bytes are base64-encoded — not raw — in the data URL."""
+    fake_response = _make_response("ok")
+    mock = AsyncMock(return_value=fake_response)
+    raw = b"\x00\x01\x02\xff\xfe"
+
+    with patch("app.core.llm.litellm.acompletion", new=mock):
+        await complete_vision(
+            image_bytes=raw, image_mime="image/png", prompt="p"
+        )
+
+    url = mock.call_args.kwargs["messages"][0]["content"][0]["image_url"]["url"]
+    # Decode the data URL payload and verify it matches
+    payload = url.split(",", 1)[1]
+    assert base64.b64decode(payload) == raw
 
 
 # ── JSON decoding edge cases ──────────────────────────────────────────────────
