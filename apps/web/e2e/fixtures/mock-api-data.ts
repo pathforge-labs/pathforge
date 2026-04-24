@@ -349,6 +349,7 @@ export const API_ROUTE_MAP: Record<string, unknown> = {
 
   // Onboarding
   "/api/v1/users/onboarding-status": MOCK_ONBOARDING_STATUS,
+  "/api/v1/user-profile/onboarding": MOCK_ONBOARDING_STATUS,
 
   // Billing (Sprint 37 WS-2)
   "/api/v1/billing/features": MOCK_BILLING_FEATURES,

@@ -272,7 +272,7 @@ class CareerDNAAnalyzer:
             )
             # Cap confidence
             confidence = data.get("confidence", 0.5)
-            data["confidence"] = max(0.0, min(1.0, float(confidence)))
+            data["confidence"] = max(0.0, min(0.85, float(confidence)))
             logger.info(
                 "Values profile extracted (%dms, confidence=%.2f)",
                 record.latency_ms,
