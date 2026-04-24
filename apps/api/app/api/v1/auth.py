@@ -380,7 +380,13 @@ async def reset_password(
     result = await db.execute(update_stmt)
     await db.flush()
 
-    if result.rowcount == 0:
+    # mypy's stub for ``AsyncSession.execute`` returns ``Result[Any]``
+    # which doesn't declare ``rowcount``, but SQLAlchemy 2.x
+    # guarantees the attribute on the ``CursorResult`` returned by
+    # DML statements. Ignoring the attr-defined lint here is the
+    # idiomatic escape hatch; the runtime contract is documented at
+    # https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.CursorResult.rowcount
+    if result.rowcount == 0:  # type: ignore[attr-defined]
         # Another request (legitimate second click, or a racing
         # attacker) already consumed this token. Surface a distinct
         # message so the UI can point the user at /forgot-password
