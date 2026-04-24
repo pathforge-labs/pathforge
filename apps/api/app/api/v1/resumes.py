@@ -25,6 +25,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.services.document_parser import (
     SUPPORTED_EXTENSIONS,
+    SUPPORTED_IMAGE_EXTENSIONS,
     DocumentParseError,
     FileTooLargeError,
     UnsupportedFormatError,
@@ -37,7 +38,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/resumes", tags=["Resumes"])
 
 RESUME_TITLE_MAX_LENGTH = 255
-_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 # ── Response Schemas ──────────────────────────────────────────
@@ -87,7 +87,7 @@ async def _extract_structured(raw_text: str, user_id: Any) -> dict[str, Any] | N
         parsed = await parser.parse(raw_text)
         return parsed if isinstance(parsed, dict) else parsed.model_dump()
     except Exception:
-        logger.warning(
+        logger.exception(
             "LLM resume parsing failed for user %s — saving raw text only", user_id,
         )
         return None
@@ -134,7 +134,7 @@ async def upload_resume(
         )
 
     file_bytes = await file.read()
-    is_image = extension in _IMAGE_EXTENSIONS
+    is_image = extension in SUPPORTED_IMAGE_EXTENSIONS
 
     try:
         raw_text = await _parse_and_sanitize(file_bytes, file.filename)

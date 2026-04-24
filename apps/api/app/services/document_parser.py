@@ -45,9 +45,9 @@ MAX_PAGES: int = 100  # Memory guard (audit H3)
 _DOC_EXTENSIONS: frozenset[str] = frozenset({".txt", ".pdf", ".docx"})
 
 # Image formats (routed through OCR service)
-_IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
+SUPPORTED_IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 
-SUPPORTED_EXTENSIONS: frozenset[str] = _DOC_EXTENSIONS | _IMAGE_EXTENSIONS
+SUPPORTED_EXTENSIONS: frozenset[str] = _DOC_EXTENSIONS | SUPPORTED_IMAGE_EXTENSIONS
 
 # MIME types validated against actual file content (documents only)
 EXPECTED_MIMES: dict[str, str] = {
@@ -122,7 +122,7 @@ async def parse_document(*, file_bytes: bytes, filename: str) -> str:
     if extension == ".txt":
         return _parse_txt(file_bytes)
 
-    if extension in _IMAGE_EXTENSIONS:
+    if extension in SUPPORTED_IMAGE_EXTENSIONS:
         return await _parse_image(file_bytes, extension)
 
     return await asyncio.to_thread(_parse_in_thread, file_bytes, extension)
