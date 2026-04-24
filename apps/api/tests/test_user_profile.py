@@ -242,6 +242,8 @@ class TestSchemaValidation:
 
 # ── Service-Layer Tests (async, DB-backed) ────────────────────
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -407,6 +409,9 @@ class TestExportPipeline:
         assert manifest["categories"]["profile"] == 1
 
 
+_MOCK_BG = "app.services.user_profile_service._process_export_background"
+
+
 class TestExportRateLimiting:
     """Test UserProfileService.request_export rate limiting."""
 
@@ -416,15 +421,16 @@ class TestExportRateLimiting:
     ) -> None:
         """Second export within 24h → rate_limited status."""
         user_id = uuid.uuid4()
-        # First export
-        first_result = await UserProfileService.request_export(
-            db_session, user_id=user_id,
-        )
-        assert first_result.get("status") != "rate_limited"
-        # Second export (should be rate limited)
-        second_result = await UserProfileService.request_export(
-            db_session, user_id=user_id,
-        )
+        with patch(_MOCK_BG, new=AsyncMock()):
+            # First export
+            first_result = await UserProfileService.request_export(
+                db_session, user_id=user_id,
+            )
+            assert first_result.get("status") != "rate_limited"
+            # Second export (should be rate limited)
+            second_result = await UserProfileService.request_export(
+                db_session, user_id=user_id,
+            )
         assert second_result["status"] == "rate_limited"
 
     @pytest.mark.asyncio
@@ -433,9 +439,10 @@ class TestExportRateLimiting:
     ) -> None:
         """No recent export → proceeds normally."""
         user_id = uuid.uuid4()
-        result = await UserProfileService.request_export(
-            db_session, user_id=user_id,
-        )
+        with patch(_MOCK_BG, new=AsyncMock()):
+            result = await UserProfileService.request_export(
+                db_session, user_id=user_id,
+            )
         # First request should always succeed (may return processing or completed)
         assert result.get("status") in {"processing", "completed"}
         assert "export_id" in result
