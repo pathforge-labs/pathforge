@@ -25,7 +25,6 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.services.document_parser import (
     SUPPORTED_EXTENSIONS,
-    SUPPORTED_IMAGE_EXTENSIONS,
     DocumentParseError,
     FileTooLargeError,
     UnsupportedFormatError,
@@ -38,6 +37,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/resumes", tags=["Resumes"])
 
 RESUME_TITLE_MAX_LENGTH = 255
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 # ── Response Schemas ──────────────────────────────────────────
@@ -81,7 +81,10 @@ async def _parse_and_sanitize(file_bytes: bytes, filename: str) -> str:
 
 
 async def _extract_structured(raw_text: str, user_id: Any) -> dict[str, Any] | None:
-    """Run LLM structure extraction; return None on failure (graceful degradation)."""
+    """Run LLM structure extraction; return None on failure (graceful degradation).
+
+    ParsedResume schema has no confidence fields, so no confidence capping is needed.
+    """
     try:
         parser = ResumeParser()
         parsed = await parser.parse(raw_text)
@@ -91,6 +94,47 @@ async def _extract_structured(raw_text: str, user_id: Any) -> dict[str, Any] | N
             "LLM resume parsing failed for user %s — saving raw text only", user_id,
         )
         return None
+
+
+def _validate_upload_file(file: UploadFile) -> tuple[str, bool]:
+    """Validate filename and extension; return (extension, is_image)."""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Filename is required",
+        )
+    extension = PurePath(file.filename).suffix.lower()
+    if extension not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Unsupported file format '{extension}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+            ),
+        )
+    return extension, extension in _IMAGE_EXTENSIONS
+
+
+async def _persist_resume(
+    db: AsyncSession,
+    user_id: Any,
+    filename: str,
+    raw_text: str,
+    structured: dict[str, Any] | None,
+) -> Any:
+    """Create resume in DB, attach structured data if present, commit and refresh."""
+    resume = await ResumeService.create(
+        db,
+        user_id=user_id,
+        title=(filename or "Uploaded Resume")[:RESUME_TITLE_MAX_LENGTH],
+        raw_text=raw_text,
+    )
+    if structured is not None:
+        resume.structured_data = structured
+        await db.flush()
+    await db.commit()
+    await db.refresh(resume)
+    return resume
 
 
 # ── Endpoint ──────────────────────────────────────────────────
@@ -117,27 +161,11 @@ async def upload_resume(
     db: AsyncSession = Depends(get_db),
 ) -> ResumeUploadResponse:
     """Upload a resume file, extract text, optionally parse structure, and save."""
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Filename is required",
-        )
-
-    extension = PurePath(file.filename).suffix.lower()
-    if extension not in SUPPORTED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Unsupported file format '{extension}'. "
-                f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
-            ),
-        )
-
+    _, is_image = _validate_upload_file(file)
     file_bytes = await file.read()
-    is_image = extension in SUPPORTED_IMAGE_EXTENSIONS
 
     try:
-        raw_text = await _parse_and_sanitize(file_bytes, file.filename)
+        raw_text = await _parse_and_sanitize(file_bytes, file.filename)  # type: ignore[arg-type]
     except FileTooLargeError as exc:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
     except UnsupportedFormatError as exc:
@@ -156,20 +184,7 @@ async def upload_resume(
         )
 
     structured = await _extract_structured(raw_text, current_user.id) if parse_structured else None
-
-    resume = await ResumeService.create(
-        db,
-        user_id=current_user.id,
-        title=(file.filename or "Uploaded Resume")[:RESUME_TITLE_MAX_LENGTH],
-        raw_text=raw_text,
-    )
-
-    if structured is not None:
-        resume.structured_data = structured
-        await db.flush()
-
-    await db.commit()
-    await db.refresh(resume)
+    resume = await _persist_resume(db, current_user.id, file.filename or "", raw_text, structured)
 
     logger.info(
         "Resume uploaded: user=%s resume_id=%s version=%d ocr=%s",
