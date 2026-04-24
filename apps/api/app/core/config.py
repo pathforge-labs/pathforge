@@ -202,6 +202,14 @@ class Settings(BaseSettings):  # type: ignore[misc]
     rate_limit_reset_password: str = "5/minute"
     rate_limit_verify_email: str = "5/minute"
     rate_limit_resend_verification: str = "3/minute"
+    # Sprint 39 audit F32: per-account cooldown on resend-verification.
+    # The slowapi limit above throttles at the caller level, but a
+    # determined attacker (multiple IPs) or a panic-clicking legit user
+    # could still spam a single address and exhaust the Resend quota.
+    # 300s == 5 min matches the typical verification-email UX: user
+    # reads mail, clicks link, returns → if the link didn't arrive,
+    # resending after 5 minutes is reasonable. Tuneable via env.
+    email_resend_cooldown_seconds: int = 300
     # Token blacklist fail mode: "open" allows requests on Redis failure,
     # "closed" rejects all authenticated requests on Redis failure.
     # Sprint 40 (Audit P1-1): Configurable for security-critical deployments.

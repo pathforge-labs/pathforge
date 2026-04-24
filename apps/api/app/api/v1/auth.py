@@ -299,14 +299,33 @@ async def reset_password(
     payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    """Validate reset token and update the user's password."""
-    # Find user with a matching token hash
+    """Validate reset token and update the user's password atomically.
+
+    Concurrency model (Sprint 39 audit F30):
+        The prior implementation did SELECT → check expiry → UPDATE as
+        three separate steps. Two concurrent workers could both pass
+        the SELECT+expiry phase against the same token, each then
+        running an unconditional UPDATE. The row-level lock serialises
+        the UPDATEs, but "last write wins" means an attacker who knew
+        the token could overwrite the legitimate user's new password
+        if they raced.
+
+        The fix is a single atomic UPDATE gated on the token value:
+        once the first writer clears ``password_reset_token``, any
+        subsequent UPDATE filtering on ``password_reset_token = :hash``
+        affects zero rows — we detect that via ``rowcount`` and reject
+        the second caller. No database trip happens between the token
+        check and the credential swap; consumption is truly one-shot.
+    """
     incoming_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
-    result = await db.execute(
+    # Look up the token to validate existence + expiry *before* we
+    # attempt the atomic swap. If the token is absent or expired we
+    # return a distinct error, same as the legacy behaviour.
+    lookup = await db.execute(
         select(User).where(User.password_reset_token == incoming_hash)
     )
-    user = result.scalar_one_or_none()
+    user = lookup.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
@@ -314,8 +333,9 @@ async def reset_password(
             detail="Invalid or expired reset token",
         )
 
-    # Check token expiry (fail-safe: reject if timestamp is missing)
     if not user.password_reset_sent_at:
+        # Missing timestamp — scrub the token to prevent indefinite
+        # retries and surface the generic "invalid/expired" error.
         user.password_reset_token = None
         await db.flush()
         raise HTTPException(
@@ -335,13 +355,44 @@ async def reset_password(
             detail="Reset token has expired. Please request a new one.",
         )
 
-    # Update password and clear token
-    user.hashed_password = hash_password(payload.new_password)
-    user.password_reset_token = None
-    user.password_reset_sent_at = None
-    # Sprint 41 C2: Invalidate all existing sessions after password change
-    user.tokens_invalidated_at = datetime.now(UTC)
+    # Atomic consume-and-update: the WHERE clause requires the token
+    # to still be present, so the second concurrent call sees
+    # rowcount == 0 and is rejected as "already consumed".
+    from sqlalchemy import update as sql_update
+
+    now = datetime.now(UTC)
+    update_stmt = (
+        sql_update(User)
+        .where(
+            User.id == user.id,
+            User.password_reset_token == incoming_hash,
+        )
+        .values(
+            hashed_password=hash_password(payload.new_password),
+            password_reset_token=None,
+            password_reset_sent_at=None,
+            # Sprint 41 C2: invalidate every existing session after a
+            # password reset — a compromised refresh token must not
+            # survive the rotation.
+            tokens_invalidated_at=now,
+        )
+    )
+    result = await db.execute(update_stmt)
     await db.flush()
+
+    if result.rowcount == 0:
+        # Another request (legitimate second click, or a racing
+        # attacker) already consumed this token. Surface a distinct
+        # message so the UI can point the user at /forgot-password
+        # without implying an application bug.
+        logger.warning(
+            "Reset token already consumed (race or replay): user_id=%s",
+            user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has already been used. Please request a new one.",
+        )
 
     return MessageResponse(message="Password has been reset successfully.")
 
@@ -411,20 +462,55 @@ async def resend_verification(
     payload: ForgotPasswordRequest,  # Reuse: just needs email
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    """Resend verification email. Always returns 200 to prevent email enumeration."""
+    """Resend verification email.
+
+    Always returns 200 regardless of whether the account exists — this
+    is deliberate anti-enumeration behaviour. The response text
+    therefore must not distinguish "account not found", "already
+    verified", "cooldown in effect", or "sent". The UI surfaces a
+    generic "check your inbox" message; the user experience is
+    identical in every branch.
+
+    Abuse protection (Sprint 39 audit F32):
+        slowapi's per-minute rate limit (``rate_limit_resend_verification``)
+        throttles attacks at the *caller* level, but an attacker using
+        many IPs or a legitimate user panic-clicking Resend could
+        still generate dozens of verification mails per hour against
+        a single address, burning our Resend daily quota (100/day on
+        the free tier).
+
+        We therefore enforce a per-*account* cooldown of
+        ``EMAIL_RESEND_COOLDOWN_SECONDS`` — if the account's last
+        ``verification_sent_at`` was within that window we silently
+        short-circuit without calling the email provider. The caller
+        still gets 200 + the generic message, so enumeration is
+        preserved.
+    """
     user = await UserService.get_by_email(db, payload.email)
 
     if user and user.is_active and not user.is_verified:
-        raw_token, hashed_token = generate_token()
-        user.verification_token = hashed_token
-        user.verification_sent_at = datetime.now(UTC)
-        await db.flush()
+        cooldown = timedelta(seconds=settings.email_resend_cooldown_seconds)
+        now = datetime.now(UTC)
+        last_sent = user.verification_sent_at
 
-        EmailService.send_verification_email(
-            to=user.email,
-            token=raw_token,
-            name=user.full_name,
-        )
+        if last_sent is None or (now - last_sent) >= cooldown:
+            raw_token, hashed_token = generate_token()
+            user.verification_token = hashed_token
+            user.verification_sent_at = now
+            await db.flush()
+
+            EmailService.send_verification_email(
+                to=user.email,
+                token=raw_token,
+                name=user.full_name,
+            )
+        else:
+            logger.info(
+                "Resend-verification suppressed by cooldown: "
+                "user_id=%s, seconds_remaining=%d",
+                user.id,
+                int((cooldown - (now - last_sent)).total_seconds()),
+            )
 
     return MessageResponse(
         message="If an unverified account with that email exists, a verification link has been sent."
