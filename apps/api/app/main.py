@@ -43,6 +43,7 @@ from app.api.v1 import (
     predictive_career,
     public_profiles,
     recommendation_intelligence,
+    resumes,
     salary_intelligence,
     skill_decay,
     threat_radar,
@@ -257,6 +258,7 @@ def create_app() -> FastAPI:
     application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
+    application.include_router(resumes.router, prefix="/api/v1")  # Sprint 50: resume upload
 
     # Sprint 34: Monetization & Growth routers
     application.include_router(billing.router, prefix="/api/v1")
