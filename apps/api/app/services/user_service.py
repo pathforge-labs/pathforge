@@ -18,6 +18,12 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.user import TokenResponse
+from app.services.user_service_errors import (
+    InactiveAccountError,
+    InvalidCredentialsError,
+    OAuthOnlyAccountError,
+    UnverifiedAccountError,
+)
 
 
 class UserService:
@@ -66,8 +72,17 @@ class UserService:
         """Authenticate a user and return access + refresh tokens.
 
         Raises:
-            ValueError: If credentials are invalid, the account is inactive,
-                or the email address has not been verified.
+            InvalidCredentialsError: Email not found or password
+                mismatch. Maps to HTTP 401 in the route handler.
+            OAuthOnlyAccountError: Account has no password because it
+                was provisioned via Google/Microsoft sign-in. The route
+                handler returns HTTP 403 so callers can show the correct
+                brand button.
+            InactiveAccountError: ``is_active`` is False (admin-disabled
+                or GDPR-deleted). Maps to HTTP 403.
+            UnverifiedAccountError: Email-based account hasn't confirmed
+                its email. Maps to HTTP 403 with a recovery message that
+                points at the verification flow.
 
         Security note:
             The ``is_verified`` check is performed *after* password
@@ -83,31 +98,24 @@ class UserService:
         user = result.scalar_one_or_none()
 
         if not user:
-            raise ValueError("Incorrect email or password")
+            raise InvalidCredentialsError
 
-        # F23: Guard against OAuth users attempting password login
+        # F23: Guard against OAuth users attempting password login.
         if user.hashed_password is None:
-            raise ValueError(
-                f"This account uses {user.auth_provider} sign-in. "
-                f"Please use the {user.auth_provider} button to log in."
-            )
+            raise OAuthOnlyAccountError(provider=user.auth_provider)
 
         if not verify_password(password, user.hashed_password):
-            raise ValueError("Incorrect email or password")
+            raise InvalidCredentialsError
 
         if not user.is_active:
-            raise ValueError("User account is inactive")
+            raise InactiveAccountError
 
         # F28 audit fix: enforce email verification for email-based
         # (non-OAuth) accounts before issuing tokens. Prior to this check
         # a user who registered but never clicked the verification link
         # could still log in and bypass the verification gate entirely.
         if not user.is_verified:
-            raise ValueError(
-                "Please verify your email address before signing in. "
-                "Check your inbox for the verification link "
-                "or request a new one from the sign-in page."
-            )
+            raise UnverifiedAccountError
 
         return TokenResponse(
             access_token=create_access_token(str(user.id)),

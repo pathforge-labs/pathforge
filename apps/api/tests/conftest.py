@@ -210,13 +210,14 @@ def _auto_verify_on_login(
     from sqlalchemy import update as sql_update
 
     from app.models.user import User as UserModel
+    from app.schemas.user import TokenResponse
     from app.services.user_service import UserService
 
     original_authenticate = UserService.authenticate
 
     async def _patched_authenticate(
         db: AsyncSession, *, email: str, password: str,
-    ) -> Any:
+    ) -> TokenResponse:
         # Flip is_verified for any matching account before delegating to
         # the real authenticate() so that the verification gate becomes
         # a no-op for the register→login test pattern.
