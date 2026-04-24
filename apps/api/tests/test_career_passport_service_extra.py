@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +18,6 @@ from app.services.career_passport_service import (
     get_credential_mapping,
     get_market_demand_by_country,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

@@ -32,7 +32,6 @@ from app.services.hidden_job_market_service import (
     update_preferences,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
