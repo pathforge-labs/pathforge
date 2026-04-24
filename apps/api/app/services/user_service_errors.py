@@ -17,6 +17,11 @@ Hierarchy
 ├── ``UnverifiedAccountError``     → 403
 └── ``OAuthOnlyAccountError``      → 403
 
+``PasswordResetError``  (base)
+├── ``InvalidResetTokenError``     → 400
+├── ``ExpiredResetTokenError``     → 400
+└── ``ResetTokenAlreadyUsedError`` → 400
+
 All subclasses carry a ``message`` attribute that is safe to render
 to the user; callers should *not* inspect private attributes or the
 stringified exception when making control-flow decisions — use
@@ -92,3 +97,42 @@ class OAuthOnlyAccountError(AuthenticationError):
             f"Please use the {provider} button to log in."
         )
         super().__init__(message)
+
+
+# ── Password-reset failures ───────────────────────────────────────
+
+
+class PasswordResetError(Exception):
+    """Base class for password-reset failures (F30)."""
+
+    default_message: str = "Password reset failed"
+
+    def __init__(self, message: str | None = None) -> None:
+        self.message: str = message or self.default_message
+        super().__init__(self.message)
+
+
+class InvalidResetTokenError(PasswordResetError):
+    """Reset token doesn't match any user, or timestamp missing."""
+
+    default_message = "Invalid or expired reset token"
+
+
+class ExpiredResetTokenError(PasswordResetError):
+    """Reset token was valid at some point but has aged out."""
+
+    default_message = "Reset token has expired. Please request a new one."
+
+
+class ResetTokenAlreadyUsedError(PasswordResetError):
+    """Reset token was consumed by a previous request (race or replay).
+
+    Raised by the atomic consume-and-update path — if the UPDATE
+    affects zero rows after the pre-check passed, another caller
+    completed the reset first. Surfaced to users as a distinct
+    message so the UI can route them to /forgot-password.
+    """
+
+    default_message = (
+        "Reset token has already been used. Please request a new one."
+    )

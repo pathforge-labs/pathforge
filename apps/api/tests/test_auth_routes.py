@@ -948,6 +948,38 @@ class TestResetPassword:
         )
         assert response.status_code == 422
 
+    async def test_reset_password_replay_returns_400(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        """F30 audit: a second reset with the same token is rejected.
+
+        Simulates the race/replay scenario that the atomic UPDATE
+        guards against: after the first reset consumes the token,
+        a second request presenting the identical token must fail.
+        """
+        await _register(client, email="rp-replay@pathforge.eu")
+        user = await _fetch_user(db_session, "rp-replay@pathforge.eu")
+        raw, hashed = generate_token()
+        user.password_reset_token = hashed
+        user.password_reset_sent_at = datetime.now(UTC)
+        await db_session.flush()
+
+        first = await client.post(
+            RESET_URL, json={"token": raw, "new_password": NEW_PASSWORD},
+        )
+        assert first.status_code == 200
+
+        second = await client.post(
+            RESET_URL, json={"token": raw, "new_password": "Different1!"},
+        )
+        assert second.status_code == 400
+        detail = second.json()["detail"].lower()
+        # Token was scrubbed by the first request, so the lookup
+        # returns the generic "invalid or expired" branch. The key
+        # property under test is that the second request cannot
+        # change the password; the exact wording is secondary.
+        assert "invalid" in detail or "already been used" in detail
+
 
 # ═════════════════════════════════════════════════════════════════
 # VERIFY EMAIL
@@ -1076,9 +1108,17 @@ class TestResendVerification:
     """POST /api/v1/auth/resend-verification."""
 
     async def test_resend_unverified_user_sends_email(
-        self, client: AsyncClient,
+        self, client: AsyncClient, db_session: AsyncSession,
     ) -> None:
         await _register(client, email="rv-ok@pathforge.eu")
+        # F32 cooldown: register() stamps verification_sent_at=now,
+        # so an immediate resend is suppressed by default. Push the
+        # timestamp outside the cooldown window to exercise the
+        # "send happens" branch.
+        user = await _fetch_user(db_session, "rv-ok@pathforge.eu")
+        user.verification_sent_at = datetime.now(UTC) - timedelta(hours=1)
+        await db_session.flush()
+
         email_mock = MagicMock(return_value=True)
         with patch(
             "app.api.v1.auth.EmailService.send_verification_email",
@@ -1099,6 +1139,10 @@ class TestResendVerification:
         user = await _fetch_user(db_session, "rv-update@pathforge.eu")
         original_hash = user.verification_token
         assert original_hash is not None
+        # F32 cooldown: move last-sent far enough in the past that
+        # the resend actually fires and rotates the token.
+        user.verification_sent_at = datetime.now(UTC) - timedelta(hours=1)
+        await db_session.flush()
 
         with patch(
             "app.api.v1.auth.EmailService.send_verification_email",
@@ -1112,6 +1156,42 @@ class TestResendVerification:
         await db_session.refresh(user)
         assert user.verification_token is not None
         assert user.verification_token != original_hash
+
+    async def test_resend_cooldown_suppresses_duplicate_email(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        """F32 audit: rapid-fire resend requests must not re-send mail.
+
+        The slowapi per-minute limit fires faster than our 5-minute
+        cooldown, but an attacker rotating IPs or a panic-clicking
+        user can still bypass the caller-level limit. Verify that
+        the per-account cooldown suppresses the second send *and*
+        still returns 200 with the generic anti-enumeration message
+        (no branch distinguishing "cooldown" from "sent").
+        """
+        await _register(client, email="rv-cooldown@pathforge.eu")
+        user = await _fetch_user(db_session, "rv-cooldown@pathforge.eu")
+        original_token = user.verification_token
+        # Register just stamped verification_sent_at = now, so the
+        # next resend call is inside the cooldown window.
+
+        email_mock = MagicMock(return_value=True)
+        with patch(
+            "app.api.v1.auth.EmailService.send_verification_email",
+            new=email_mock,
+        ):
+            response = await client.post(
+                RESEND_URL, json={"email": "rv-cooldown@pathforge.eu"},
+            )
+
+        assert response.status_code == 200
+        email_mock.assert_not_called()
+
+        # Token unchanged — no rotation happened during the
+        # suppressed call, so any link the user already has in their
+        # inbox is still valid.
+        await db_session.refresh(user)
+        assert user.verification_token == original_token
 
     async def test_resend_already_verified_no_email(
         self, client: AsyncClient, db_session: AsyncSession,

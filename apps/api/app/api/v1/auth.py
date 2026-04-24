@@ -21,7 +21,6 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     get_current_user,
-    hash_password,
     oauth2_scheme,
 )
 from app.core.token_blacklist import token_blacklist
@@ -46,6 +45,7 @@ from app.services.user_service_errors import (
     InactiveAccountError,
     InvalidCredentialsError,
     OAuthOnlyAccountError,
+    PasswordResetError,
     UnverifiedAccountError,
 )
 
@@ -299,49 +299,23 @@ async def reset_password(
     payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    """Validate reset token and update the user's password."""
-    # Find user with a matching token hash
-    incoming_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    """Thin orchestrator around ``UserService.reset_password_with_token``.
 
-    result = await db.execute(
-        select(User).where(User.password_reset_token == incoming_hash)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user:
+    The service performs the full validate-and-swap flow atomically;
+    each failure mode raises a distinct ``PasswordResetError``
+    subclass that we surface as 400 with the exception's user-facing
+    ``message``. See the service docstring for the F30 concurrency
+    rationale.
+    """
+    try:
+        await UserService.reset_password_with_token(
+            db, token=payload.token, new_password=payload.new_password,
+        )
+    except PasswordResetError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
-        )
-
-    # Check token expiry (fail-safe: reject if timestamp is missing)
-    if not user.password_reset_sent_at:
-        user.password_reset_token = None
-        await db.flush()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
-        )
-
-    expiry = user.password_reset_sent_at + timedelta(
-        minutes=settings.password_reset_token_expire_minutes
-    )
-    if datetime.now(UTC) > expiry:
-        user.password_reset_token = None
-        user.password_reset_sent_at = None
-        await db.flush()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset token has expired. Please request a new one.",
-        )
-
-    # Update password and clear token
-    user.hashed_password = hash_password(payload.new_password)
-    user.password_reset_token = None
-    user.password_reset_sent_at = None
-    # Sprint 41 C2: Invalidate all existing sessions after password change
-    user.tokens_invalidated_at = datetime.now(UTC)
-    await db.flush()
+            detail=exc.message,
+        ) from exc
 
     return MessageResponse(message="Password has been reset successfully.")
 
@@ -411,21 +385,19 @@ async def resend_verification(
     payload: ForgotPasswordRequest,  # Reuse: just needs email
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    """Resend verification email. Always returns 200 to prevent email enumeration."""
-    user = await UserService.get_by_email(db, payload.email)
+    """Resend verification email.
 
-    if user and user.is_active and not user.is_verified:
-        raw_token, hashed_token = generate_token()
-        user.verification_token = hashed_token
-        user.verification_sent_at = datetime.now(UTC)
-        await db.flush()
-
-        EmailService.send_verification_email(
-            to=user.email,
-            token=raw_token,
-            name=user.full_name,
-        )
-
+    Thin orchestrator around
+    ``UserService.resend_verification_if_eligible``. Eligibility
+    (account exists, active, unverified, outside cooldown) and the
+    email dispatch itself live in the service — see the F32 audit
+    rationale there. The response intentionally does not distinguish
+    eligible/ineligible cases to preserve anti-enumeration semantics.
+    """
+    await UserService.resend_verification_if_eligible(db, email=payload.email)
     return MessageResponse(
-        message="If an unverified account with that email exists, a verification link has been sent."
+        message=(
+            "If an unverified account with that email exists, "
+            "a verification link has been sent."
+        )
     )

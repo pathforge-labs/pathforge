@@ -221,15 +221,31 @@ async def oauth_login(
 
     if user:
         # Account linking — if user exists but with different provider,
-        # allow login since email is verified by the OAuth provider
+        # allow login since email is verified by the OAuth provider.
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is inactive",
             )
-        # F16: OAuth provider verified this email — mark user as verified
-        # This handles the edge case where a user registered via email/password
-        # but never verified their email, then signs in via OAuth
+        # ── Verification cross-provider policy (F16) ───────────────
+        #
+        # If a user initially registered with email+password but never
+        # clicked the verification link, then later signs in via
+        # Google/Microsoft OAuth, the OAuth provider has already
+        # verified the email address by issuing an ID token for it.
+        # We therefore mark the account as verified here.
+        #
+        # Security note (Sprint 39 audit F31): this is intentional
+        # and NOT a verification bypass. The email-based login flow
+        # (``UserService.authenticate``) still enforces
+        # ``is_verified == True`` independently — an attacker who
+        # knew the victim's password but did not control the email
+        # cannot use this path because they cannot complete the
+        # Google/Microsoft OAuth challenge for that address. In
+        # other words, trust is transitively passed from "OAuth
+        # provider asserts control of the inbox" → "inbox owner is
+        # verified", which matches exactly what the email
+        # verification link would have proved.
         if not user.is_verified:
             user.is_verified = True
             await db.flush()

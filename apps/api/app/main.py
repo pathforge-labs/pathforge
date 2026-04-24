@@ -210,12 +210,35 @@ def create_app() -> FastAPI:
     )
 
     # ── Middleware (order matters: outermost runs first) ────────
+    #
+    # CORS — Sprint 39 audit (F29) tightening:
+    # Replaced ``allow_methods=["*"]`` + ``allow_headers=["*"]`` with
+    # explicit allow-lists. The wildcard configuration let any origin
+    # (once past the origin check) probe arbitrary HTTP verbs and ship
+    # arbitrary headers. Our real API surface is REST-style — only
+    # these verbs are actually routed, and only these request headers
+    # are read by the app:
+    #   - Authorization        (Bearer token)
+    #   - Content-Type         (application/json uploads)
+    #   - X-PathForge-Trace    (force-trace override, Sprint 30 obs)
+    #   - X-Request-ID         (correlation, optional inbound echo)
+    # Response headers exposed to JS callers are intentionally narrow:
+    # only ``X-Request-ID`` is surfaced so the SPA can show the
+    # correlation ID in error toasts and forward it when filing a bug
+    # report.
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.effective_cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-PathForge-Trace",
+            "X-Request-ID",
+        ],
+        expose_headers=["X-Request-ID"],
+        max_age=600,  # cache pre-flight results for 10 min
     )
     application.add_middleware(RequestIDMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
