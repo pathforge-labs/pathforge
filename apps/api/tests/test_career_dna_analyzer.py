@@ -503,7 +503,7 @@ class TestExtractValuesProfile:
         mock_llm.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_confidence_clamped_above_1(self) -> None:
+    async def test_confidence_clamped_above_085(self) -> None:
         fake_record = _make_record()
         fake_data = {"work_style": "flexible", "confidence": 1.5}
         patcher = _patch_complete(return_value=(fake_data, fake_record))
@@ -513,7 +513,7 @@ class TestExtractValuesProfile:
                 preferences_text="prefs",
             )
 
-        assert data["confidence"] == 1.0
+        assert data["confidence"] == 0.85
 
     @pytest.mark.asyncio
     async def test_confidence_clamped_below_0(self) -> None:
@@ -542,7 +542,7 @@ class TestExtractValuesProfile:
         assert data["confidence"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_confidence_boundary_1(self) -> None:
+    async def test_confidence_boundary_085(self) -> None:
         fake_record = _make_record()
         fake_data = {"confidence": 1.0}
         patcher = _patch_complete(return_value=(fake_data, fake_record))
@@ -552,7 +552,7 @@ class TestExtractValuesProfile:
                 preferences_text="prefs",
             )
 
-        assert data["confidence"] == 1.0
+        assert data["confidence"] == 0.85
 
     @pytest.mark.asyncio
     async def test_confidence_missing_defaults_to_0_5(self) -> None:

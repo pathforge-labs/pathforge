@@ -542,7 +542,7 @@ async def _call_with_retry(
             elapsed = time.monotonic() - start
 
             # Extract response text
-            content = response.choices[0].message.content or ""
+            content: str = response.choices[0].message.content or "" if response.choices else ""
 
             # Log usage + record metrics
             usage = getattr(response, "usage", None)

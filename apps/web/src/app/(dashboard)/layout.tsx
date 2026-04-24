@@ -166,7 +166,7 @@ export default function DashboardLayout({
           {navigation.map((section) => (
             <div key={section.label || "_top"} className="mb-3">
               {section.label && (
-                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   {section.label}
                 </p>
               )}
@@ -180,7 +180,7 @@ export default function DashboardLayout({
                       onClick={() => setSidebarOpen(false)}
                       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150 ${
                         active
-                          ? "bg-primary/10 text-primary font-medium"
+                          ? "bg-primary/10 text-sidebar-foreground font-medium"
                           : "text-sidebar-foreground hover:bg-sidebar-accent"
                       }`}
                     >
