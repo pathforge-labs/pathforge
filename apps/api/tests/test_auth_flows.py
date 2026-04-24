@@ -589,7 +589,11 @@ class TestAuthEdgeCases:
                 "password": "AnyPassword123!",
             },
         )
-        assert response.status_code == 401
+        # F28 audit: OAuth-only accounts now return 403 (method not
+        # allowed for this account) instead of 401 (credential error),
+        # which is semantically more accurate — the credentials aren't
+        # wrong, the login path simply isn't supported for this user.
+        assert response.status_code == 403
         assert "google" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio

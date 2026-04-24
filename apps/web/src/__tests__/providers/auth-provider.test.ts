@@ -201,12 +201,12 @@ describe("AuthProvider", () => {
   // ── Register ─────────────────────────────────────────
 
   describe("register", () => {
-    it("should register and auto-login", async () => {
-      // First call: register, second call: login
-      (fetchPublic as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce(MOCK_USER_API) // register
-        .mockResolvedValueOnce(MOCK_TOKENS); // auto-login
-      (fetchWithAuth as ReturnType<typeof vi.fn>).mockResolvedValue(MOCK_USER_API);
+    it("should register without auto-login (F28: verification-first flow)", async () => {
+      // Only one call expected: the register POST. Auto-login was
+      // removed so that unverified accounts cannot skip the
+      // email-verification step (F28 audit fix). Callers are expected
+      // to redirect the user to /check-email after register() resolves.
+      (fetchPublic as ReturnType<typeof vi.fn>).mockResolvedValueOnce(MOCK_USER_API);
 
       const { result } = renderHook(() => useAuthContext(), {
         wrapper: createAuthWrapper(),
@@ -222,8 +222,13 @@ describe("AuthProvider", () => {
         });
       });
 
-      expect(setTokens).toHaveBeenCalledWith("access-123", "refresh-456");
-      expect(result.current.isAuthenticated).toBe(true);
+      // No tokens should be stored: the user still has to verify.
+      expect(setTokens).not.toHaveBeenCalled();
+      // Provider returns to the unauthenticated state — downstream
+      // navigation (e.g. router.push("/check-email")) is the caller's
+      // responsibility.
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(clearTokens).toHaveBeenCalled();
     });
 
     it("should set error and rethrow on register failure", async () => {

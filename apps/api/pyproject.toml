@@ -48,6 +48,15 @@ dev = [
     "aiosqlite>=0.21.0",
 ]
 ai = [
+    # GHSA-xqmj-j6mv-4862 (sandbox escape in LiteLLM Proxy's
+    # /prompts/test endpoint — authenticated RCE) applies only when
+    # running the LiteLLM Proxy server. PathForge uses LiteLLM as an
+    # SDK (``litellm.acompletion``, success/failure callbacks) — the
+    # vulnerable HTTP route is never exposed. A straight bump to
+    # 1.83.7 is blocked by litellm's downgrade of python-dotenv to
+    # 1.0.1, which would re-expose us to CVE-2026-28684. The CVE is
+    # therefore ignored in CI (pip-audit --ignore-vuln) with
+    # justification documented next to the ignore flag.
     "litellm>=1.55.0",
     "langfuse>=2.50.0",
     "langchain>=0.3.0",
@@ -126,6 +135,9 @@ filterwarnings = [
     "ignore:.*HTTP_422_UNPROCESSABLE_ENTITY.*:DeprecationWarning:slowapi",
     "ignore::DeprecationWarning:pytest_asyncio.plugin",
     "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
+markers = [
+    "no_auto_verify: disable the _auto_verify_on_login autouse fixture so the test can exercise the real unverified-account rejection path",
 ]
 
 # ── Coverage (Sprint 42 N-2) ──────────────────────────────────────

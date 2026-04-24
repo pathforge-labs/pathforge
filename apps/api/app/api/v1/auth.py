@@ -42,6 +42,12 @@ from app.schemas.user import (
 )
 from app.services.email_service import EmailService, generate_token
 from app.services.user_service import UserService
+from app.services.user_service_errors import (
+    InactiveAccountError,
+    InvalidCredentialsError,
+    OAuthOnlyAccountError,
+    UnverifiedAccountError,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -105,17 +111,27 @@ async def login(
         return await UserService.authenticate(
             db, email=payload.email, password=payload.password
         )
-    except ValueError as exc:
-        # Map inactive account to 403, bad credentials to 401
-        detail = str(exc)
-        if "inactive" in detail.lower():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=detail,
-            ) from exc
+    except InvalidCredentialsError as exc:
+        # Credential failure — wrong email or wrong password. Kept at
+        # 401 and surfaced with a deliberately generic message so the
+        # response doesn't leak whether the email exists.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=detail,
+            detail=exc.message,
+        ) from exc
+    except (
+        InactiveAccountError,
+        UnverifiedAccountError,
+        OAuthOnlyAccountError,
+    ) as exc:
+        # Account-state rejections: credentials are technically valid,
+        # but this login path is not allowed for this account. 403 is
+        # semantically more accurate than 401 and lets clients (and
+        # our tests) branch on status code + structured exception type
+        # rather than matching on the detail string.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.message,
         ) from exc
 
 

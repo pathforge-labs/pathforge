@@ -70,13 +70,16 @@ jobs:
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
 
-      # Audit H3: Security scan before deploy
+      # Audit H3: Security scan before deploy (see ci.yml for the
+      # full rationale on the ignored CVEs).
       - name: Security audit (pip-audit)
         working-directory: apps/api
         continue-on-error: true
         run: |
           uv pip install pip-audit
-          python -m pip_audit --desc --progress-spinner off
+          python -m pip_audit --desc --progress-spinner off \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln GHSA-xqmj-j6mv-4862
 
   # ── Deploy to Railway ───────────────────────────────────
   deploy:

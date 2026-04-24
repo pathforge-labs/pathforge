@@ -349,6 +349,7 @@ class TestLogin:
             hashed_password=hash_password(VALID_PASSWORD),
             full_name="Inactive",
             is_active=False,
+            is_verified=True,
         )
         db_session.add(user)
         await db_session.flush()
@@ -368,6 +369,35 @@ class TestLogin:
             json={"email": "not-an-email", "password": VALID_PASSWORD},
         )
         assert response.status_code == 422
+
+    @pytest.mark.no_auto_verify
+    async def test_login_unverified_user_returns_403(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        """F28 audit guardrail: unverified accounts must be rejected at /login.
+
+        Registers a fresh user and hits /login with the correct password
+        but without verifying the account. Expects 403 + a message that
+        points the user at the verification flow. Uses
+        ``@pytest.mark.no_auto_verify`` to disable the conftest shortcut
+        that normally flips ``is_verified`` before authentication.
+        """
+        user = User(
+            email="login-unverified@pathforge.eu",
+            hashed_password=hash_password(VALID_PASSWORD),
+            full_name="Unverified",
+            is_active=True,
+            is_verified=False,
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        response = await client.post(
+            LOGIN_URL,
+            json={"email": user.email, "password": VALID_PASSWORD},
+        )
+        assert response.status_code == 403
+        assert "verify your email" in response.json()["detail"].lower()
 
 
 # ═════════════════════════════════════════════════════════════════

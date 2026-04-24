@@ -4,11 +4,12 @@ PathForge — Pydantic Schemas for User & Auth
 Request/response DTOs for authentication and user management.
 """
 
-import re
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.core.password_policy import validate_password_complexity
 
 # ── Auth Schemas ────────────────────────────────────────────────
 
@@ -21,20 +22,9 @@ class UserRegisterRequest(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def validate_password_complexity(cls, value: str) -> str:
-        """Enforce OWASP-aligned password complexity rules."""
-        errors: list[str] = []
-        if not re.search(r"[A-Z]", value):
-            errors.append("one uppercase letter")
-        if not re.search(r"\d", value):
-            errors.append("one digit")
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_=+\[\]\\/'`~;]", value):
-            errors.append("one special character")
-        if errors:
-            missing = ", ".join(errors)
-            msg = f"Password must contain at least {missing}"
-            raise ValueError(msg)
-        return value
+    def _validate_password(cls, value: str) -> str:
+        """Delegate to shared password policy (see ``core.password_policy``)."""
+        return validate_password_complexity(value)
 
 
 class UserLoginRequest(BaseModel):
@@ -89,20 +79,9 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator("new_password")
     @classmethod
-    def validate_password_complexity(cls, value: str) -> str:
-        """Enforce OWASP-aligned password complexity rules (reuses register logic)."""
-        errors: list[str] = []
-        if not re.search(r"[A-Z]", value):
-            errors.append("one uppercase letter")
-        if not re.search(r"\d", value):
-            errors.append("one digit")
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_=+\[\]\\\/'`~;]", value):
-            errors.append("one special character")
-        if errors:
-            missing = ", ".join(errors)
-            msg = f"Password must contain at least {missing}"
-            raise ValueError(msg)
-        return value
+    def _validate_new_password(cls, value: str) -> str:
+        """Delegate to shared password policy (see ``core.password_policy``)."""
+        return validate_password_complexity(value)
 
 
 class VerifyEmailRequest(BaseModel):

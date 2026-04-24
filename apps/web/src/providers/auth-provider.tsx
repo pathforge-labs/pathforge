@@ -198,11 +198,23 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
   }, []);
 
   // ── Register ────────────────────────────────────────────
+  //
+  // F28 audit fix: previous versions auto-logged the user in right after
+  // register by calling /auth/login with the freshly-submitted
+  // password. That silently bypassed the email-verification gate —
+  // unverified users would land in the dashboard with full
+  // permissions. Since Sprint 39 the backend also blocks
+  // unverified-account login, so an auto-login here would now *fail*,
+  // leaving the caller stuck in the "loading" state.
+  //
+  // New contract: ``register()`` creates the account on the backend and
+  // transitions the provider back to ``unauthenticated``. The
+  // register page is responsible for routing to /check-email so the
+  // user can complete verification before returning to /login.
   const register = useCallback(async (credentials: RegisterCredentials): Promise<void> => {
     dispatch({ type: "START_LOADING" });
 
     try {
-      // Register the account
       await fetchPublic<UserApiResponse>("/api/v1/auth/register", {
         method: "POST",
         body: {
@@ -212,16 +224,10 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
         },
       });
 
-      // Auto-login after successful registration
-      const tokens = await fetchPublic<TokenResponse>("/api/v1/auth/login", {
-        method: "POST",
-        body: { email: credentials.email, password: credentials.password },
-      });
-
-      setTokens(tokens.access_token, tokens.refresh_token);
-
-      const userData = await fetchWithAuth<UserApiResponse>("/api/v1/users/me");
-      dispatch({ type: "SET_AUTHENTICATED", user: mapUserResponse(userData) });
+      // No auto-login: caller must drive the verification flow.
+      // Clear tokens defensively in case a stale session existed.
+      clearTokens();
+      dispatch({ type: "SET_UNAUTHENTICATED" });
     } catch (error) {
       const message = (error as ApiError)?.message ?? "Registration failed";
       dispatch({ type: "SET_UNAUTHENTICATED", error: message });

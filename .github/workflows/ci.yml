@@ -144,11 +144,27 @@ jobs:
 
       # Sprint 30 Audit H3: Dependency vulnerability scan
       # Sprint 40 Audit P1-3: Made blocking — CVEs must not ship to production
+      # Ignored CVE rationale (keep in sync with SECURITY.md):
+      #
+      # CVE-2026-3219 — pip tarball/ZIP ambiguity in installer only.
+      #   pip is a build-time tool, not a runtime dependency. No fix
+      #   released upstream as of 2026-04-24. Re-evaluate on next pip
+      #   release.
+      #
+      # GHSA-xqmj-j6mv-4862 — LiteLLM Proxy /prompts/test sandbox
+      #   escape (authenticated RCE). Applies only when running the
+      #   LiteLLM Proxy *server*. PathForge uses LiteLLM as an SDK
+      #   (``litellm.acompletion``, success/failure callbacks) — the
+      #   vulnerable HTTP route is never exposed. A direct bump to
+      #   1.83.7 is blocked by litellm's downgrade of python-dotenv
+      #   to 1.0.1, which would re-expose us to CVE-2026-28684.
       - name: Security audit (pip-audit)
         working-directory: apps/api
         run: |
           uv pip install pip-audit --system
-          python -m pip_audit --desc --progress-spinner off
+          python -m pip_audit --desc --progress-spinner off \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln GHSA-xqmj-j6mv-4862
 
       # ADR-0001: boot-time config-guards. Fail the build if the
       # production TLS posture regresses.

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api-client/auth";
+import { validatePasswordComplexity } from "@/lib/auth/password-policy";
 import OAuthButtons from "@/components/auth/oauth-buttons";
 
 export default function RegisterPage() {
@@ -28,17 +29,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-
-    const complexityErrors: string[] = [];
-    if (!/[A-Z]/.test(password)) complexityErrors.push("one uppercase letter");
-    if (!/\d/.test(password)) complexityErrors.push("one digit");
-    if (!/[!@#$%^&*(),.?":{}|<>\-_=+[\]\\/\'`~;]/.test(password)) complexityErrors.push("one special character");
-    if (complexityErrors.length > 0) {
-      setError(`Password must contain at least ${complexityErrors.join(", ")}`);
+    const complexityError = validatePasswordComplexity(password);
+    if (complexityError) {
+      setError(complexityError);
       return;
     }
 

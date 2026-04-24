@@ -8,6 +8,12 @@ from typing import Any
 import pytest
 
 from app.services.user_service import UserService
+from app.services.user_service_errors import (
+    InactiveAccountError,
+    InvalidCredentialsError,
+    OAuthOnlyAccountError,
+    UnverifiedAccountError,
+)
 
 # ── create_user ───────────────────────────────────────────────────────────────
 
@@ -78,7 +84,7 @@ async def test_authenticate_success(db_session: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_authenticate_user_not_found_raises(db_session: Any) -> None:
-    with pytest.raises(ValueError, match="Incorrect email or password"):
+    with pytest.raises(InvalidCredentialsError, match="Incorrect email or password"):
         await UserService.authenticate(
             db_session, email="nobody@example.com", password="pass",
         )
@@ -94,10 +100,13 @@ async def test_authenticate_oauth_user_raises(db_session: Any) -> None:
         auth_provider="google",
         is_verified=True,
     )
-    with pytest.raises(ValueError, match="google sign-in"):
+    with pytest.raises(OAuthOnlyAccountError, match="google sign-in") as exc_info:
         await UserService.authenticate(
             db_session, email="google@example.com", password="anything",
         )
+    # The exception carries the provider as a structured attribute so
+    # the route layer can branch on it without parsing the message.
+    assert exc_info.value.provider == "google"
 
 
 @pytest.mark.asyncio
@@ -108,7 +117,7 @@ async def test_authenticate_wrong_password_raises(db_session: Any) -> None:
         password="correct",
         full_name="User",
     )
-    with pytest.raises(ValueError, match="Incorrect email or password"):
+    with pytest.raises(InvalidCredentialsError, match="Incorrect email or password"):
         await UserService.authenticate(
             db_session, email="wrongpw@example.com", password="wrong",
         )
@@ -121,14 +130,60 @@ async def test_authenticate_inactive_user_raises(db_session: Any) -> None:
         email="inactive@example.com",
         password="pass123",
         full_name="Inactive",
+        is_verified=True,
     )
     user.is_active = False
     await db_session.flush()
 
-    with pytest.raises(ValueError, match="inactive"):
+    with pytest.raises(InactiveAccountError, match="inactive"):
         await UserService.authenticate(
             db_session, email="inactive@example.com", password="pass123",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_auto_verify
+async def test_authenticate_unverified_user_raises(db_session: Any) -> None:
+    """Email-based accounts must verify before they can log in (F28 audit).
+
+    Sanity check against regression: prior to this enforcement an
+    unverified user could sign up and immediately log in, bypassing the
+    verification flow entirely.
+    """
+    await UserService.create_user(
+        db_session,
+        email="unverified@example.com",
+        password="pass123",
+        full_name="Unverified",
+        # is_verified defaults to False for email-based users
+    )
+
+    with pytest.raises(UnverifiedAccountError, match="verify your email"):
+        await UserService.authenticate(
+            db_session, email="unverified@example.com", password="pass123",
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_auto_verify
+async def test_authenticate_unverified_user_rejected_before_token_issued(
+    db_session: Any,
+) -> None:
+    """Verification gate blocks token issuance even if credentials are valid."""
+    await UserService.create_user(
+        db_session,
+        email="gate@example.com",
+        password="ValidPass1!",
+        full_name="Gate",
+    )
+
+    # Correct password, but account is not verified — no tokens should be
+    # returned and the caller should see a clear "verify email" message.
+    with pytest.raises(UnverifiedAccountError) as exc_info:
+        await UserService.authenticate(
+            db_session, email="gate@example.com", password="ValidPass1!",
+        )
+    assert "verify your email" in exc_info.value.message.lower()
 
 
 # ── get_by_id ─────────────────────────────────────────────────────────────────
