@@ -187,13 +187,13 @@ def test_send_verification_email_includes_token_in_url() -> None:
     original_key = settings.resend_api_key
     object.__setattr__(settings, "resend_api_key", "re_prod_key")
     try:
-        with patch("resend.Emails.send") as mock_send, \
-             patch("app.services.email_service._load_template", return_value="<p>verify</p>"):
+        with patch("resend.Emails.send"), \
+             patch("app.services.email_service._load_template", return_value="<p>verify</p>") as mock_load:
             EmailService.send_verification_email(
                 to="u@x.com", token="mytoken", name="Alice"
             )
-        call_kwargs = mock_send.call_args[0][0]
-        assert "mytoken" in call_kwargs.get("html", "") or True  # template mocked
+        _, kw = mock_load.call_args
+        assert "mytoken" in kw.get("verify_url", "")
     finally:
         object.__setattr__(settings, "resend_api_key", original_key)
 

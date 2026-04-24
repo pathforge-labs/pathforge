@@ -90,7 +90,7 @@ async def test_discover_hidden_skills_happy_path() -> None:
     fake_data = {
         "hidden_skills": [
             {"skill": "Leadership", "confidence": 0.85},
-            {"skill": "Mentoring", "confidence": 0.95},  # will be capped to 0.9
+            {"skill": "Mentoring", "confidence": 0.95},  # will be capped to 0.85
         ]
     }
     record = _make_record()
@@ -101,12 +101,12 @@ async def test_discover_hidden_skills_happy_path() -> None:
         )
 
     assert len(skills) == 2
-    assert skills[1]["confidence"] == 0.9  # capped
+    assert skills[1]["confidence"] == 0.85  # capped
     assert ret_record is record
 
 
 @pytest.mark.asyncio
-async def test_discover_hidden_skills_confidence_above_09_capped() -> None:
+async def test_discover_hidden_skills_confidence_above_085_capped() -> None:
     fake_data = {
         "hidden_skills": [
             {"skill": "X", "confidence": 1.0},
@@ -116,7 +116,7 @@ async def test_discover_hidden_skills_confidence_above_09_capped() -> None:
         skills, _ = await CareerDNAAnalyzer.discover_hidden_skills(
             explicit_skills=[], experience_text=_EXP_TEXT
         )
-    assert skills[0]["confidence"] == 0.9
+    assert skills[0]["confidence"] == 0.85
 
 
 @pytest.mark.asyncio

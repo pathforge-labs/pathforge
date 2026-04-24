@@ -166,7 +166,7 @@ export default function DashboardLayout({
           {navigation.map((section) => (
             <div key={section.label || "_top"} className="mb-3">
               {section.label && (
-                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   {section.label}
                 </p>
               )}
