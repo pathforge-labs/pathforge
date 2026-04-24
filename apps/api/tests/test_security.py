@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import jwt
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
     create_access_token,
@@ -143,7 +143,7 @@ def _make_valid_token(user_id: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_returns_user(db_session: Any) -> None:
+async def test_get_current_user_returns_user(db_session: AsyncSession) -> None:
     from app.models.user import User as UserModel
 
     user = UserModel(
@@ -167,14 +167,14 @@ async def test_get_current_user_returns_user(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_invalid_token(db_session: Any) -> None:
+async def test_get_current_user_invalid_token(db_session: AsyncSession) -> None:
     with pytest.raises(HTTPException) as exc_info:
         await get_current_user(token="not.a.valid.token", db=db_session)
     assert exc_info.value.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_revoked_token(db_session: Any) -> None:
+async def test_get_current_user_revoked_token(db_session: AsyncSession) -> None:
     from app.models.user import User as UserModel
 
     user = UserModel(
@@ -198,7 +198,7 @@ async def test_get_current_user_revoked_token(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_inactive_user(db_session: Any) -> None:
+async def test_get_current_user_inactive_user(db_session: AsyncSession) -> None:
     from app.models.user import User as UserModel
 
     user = UserModel(
@@ -222,7 +222,7 @@ async def test_get_current_user_inactive_user(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_nonexistent_user(db_session: Any) -> None:
+async def test_get_current_user_nonexistent_user(db_session: AsyncSession) -> None:
     token = _make_valid_token(str(uuid.uuid4()))
 
     with patch(
@@ -235,7 +235,7 @@ async def test_get_current_user_nonexistent_user(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_blacklist_fail_open(db_session: Any) -> None:
+async def test_get_current_user_blacklist_fail_open(db_session: AsyncSession) -> None:
     """When blacklist check raises (Redis down), fail-open allows the request."""
     from app.models.user import User as UserModel
 
@@ -260,7 +260,7 @@ async def test_get_current_user_blacklist_fail_open(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_blacklist_fail_closed(db_session: Any) -> None:
+async def test_get_current_user_blacklist_fail_closed(db_session: AsyncSession) -> None:
     """In fail-closed mode, blacklist errors reject the request with 503."""
     from app.core.config import settings
     from app.models.user import User as UserModel
@@ -290,7 +290,7 @@ async def test_get_current_user_blacklist_fail_closed(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_invalidated_token(db_session: Any) -> None:
+async def test_get_current_user_invalidated_token(db_session: AsyncSession) -> None:
     """Token issued before tokens_invalidated_at is rejected."""
     from app.models.user import User as UserModel
 
@@ -316,7 +316,7 @@ async def test_get_current_user_invalidated_token(db_session: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_wrong_token_type(db_session: Any) -> None:
+async def test_get_current_user_wrong_token_type(db_session: AsyncSession) -> None:
     """Refresh tokens must not be accepted as access tokens."""
     token = create_refresh_token("user-x")
 

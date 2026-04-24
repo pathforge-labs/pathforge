@@ -270,16 +270,16 @@ async def test_extract_values_profile_happy_path() -> None:
         result, record = await CareerDNAAnalyzer.extract_values_profile(
             _EXP_TEXT, "flexible hours"
         )
-    assert result["confidence"] == 0.88
+    assert result["confidence"] == 0.85
     assert record is not None
 
 
 @pytest.mark.asyncio
-async def test_extract_values_profile_confidence_clamped_above_1() -> None:
+async def test_extract_values_profile_confidence_clamped_above_085() -> None:
     fake_data = {"confidence": 1.5}
     with patch(LLM_PATH, new_callable=AsyncMock, return_value=(fake_data, _make_record())):
         result, _ = await CareerDNAAnalyzer.extract_values_profile(_EXP_TEXT, "remote")
-    assert result["confidence"] == 1.0
+    assert result["confidence"] == 0.85
 
 
 @pytest.mark.asyncio
