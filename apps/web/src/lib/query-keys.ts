@@ -104,6 +104,7 @@ export const queryKeys = {
   // ── AI Engine ─────────────────────────────────────────
   ai: {
     all: ["ai"] as const,
+    matches: (resumeId: string | null) => ["ai", "matches", resumeId] as const,
   },
 
   // ── Sprint 27: Intelligence Hub ───────────────────────
@@ -206,5 +207,11 @@ export const queryKeys = {
     subscription: () => ["billing", "subscription"] as const,
     usage: () => ["billing", "usage"] as const,
     features: () => ["billing", "features"] as const,
+  },
+
+  // ── Resumes ──────────────────────────────────────────────
+  resumes: {
+    all: ["resumes"] as const,
+    list: () => ["resumes", "list"] as const,
   },
 } as const;
