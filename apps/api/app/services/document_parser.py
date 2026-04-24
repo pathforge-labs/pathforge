@@ -27,6 +27,13 @@ import io
 import logging
 from pathlib import PurePath
 
+from app.services.ocr_service import (
+    ImageTextExtractionError,
+    UnsupportedImageFormatError,
+    extract_text_from_image,
+    get_image_mime,
+)
+
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────
@@ -137,13 +144,6 @@ async def _parse_image(file_bytes: bytes, extension: str) -> str:
     Raises:
         DocumentParseError: If the image format is unsupported or OCR fails.
     """
-    from app.services.ocr_service import (
-        ImageTextExtractionError,
-        UnsupportedImageFormatError,
-        extract_text_from_image,
-        get_image_mime,
-    )
-
     image_mime = get_image_mime(extension)
     if image_mime is None:
         raise UnsupportedFormatError(

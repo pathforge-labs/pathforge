@@ -29,6 +29,12 @@ from app.services.document_parser import (
     _verify_mime,
     parse_document,
 )
+from app.services.ocr_service import (
+    ImageTextExtractionError as RealImageTextExtractionError,
+)
+from app.services.ocr_service import (
+    UnsupportedImageFormatError as RealUnsupportedImageFormatError,
+)
 
 # ── Exception Hierarchy ───────────────────────────────────────
 
@@ -372,72 +378,64 @@ def test_parse_in_thread_dispatches_docx() -> None:
 
 @pytest.mark.asyncio
 async def test_parse_document_jpg_dispatches_to_image_parser() -> None:
-    fake_ocr = SimpleNamespace(
-        ImageTextExtractionError=type("ImageTextExtractionError", (Exception,), {}),
-        UnsupportedImageFormatError=type("UnsupportedImageFormatError", (Exception,), {}),
-        extract_text_from_image=AsyncMock(return_value="ocr text"),
-        get_image_mime=MagicMock(return_value="image/jpeg"),
-    )
-    with patch.dict("sys.modules", {"app.services.ocr_service": fake_ocr}):
+    mock_extract = AsyncMock(return_value="ocr text")
+    mock_get_mime = MagicMock(return_value="image/jpeg")
+    with (
+        patch("app.services.document_parser.extract_text_from_image", new=mock_extract),
+        patch("app.services.document_parser.get_image_mime", new=mock_get_mime),
+    ):
         result = await parse_document(file_bytes=b"\xff\xd8\xff fake jpg", filename="photo.jpg")
     assert result == "ocr text"
-    fake_ocr.extract_text_from_image.assert_awaited_once()
-    fake_ocr.get_image_mime.assert_called_once_with(".jpg")
+    mock_extract.assert_awaited_once()
+    mock_get_mime.assert_called_once_with(".jpg")
 
 
 @pytest.mark.asyncio
 async def test_parse_image_maps_extension_to_mime() -> None:
-    fake_ocr = SimpleNamespace(
-        ImageTextExtractionError=type("ImageTextExtractionError", (Exception,), {}),
-        UnsupportedImageFormatError=type("UnsupportedImageFormatError", (Exception,), {}),
-        extract_text_from_image=AsyncMock(return_value="png text"),
-        get_image_mime=MagicMock(return_value="image/png"),
-    )
-    with patch.dict("sys.modules", {"app.services.ocr_service": fake_ocr}):
+    mock_extract = AsyncMock(return_value="png text")
+    mock_get_mime = MagicMock(return_value="image/png")
+    with (
+        patch("app.services.document_parser.extract_text_from_image", new=mock_extract),
+        patch("app.services.document_parser.get_image_mime", new=mock_get_mime),
+    ):
         result = await _parse_image(b"png bytes", ".png")
     assert result == "png text"
-    fake_ocr.extract_text_from_image.assert_awaited_once_with(
-        image_bytes=b"png bytes", image_mime="image/png"
-    )
+    mock_extract.assert_awaited_once_with(image_bytes=b"png bytes", image_mime="image/png")
 
 
 @pytest.mark.asyncio
 async def test_parse_image_unknown_mime_raises_unsupported() -> None:
-    fake_ocr = SimpleNamespace(
-        ImageTextExtractionError=type("ImageTextExtractionError", (Exception,), {}),
-        UnsupportedImageFormatError=type("UnsupportedImageFormatError", (Exception,), {}),
-        extract_text_from_image=AsyncMock(),
-        get_image_mime=MagicMock(return_value=None),
-    )
-    with patch.dict("sys.modules", {"app.services.ocr_service": fake_ocr}), pytest.raises(UnsupportedFormatError):
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value=None),
+        patch("app.services.document_parser.extract_text_from_image", new=AsyncMock()),
+        pytest.raises(UnsupportedFormatError),
+    ):
         await _parse_image(b"bytes", ".bmp")
 
 
 @pytest.mark.asyncio
 async def test_parse_image_unsupported_image_format_error_reraised() -> None:
-    UnsupportedImageFormatError = type("UnsupportedImageFormatError", (Exception,), {})  # noqa: N806
-    ImageTextExtractionError = type("ImageTextExtractionError", (Exception,), {})  # noqa: N806
-    fake_ocr = SimpleNamespace(
-        ImageTextExtractionError=ImageTextExtractionError,
-        UnsupportedImageFormatError=UnsupportedImageFormatError,
-        extract_text_from_image=AsyncMock(side_effect=UnsupportedImageFormatError("bad image")),
-        get_image_mime=MagicMock(return_value="image/webp"),
-    )
-    with patch.dict("sys.modules", {"app.services.ocr_service": fake_ocr}), pytest.raises(UnsupportedFormatError):
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value="image/webp"),
+        patch(
+            "app.services.document_parser.extract_text_from_image",
+            new=AsyncMock(side_effect=RealUnsupportedImageFormatError("bad image")),
+        ),
+        pytest.raises(UnsupportedFormatError),
+    ):
         await _parse_image(b"bytes", ".webp")
 
 
 @pytest.mark.asyncio
 async def test_parse_image_text_extraction_error_reraised_as_parse_error() -> None:
-    UnsupportedImageFormatError = type("UnsupportedImageFormatError", (Exception,), {})  # noqa: N806
-    ImageTextExtractionError = type("ImageTextExtractionError", (Exception,), {})  # noqa: N806
-    fake_ocr = SimpleNamespace(
-        ImageTextExtractionError=ImageTextExtractionError,
-        UnsupportedImageFormatError=UnsupportedImageFormatError,
-        extract_text_from_image=AsyncMock(side_effect=ImageTextExtractionError("OCR broke")),
-        get_image_mime=MagicMock(return_value="image/gif"),
-    )
-    with patch.dict("sys.modules", {"app.services.ocr_service": fake_ocr}), pytest.raises(DocumentParseError) as exc_info:
+    with (
+        patch("app.services.document_parser.get_image_mime", return_value="image/gif"),
+        patch(
+            "app.services.document_parser.extract_text_from_image",
+            new=AsyncMock(side_effect=RealImageTextExtractionError("OCR broke")),
+        ),
+        pytest.raises(DocumentParseError) as exc_info,
+    ):
         await _parse_image(b"bytes", ".gif")
     assert not isinstance(exc_info.value, UnsupportedFormatError)
 

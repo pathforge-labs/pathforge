@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-_PARSE_DOC_PATH = "app.services.document_parser.parse_document"
-_RESUME_PARSER_PATH = "app.ai.resume_parser.ResumeParser"
+_PARSE_DOC_PATH = "app.api.v1.resumes.parse_document"
+_RESUME_PARSER_PATH = "app.api.v1.resumes.ResumeParser"
 
 _PDF_BYTES = b"%PDF-1.4 fake"
 _TXT_BYTES = b"John Doe\nSoftware Engineer"

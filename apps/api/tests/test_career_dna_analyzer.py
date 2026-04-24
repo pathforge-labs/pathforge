@@ -2,7 +2,7 @@
 Unit tests for CareerDNAAnalyzer.
 
 Covers all 6 async/static methods:
-  - discover_hidden_skills (LLM, confidence cap 0.9)
+  - discover_hidden_skills (LLM, confidence cap 0.85)
   - analyze_experience_blueprint (LLM)
   - compute_growth_vector (LLM, growth_score clamping)
   - extract_values_profile (LLM, confidence clamping)
@@ -117,7 +117,7 @@ class TestDiscoverHiddenSkills:
         mock_llm.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_confidence_cap_at_0_9(self) -> None:
+    async def test_confidence_cap_at_0_85(self) -> None:
         fake_record = _make_record()
         fake_data = {
             "hidden_skills": [
@@ -133,15 +133,15 @@ class TestDiscoverHiddenSkills:
                 experience_text="Some meaningful experience text.",
             )
 
-        assert skills[0]["confidence"] == 0.9
-        assert skills[1]["confidence"] == 0.9
+        assert skills[0]["confidence"] == 0.85
+        assert skills[1]["confidence"] == 0.85
         assert skills[2]["confidence"] == 0.7
 
     @pytest.mark.asyncio
-    async def test_confidence_exactly_0_9_unchanged(self) -> None:
+    async def test_confidence_exactly_0_85_unchanged(self) -> None:
         fake_record = _make_record()
         fake_data = {
-            "hidden_skills": [{"name": "Skill A", "confidence": 0.9}],
+            "hidden_skills": [{"name": "Skill A", "confidence": 0.85}],
         }
         patcher = _patch_complete(return_value=(fake_data, fake_record))
         with patcher:
@@ -150,7 +150,7 @@ class TestDiscoverHiddenSkills:
                 experience_text="Experience text.",
             )
 
-        assert skills[0]["confidence"] == 0.9
+        assert skills[0]["confidence"] == 0.85
 
     @pytest.mark.asyncio
     async def test_missing_confidence_key_preserved(self) -> None:
