@@ -1119,7 +1119,7 @@
 
 ### Sprint 49 — N-3 Coverage Ratchet: 0% → ~90% on 6 Core Modules (✅ Complete — 2026-04-24)
 
-> Sprint 49: Systematic coverage push targeting modules with 0% coverage. Wrote comprehensive unit tests for 6 previously-untested modules: security, token_blacklist, email_service, rate_limit, career_dna_analyzer, and document_parser. Total: +130 tests (2605→2735 passing).
+> Sprint 49: Systematic coverage push targeting modules with 0% coverage. Wrote comprehensive unit tests for 6 previously-untested modules: security, token_blacklist, email_service, rate_limit, career_dna_analyzer, and document_parser. Total: +195 tests (2647→2842 passing). Note: session 1 wrote the tests but lost them between context windows; session 2 recovered and expanded them.
 
 - [x] **COV-1: `test_security.py`** — 2026-04-24. 21 tests: `hash_password`, `verify_password`, `create_access_token`/`create_refresh_token`, `get_current_user` (valid token, expired, revoked, wrong type, malformed). Uses `db_session` fixture + AsyncMock for token blacklist.
 - [x] **COV-2: `test_token_blacklist.py`** — 2026-04-24. 11 tests: Redis lazy init, `revoke` SETEX, `is_revoked` EXISTS, `consume_once` NX flag, `close`. Patches `app.core.redis_ssl.resolve_redis_url` (lazy import path).
@@ -1259,5 +1259,5 @@
 | 46       | N-2 ratchet | 113 tests  | 0            | 1        |
 | 47       | N-2 ratchet | 97 tests   | 1 (VR fix)   | 1        |
 | 48       | 4           | 5          | 0            | 1        |
-| 49       | N-3 ratchet | 130 tests  | 0            | 1        |
+| 49       | N-3 ratchet | 195 tests  | 0            | 2        |
 | 50       | 7           | 7          | 0            | 1        |
