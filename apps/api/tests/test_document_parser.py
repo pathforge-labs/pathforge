@@ -29,6 +29,12 @@ from app.services.document_parser import (
     _verify_mime,
     parse_document,
 )
+from app.services.ocr_service import (
+    ImageTextExtractionError as RealImageTextExtractionError,
+)
+from app.services.ocr_service import (
+    UnsupportedImageFormatError as RealUnsupportedImageFormatError,
+)
 
 # ── Exception Hierarchy ───────────────────────────────────────
 
@@ -409,10 +415,6 @@ async def test_parse_image_unknown_mime_raises_unsupported() -> None:
 
 @pytest.mark.asyncio
 async def test_parse_image_unsupported_image_format_error_reraised() -> None:
-    from app.services.ocr_service import (
-        UnsupportedImageFormatError as RealUnsupportedImageFormatError,
-    )
-
     with (
         patch("app.services.document_parser.get_image_mime", return_value="image/webp"),
         patch(
@@ -426,8 +428,6 @@ async def test_parse_image_unsupported_image_format_error_reraised() -> None:
 
 @pytest.mark.asyncio
 async def test_parse_image_text_extraction_error_reraised_as_parse_error() -> None:
-    from app.services.ocr_service import ImageTextExtractionError as RealImageTextExtractionError
-
     with (
         patch("app.services.document_parser.get_image_mime", return_value="image/gif"),
         patch(
