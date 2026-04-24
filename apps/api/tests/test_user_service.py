@@ -121,6 +121,7 @@ async def test_authenticate_inactive_user_raises(db_session: Any) -> None:
         email="inactive@example.com",
         password="pass123",
         full_name="Inactive",
+        is_verified=True,
     )
     user.is_active = False
     await db_session.flush()
@@ -129,6 +130,51 @@ async def test_authenticate_inactive_user_raises(db_session: Any) -> None:
         await UserService.authenticate(
             db_session, email="inactive@example.com", password="pass123",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_auto_verify
+async def test_authenticate_unverified_user_raises(db_session: Any) -> None:
+    """Email-based accounts must verify before they can log in (F28 audit).
+
+    Sanity check against regression: prior to this enforcement an
+    unverified user could sign up and immediately log in, bypassing the
+    verification flow entirely.
+    """
+    await UserService.create_user(
+        db_session,
+        email="unverified@example.com",
+        password="pass123",
+        full_name="Unverified",
+        # is_verified defaults to False for email-based users
+    )
+
+    with pytest.raises(ValueError, match="verify your email"):
+        await UserService.authenticate(
+            db_session, email="unverified@example.com", password="pass123",
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_auto_verify
+async def test_authenticate_unverified_user_rejected_before_token_issued(
+    db_session: Any,
+) -> None:
+    """Verification gate blocks token issuance even if credentials are valid."""
+    await UserService.create_user(
+        db_session,
+        email="gate@example.com",
+        password="ValidPass1!",
+        full_name="Gate",
+    )
+
+    # Correct password, but account is not verified — no tokens should be
+    # returned and the caller should see a clear "verify email" message.
+    with pytest.raises(ValueError) as exc_info:
+        await UserService.authenticate(
+            db_session, email="gate@example.com", password="ValidPass1!",
+        )
+    assert "verify your email" in str(exc_info.value).lower()
 
 
 # ── get_by_id ─────────────────────────────────────────────────────────────────

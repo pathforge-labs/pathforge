@@ -106,9 +106,18 @@ async def login(
             db, email=payload.email, password=payload.password
         )
     except ValueError as exc:
-        # Map inactive account to 403, bad credentials to 401
+        # Status-code mapping:
+        #   - "inactive"       -> 403 (account exists but disabled)
+        #   - "verify your email" -> 403 (credentials OK, gate not passed)
+        #   - "uses X sign-in" -> 403 (password login not supported)
+        #   - anything else    -> 401 (credential failure, generic)
         detail = str(exc)
-        if "inactive" in detail.lower():
+        lowered = detail.lower()
+        if (
+            "inactive" in lowered
+            or "verify your email" in lowered
+            or "sign-in" in lowered
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=detail,

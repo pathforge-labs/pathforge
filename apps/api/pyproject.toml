@@ -127,6 +127,9 @@ filterwarnings = [
     "ignore::DeprecationWarning:pytest_asyncio.plugin",
     "ignore::jwt.warnings.InsecureKeyLengthWarning",
 ]
+markers = [
+    "no_auto_verify: disable the _auto_verify_on_login autouse fixture so the test can exercise the real unverified-account rejection path",
+]
 
 # ── Coverage (Sprint 42 N-2) ──────────────────────────────────────
 # Minimal config: make industry-standard exclusions explicit.

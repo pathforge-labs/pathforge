@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api-client/auth";
+import { validatePasswordComplexity } from "@/lib/auth/password-policy";
 
 export default function ResetPasswordPage(): ReactElement {
   const router = useRouter();
@@ -34,17 +35,9 @@ export default function ResetPasswordPage(): ReactElement {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-
-    const complexityErrors: string[] = [];
-    if (!/[A-Z]/.test(newPassword)) complexityErrors.push("one uppercase letter");
-    if (!/\d/.test(newPassword)) complexityErrors.push("one digit");
-    if (!/[!@#$%^&*(),.?":{}|<>\-_=+[\]\\/\'`~;]/.test(newPassword)) complexityErrors.push("one special character");
-    if (complexityErrors.length > 0) {
-      setError(`Password must contain at least ${complexityErrors.join(", ")}`);
+    const complexityError = validatePasswordComplexity(newPassword);
+    if (complexityError) {
+      setError(complexityError);
       return;
     }
 

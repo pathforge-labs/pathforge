@@ -66,7 +66,18 @@ class UserService:
         """Authenticate a user and return access + refresh tokens.
 
         Raises:
-            ValueError: If credentials are invalid or account is inactive.
+            ValueError: If credentials are invalid, the account is inactive,
+                or the email address has not been verified.
+
+        Security note:
+            The ``is_verified`` check is performed *after* password
+            verification so that attackers cannot use login responses to
+            enumerate which emails are registered but unverified (which
+            would leak sign-up information). Unverified accounts see a
+            distinct "verify your email" message instead of a generic
+            credential error — this matches expected UX for the legitimate
+            owner of the credentials while still preventing enumeration by
+            unauthenticated callers.
         """
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
@@ -86,6 +97,17 @@ class UserService:
 
         if not user.is_active:
             raise ValueError("User account is inactive")
+
+        # F28 audit fix: enforce email verification for email-based
+        # (non-OAuth) accounts before issuing tokens. Prior to this check
+        # a user who registered but never clicked the verification link
+        # could still log in and bypass the verification gate entirely.
+        if not user.is_verified:
+            raise ValueError(
+                "Please verify your email address before signing in. "
+                "Check your inbox for the verification link "
+                "or request a new one from the sign-in page."
+            )
 
         return TokenResponse(
             access_token=create_access_token(str(user.id)),

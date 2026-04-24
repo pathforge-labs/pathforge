@@ -179,6 +179,60 @@ def _enable_oauth_providers() -> None:
     object.__setattr__(settings, "microsoft_oauth_client_id", "test-microsoft-client-id")
 
 
+# ── Email-verification bypass (F28 audit follow-up) ──────────────
+#
+# ``UserService.authenticate`` now rejects email-based accounts whose
+# ``is_verified`` flag is still False. That is a production hardening
+# (audit finding Sprint 39 → 28) but it would break the vast majority
+# of existing tests, which follow a ``register → login`` pattern via
+# HTTP endpoints and never mock the verify-email step.
+#
+# Rather than retrofit every test to call ``/verify-email`` (dozens of
+# call sites), tests opt into a shared autouse fixture that
+# transparently flips ``is_verified`` right before authentication.
+# Tests that MUST see the unverified path (e.g. the guardrail test
+# itself) mark themselves ``@pytest.mark.no_auto_verify`` and skip
+# the shortcut.
+
+
+@pytest.fixture(autouse=True)
+def _auto_verify_on_login(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto-verify email accounts before password authentication.
+
+    Opt-out via ``@pytest.mark.no_auto_verify`` for tests that need to
+    exercise the "unverified account is rejected" behaviour directly.
+    """
+    if request.node.get_closest_marker("no_auto_verify"):
+        return
+
+    from sqlalchemy import update as sql_update
+
+    from app.models.user import User as UserModel
+    from app.services.user_service import UserService
+
+    original_authenticate = UserService.authenticate
+
+    async def _patched_authenticate(
+        db: AsyncSession, *, email: str, password: str,
+    ) -> Any:
+        # Flip is_verified for any matching account before delegating to
+        # the real authenticate() so that the verification gate becomes
+        # a no-op for the register→login test pattern.
+        await db.execute(
+            sql_update(UserModel)
+            .where(UserModel.email == email)
+            .values(is_verified=True)
+        )
+        await db.flush()
+        return await original_authenticate(db, email=email, password=password)
+
+    monkeypatch.setattr(
+        UserService, "authenticate", staticmethod(_patched_authenticate),
+    )
+
+
 # ── Hermetic settings environment (ADR-0001/0002) ─────────────
 # Shared opt-in fixture for tests that build fresh `Settings(...)` instances
 # and need ambient env vars (e.g. from the developer's shell or a `.env` file)
@@ -298,8 +352,21 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-async def registered_user(client: AsyncClient) -> dict[str, str]:
-    """Register a test user and return their data."""
+async def registered_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> dict[str, str]:
+    """Register a test user and mark them verified.
+
+    F28 audit fix: login now requires ``is_verified=True`` for email
+    accounts. Tests that use the ``auth_headers`` fixture (which logs in
+    via HTTP) must therefore flip the flag after registration so the
+    login call succeeds without exercising the full email-verification
+    flow, which is covered by dedicated tests.
+    """
+    from sqlalchemy import update as sql_update
+
+    from app.models.user import User as UserModel
+
     payload = {
         "email": "test@pathforge.eu",
         "password": "TestPass123!",
@@ -307,6 +374,15 @@ async def registered_user(client: AsyncClient) -> dict[str, str]:
     }
     response = await client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
+
+    # Verify the account so downstream login-based fixtures work.
+    await db_session.execute(
+        sql_update(UserModel)
+        .where(UserModel.email == payload["email"])
+        .values(is_verified=True)
+    )
+    await db_session.commit()
+
     return {**response.json(), "password": payload["password"]}
 
 
@@ -332,6 +408,10 @@ async def authenticated_user(db_session: AsyncSession) -> User:
     Unlike ``registered_user``, this fixture bypasses HTTP endpoints,
     providing a deterministic User instance for integration tests that
     need an authenticated context without depending on the auth routes.
+
+    ``is_verified`` is True because integration tests using this fixture
+    often go through the login endpoint, which requires verification
+    (F28 audit fix).
     """
     from app.core.security import hash_password
     from app.models.user import User as UserModel
@@ -340,6 +420,7 @@ async def authenticated_user(db_session: AsyncSession) -> User:
         email="integration@pathforge.eu",
         hashed_password=hash_password("IntegrationPass123!"),
         full_name="Integration User",
+        is_verified=True,
     )
     db_session.add(user)
     await db_session.flush()
