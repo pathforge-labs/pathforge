@@ -161,7 +161,7 @@ async def upload_resume(
     db: AsyncSession = Depends(get_db),
 ) -> ResumeUploadResponse:
     """Upload a resume file, extract text, optionally parse structure, and save."""
-    extension, is_image = _validate_upload_file(file)
+    _, is_image = _validate_upload_file(file)
     file_bytes = await file.read()
 
     try:
