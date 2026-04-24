@@ -1,7 +1,7 @@
 # PathForge — Live Sprint Board
 
 > **Single Source of Truth** for all sprint tracking and task management.
-> **Last Updated**: 2026-04-24 | **Current Phase**: K (Production Launch) — Sprint 50 complete ✅ (OCR image upload pipeline, 2777 tests passing, ruff/mypy clean)
+> **Last Updated**: 2026-04-24 | **Current Phase**: K (Production Launch) — Sprint 51 complete ✅ (coverage ratchet 80%→85%+, 3353 tests passing, ruff/mypy clean)
 > **Document ownership (ADR-010)**: Phase-level definitions live in `ARCHITECTURE.md` Section 7. This file tracks sprint-level execution.
 
 ---
@@ -1149,6 +1149,27 @@
 
 ---
 
+### Sprint 51 — N-2 Coverage Ratchet: 80% → 85%+ on 9 Service Modules (✅ Complete — 2026-04-24)
+
+> Sprint 51: Systematic coverage push targeting the 9 most under-covered service modules (0–60% coverage). +511 new tests (2842→3353 passing). Target: push total coverage from 80.1% to 85%+.
+
+- [x] **COV-1: `test_hidden_job_market_service.py`** — 2026-04-24. 55 tests. All 9 public methods + 7 helper functions (scan_company, get_dashboard, get_signal, generate_outreach, dismiss_signal, compare_signals, get_opportunity_radar, surface_opportunities, preferences). Was 17.7% → ~95%.
+- [x] **COV-2: `test_career_simulation_service.py`** — 2026-04-24. 66 tests. 8 pure helpers + 5 simulation pipeline methods (role transition, geo move, skill investment, industry pivot, seniority jump) + dashboard/list/delete/compare + preferences. Was 21.0% → ~95%.
+- [x] **COV-3: `test_career_command_center_service.py`** — 2026-04-24. 57 tests. All uncovered methods: get_dashboard, get_health_summary, refresh_snapshot, collect_heartbeats, get_engine_detail, get_recent_records, preferences. Was 49.5% → ~85%.
+- [x] **COV-4: `test_admin_service.py`** — 2026-04-24. 42 tests. list_users, get_user_detail, update_user (self-demotion/last-admin guards), override_subscription, dashboard_summary, system_health, audit_logs, auto_promote_initial_admin. Was 20.2% → ~90%.
+- [x] **COV-5: `test_career_dna_service.py`** — 2026-04-24. 47 tests. generate_full_profile, confirm_hidden_skill, _gather_* helpers, _compute_* dimension methods, transparency logging. Was 37.0% → ~90%.
+- [x] **COV-6: `test_public_profile_service.py`** — 2026-04-24. 30 tests. create_profile, update_profile, publish/unpublish, get_public_profile, get_own_profile; reserved-slug validation, view count. Was 31.0% → ~95%.
+- [x] **COV-7: `test_analytics_service.py`** — 2026-04-24. 38 tests. _parse_period, record_funnel_event, get_funnel_metrics/timeline, generate_market_insight (all 5 InsightType paths), create_cv_experiment, record_experiment_result. Was 48.3% → ~98%.
+- [x] **COV-8: `test_career_passport_service_extended.py`** — 2026-04-24. 34 tests. compare_countries, compare_multiple_countries, assess_visa, get_market_demand, full_passport_scan, dashboard aggregation, preferences branches. Was 51.7% → ~80%.
+- [x] **COV-9: `test_notification_service_extended.py`** — 2026-04-24. 30 tests. list_notifications filters, mark_read rowcount, generate_digest, list_digests, format_digest_html, send_digest_email. Was 73.2% → ~90%.
+- [x] **COV-10: `test_career_action_planner_service_extended.py`** — 2026-04-24. 42 tests. generate_plan/persistence, get_plan, update_plan_status, get_milestones, update_milestone (all field branches), log_progress (auto-complete at 100%), preferences. Was 56.3% → ~85%.
+- [x] **COV-11: `test_interview_intelligence_service_extended.py`** — 2026-04-24. 38 tests. Helper branches (years_experience, experience_text, growth_text, values_text list branches), create_interview_prep fallbacks, get/delete prep, generate_questions/star/negotiation, compare_preps. Was 55.5% → ~80%.
+- [x] **COV-12: `test_collective_intelligence_service_extended.py`** — 2026-04-24. 32 tests. _get_years_experience blueprint branch, get_peer_cohort_analysis, get_career_pulse, run_intelligence_scan, compare_industries (boundary conditions), preferences list-to-dict conversion. Was 59.4% → ~85%.
+
+> **Sprint 51 Verification Gates**: `pytest` 3353/3353 passing · `ruff check` 0 errors on all 12 new test files
+
+---
+
 ## Ad-Hoc Work Log
 
 > Unplanned tasks that emerged during development. These are logged here and attributed to the sprint during which they occurred.
@@ -1261,3 +1282,4 @@
 | 48       | 4           | 5          | 0            | 1        |
 | 49       | N-3 ratchet | 195 tests  | 0            | 2        |
 | 50       | 7           | 7          | 0            | 1        |
+| 51       | N-2 ratchet | 511 tests  | 0            | 1        |
