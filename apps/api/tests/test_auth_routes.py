@@ -612,7 +612,10 @@ class TestLogout:
             )
 
         assert response.status_code == 204
-        mock_revoke.assert_called_once()
+        # Track 1 / ADR-0006: with login setting `pathforge_refresh` cookie,
+        # logout now revokes BOTH tokens (access from header + refresh from
+        # cookie). Old contract: "1 call". New contract: "≥ 1, both in scope".
+        assert mock_revoke.call_count >= 1
 
     async def test_logout_requires_authentication(self, client: AsyncClient) -> None:
         response = await client.post(LOGOUT_URL)
@@ -648,9 +651,13 @@ class TestLogout:
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             )
 
-        args, kwargs = mock_revoke.call_args
-        assert args[0] == expected_jti
-        assert kwargs["ttl_seconds"] > 0
+        # Track 1 / ADR-0006: revoke may be called multiple times (access
+        # JTI + cookie-refresh JTI). Assert the access JTI appears in any
+        # of the calls, with a positive TTL.
+        revoked_jtis = [call.args[0] for call in mock_revoke.call_args_list]
+        ttls = [call.kwargs["ttl_seconds"] for call in mock_revoke.call_args_list]
+        assert expected_jti in revoked_jtis
+        assert all(ttl > 0 for ttl in ttls)
 
     async def test_logout_revokes_refresh_when_provided(
         self, client: AsyncClient,
@@ -671,9 +678,18 @@ class TestLogout:
         assert response.status_code == 204
         assert mock_revoke.call_count == 2
 
-    async def test_logout_without_refresh_only_revokes_access(
+    async def test_logout_without_refresh_in_body_still_revokes_cookie_refresh(
         self, client: AsyncClient,
     ) -> None:
+        """Track 1 / ADR-0006: contract change.
+
+        Old contract: "client must pass refresh in body to revoke it".
+        New contract: "logout always revokes whatever's in scope —
+        bearer access in header AND refresh cookie set at login."
+
+        This is a strict security improvement: a client that forgets to
+        pass refresh no longer leaks the long-lived token.
+        """
         user = await _register(client, email="logout-accessonly@pathforge.eu")
         tokens = await _login(client, user["email"], user["password"])
 
@@ -687,7 +703,8 @@ class TestLogout:
             )
 
         assert response.status_code == 204
-        assert mock_revoke.call_count == 1
+        # Both access (header) and refresh (cookie) revoked.
+        assert mock_revoke.call_count == 2
 
     async def test_logout_invalid_refresh_token_still_succeeds(
         self, client: AsyncClient,

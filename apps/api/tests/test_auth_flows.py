@@ -488,7 +488,9 @@ class TestLogout:
             )
 
         assert response.status_code == 204
-        mock_revoke.assert_called_once()
+        # Track 1 / ADR-0006: logout now revokes both access (header)
+        # and refresh (cookie set at login) — call_count >= 1.
+        assert mock_revoke.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_logout_without_token(self, client: AsyncClient) -> None:
@@ -534,11 +536,13 @@ class TestLogout:
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             )
 
-        # Verify correct JTI was blacklisted
-        mock_revoke.assert_called_once()
-        call_args = mock_revoke.call_args
-        assert call_args[0][0] == expected_jti
-        assert call_args[1]["ttl_seconds"] > 0
+        # Verify correct access JTI was blacklisted (Track 1 / ADR-0006:
+        # cookie refresh JTI may also be revoked; assert access JTI in
+        # any of the calls).
+        revoked_jtis = [call.args[0] for call in mock_revoke.call_args_list]
+        ttls = [call.kwargs["ttl_seconds"] for call in mock_revoke.call_args_list]
+        assert expected_jti in revoked_jtis
+        assert all(ttl > 0 for ttl in ttls)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -893,10 +897,16 @@ class TestLogoutRefreshRevocation:
         assert mock_revoke.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_logout_without_body_still_works(
+    async def test_logout_without_body_revokes_cookie_refresh(
         self, client: AsyncClient,
     ) -> None:
-        """Logout without body still revokes access token only (backward compat)."""
+        """Track 1 / ADR-0006: contract change.
+
+        Old behaviour: client must pass refresh in the body for it to
+        be revoked. New behaviour: logout always revokes the cookie
+        refresh too — closing a leak where forgetful clients let the
+        long-lived refresh token outlive the user's session.
+        """
         user_data = await _register_user(client, email="logout-nobody@pathforge.eu")
         tokens = await _login_user(client, user_data["email"], user_data["password"])
 
@@ -910,8 +920,8 @@ class TestLogoutRefreshRevocation:
             )
 
         assert response.status_code == 204
-        # Only access token revoked (1 call)
-        mock_revoke.assert_called_once()
+        # Both access (header) and refresh (cookie set on login) revoked.
+        assert mock_revoke.call_count == 2
 
     @pytest.mark.asyncio
     async def test_logout_invalid_refresh_still_succeeds(
