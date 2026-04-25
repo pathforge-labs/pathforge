@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -75,7 +75,7 @@ def _stub_snapshot_orm() -> MagicMock:
     return obj
 
 
-def _stub_health_summary() -> dict:
+def _stub_health_summary() -> dict[str, Any]:
     return {
         "health_score": 72.0,
         "health_band": "healthy",

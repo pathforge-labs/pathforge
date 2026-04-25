@@ -13,6 +13,9 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import Update
+from sqlalchemy.engine import Result
+from sqlalchemy.sql import Executable
 
 from app.models.user import User
 from app.services.email_service import generate_token
@@ -159,16 +162,16 @@ async def test_reset_password_race_rowcount_zero_raises(db_session: Any) -> None
     user.password_reset_sent_at = datetime.now(UTC)
     await db_session.flush()
 
-    # Let SELECT run normally; mock the UPDATE result to rowcount=0
+    # Let SELECT run normally; intercept UPDATE statements to return rowcount=0
+    # Detecting Update by isinstance is robust against call-order changes.
     original_execute = db_session.execute
-    call_count = 0
 
-    async def selective_execute(stmt: Any, *args: Any, **kwargs: Any) -> Any:
-        nonlocal call_count
-        call_count += 1
+    async def selective_execute(
+        stmt: Executable, *args: Any, **kwargs: Any
+    ) -> Result[Any]:
         real = await original_execute(stmt, *args, **kwargs)
-        if call_count == 2:  # UPDATE is the second execute call
-            mock_res = MagicMock()
+        if isinstance(stmt, Update):
+            mock_res = MagicMock(spec=Result)
             mock_res.rowcount = 0
             return mock_res
         return real

@@ -106,15 +106,11 @@ async def test_cancel_stripe_billing_disabled_skips(db_session: AsyncSession) ->
     db_session.add(sub)
     await db_session.flush()
 
-    original = settings.billing_enabled
-    object.__setattr__(settings, "billing_enabled", False)
-    try:
+    with patch.object(settings, "billing_enabled", False):
         mock_stripe = MagicMock()
         with patch.dict("sys.modules", {"stripe": mock_stripe}):
             await _cancel_stripe_subscription(db_session, user_id=user.id)
         mock_stripe.Subscription.cancel.assert_not_called()
-    finally:
-        object.__setattr__(settings, "billing_enabled", original)
 
 
 @pytest.mark.asyncio

@@ -506,7 +506,6 @@ class TestSalaryIntelligenceRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "sal-scan@example.com")
-        est = _salary_estimate()
         with patch("app.core.feature_gate.get_user_tier", return_value="premium"), patch(
             "app.api.v1.salary_intelligence.SalaryIntelligenceService.run_full_scan",
             new_callable=AsyncMock,
