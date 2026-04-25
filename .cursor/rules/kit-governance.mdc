@@ -40,19 +40,26 @@ After generating code, you MUST enter **Self-Correction Mode**.
 
 **Priority tasks MUST be completed before suggesting or starting new tasks.**
 
-| Priority Level | Description                  | Rule                                             |
+| Priority Level | Description                       | Rule                                                  |
+| -------------- | --------------------------------- | ----------------------------------------------------- |
+| P0             | Active blocker                    | Finish before any other suggestion                    |
+| P1             | Same-day commitment               | Complete within the current session                   |
+| P2             | Next-step in approved plan        | Complete before introducing new scope                 |
 
 ### D. Cascade Update Protocol
 
 **Every change MUST trigger a systematic review of affected components.**
 
 | Change Type              | Affected Components to Check                              |
+| ------------------------ | --------------------------------------------------------- |
+| Schema migration         | ORM models, request/response schemas, integration tests   |
+| Public API contract      | Client SDKs, frontend types, OpenAPI snapshot, docs       |
+| Auth or session flow     | Middleware, route guards, e2e tests, security review      |
+| Configuration setting    | `.env.example`, deployment manifests, secret rotation log |
 
 ### E. Verification Before Completion Protocol
 
 **Nothing is "done" until explicitly verified.**
-
-```
 
 ### F. Task-Complete Checkpoint Protocol
 
@@ -70,14 +77,23 @@ This protocol is defined in `.agent/checklists/task-complete.md` and enforced by
 
 **When errors occur, recover gracefully without excuses.**
 
-| ❌ PROHIBITED              | ✅ REQUIRED                                            |
+| ❌ PROHIBITED                              | ✅ REQUIRED                                                  |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| Silent retries that hide root cause        | Surface the error, log structured fields, offer next steps   |
+| Catching and swallowing exceptions broadly | Catch specifically, re-raise with context                    |
+| Blaming external systems without proof     | Capture evidence (request id, timestamp) before attributing  |
 
-### H. Estimation Accuracy Protocol
+### I. Estimation Accuracy Protocol
 
 **Never underestimate complexity. Always disclose uncertainty.**
 
-| Level      | Meaning                            | When to Use                           |
+| Level      | Meaning                                | When to Use                                          |
+| ---------- | -------------------------------------- | ---------------------------------------------------- |
+| Confident  | Pattern is familiar, scope is bounded  | Pure refactor, well-tested change, single-file edit  |
+| Uncertain  | Pattern is new or scope is unclear     | Cross-cutting change, new integration, perf-sensitive |
+| Unknown    | Need investigation before promising    | Research spike, undocumented system, vendor opacity   |
 
 ## 🔧 TECHNICAL STANDARDS
 
-#
+(See `.agent/checklists/` for the per-domain technical standards
+referenced by this governance document.)
