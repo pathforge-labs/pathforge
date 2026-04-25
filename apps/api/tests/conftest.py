@@ -615,3 +615,106 @@ def warn_on_lazy_load() -> Generator[None, None, None]:
     yield
     event.remove(_SyncSession, "do_orm_execute", _listener)
 
+
+# ── T2 / Sprint 55 / ADR-0007: Query Budget enforcement ─────────
+#
+# When the QueryBudgetMiddleware is in place, every HTTP-driven test
+# implicitly walks through it. This fixture supplements that with two
+# guarantees the production middleware can't make:
+#
+#   * **Hard-fail mode** in tests: production logs a Sentry breadcrumb
+#     on overage; tests fail outright so the regression never reaches
+#     review.
+#   * **Registry**: every observed (endpoint, actual, declared) tuple
+#     is captured for the test_query_budgets.py report (CI artefact).
+#
+# Tests that intentionally bypass should mark themselves with
+# ``@pytest.mark.no_query_budget`` (see pyproject.toml).
+
+_query_budget_registry: dict[str, tuple[int, int]] = {}
+
+
+def _record_query_budget_observation(
+    *, endpoint_qualname: str, declared: int, observed: int
+) -> None:
+    prev_decl, prev_max = _query_budget_registry.get(
+        endpoint_qualname, (declared, 0)
+    )
+    if declared != prev_decl:  # pragma: no cover — invariant
+        raise AssertionError(
+            f"Inconsistent declared budget for {endpoint_qualname}: "
+            f"{prev_decl} vs {declared}"
+        )
+    _query_budget_registry[endpoint_qualname] = (
+        declared,
+        max(prev_max, observed),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _enforce_route_query_budgets(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    """Autouse: assert observed query count ≤ declared budget for every
+    request issued during the test, and record the observation."""
+    if request.node.get_closest_marker("no_query_budget") is not None:
+        yield
+        return
+
+    from app.core.middleware import QueryBudgetMiddleware
+    from app.core.query_budget import (
+        NoQueryBudgetDeclaredError,
+        get_route_query_budget,
+    )
+
+    original_dispatch = QueryBudgetMiddleware.dispatch
+    test_qualname = request.node.nodeid
+
+    async def _wrapped_dispatch(
+        self: QueryBudgetMiddleware,
+        starlette_request: Any,
+        call_next: Any,
+    ) -> Any:
+        response = await original_dispatch(self, starlette_request, call_next)
+        endpoint = getattr(
+            starlette_request.scope.get("route"), "endpoint", None
+        )
+        if endpoint is None:
+            return response
+        try:
+            declared = get_route_query_budget(endpoint)
+        except NoQueryBudgetDeclaredError:
+            return response
+        # The middleware sets ``x-query-count`` only in non-prod, which
+        # is the test environment.  Pull the count off the response.
+        header = response.headers.get("x-query-count")
+        if header is None:
+            return response
+        observed = int(header)
+        _record_query_budget_observation(
+            endpoint_qualname=endpoint.__qualname__,
+            declared=declared,
+            observed=observed,
+        )
+        if observed > declared:
+            raise AssertionError(
+                f"Query budget exceeded in {test_qualname}: "
+                f"{endpoint.__qualname__} ran {observed} queries, "
+                f"declared {declared}. "
+                "Either fix the N+1 or update the @route_query_budget "
+                "annotation. Use @pytest.mark.no_query_budget to opt out."
+            )
+        return response
+
+    QueryBudgetMiddleware.dispatch = _wrapped_dispatch  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        QueryBudgetMiddleware.dispatch = original_dispatch  # type: ignore[method-assign]
+
+
+@pytest.fixture
+def query_budget_registry() -> dict[str, tuple[int, int]]:
+    """Read-only snapshot of the per-endpoint budget registry."""
+    return dict(_query_budget_registry)
+

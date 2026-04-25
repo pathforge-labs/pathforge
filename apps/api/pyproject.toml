@@ -138,6 +138,7 @@ filterwarnings = [
 ]
 markers = [
     "no_auto_verify: disable the _auto_verify_on_login autouse fixture so the test can exercise the real unverified-account rejection path",
+    "no_query_budget: opt the test out of the @route_query_budget enforcement fixture (T2 / ADR-0007) — for raw integration probes that intentionally bypass per-route declared budgets",
 ]
 
 # ── Coverage (Sprint 42 N-2) ──────────────────────────────────────

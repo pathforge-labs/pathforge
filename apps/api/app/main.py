@@ -58,7 +58,12 @@ from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
 from app.core.llm_observability import initialize_observability
 from app.core.logging_config import setup_logging
-from app.core.middleware import BotTrapMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import (
+    BotTrapMiddleware,
+    QueryBudgetMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -82,6 +87,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Sprint 30 WS-1: Initialize Sentry error tracking
     from app.core.sentry import init_sentry
     init_sentry()
+
+    # T2 / Sprint 55, ADR-0007: Register the per-request DB query
+    # counter listener on the SQLAlchemy Engine class. Idempotent;
+    # safe to call before any engine instance is opened.
+    from app.core.query_recorder import register_query_counter_listener
+    register_query_counter_listener()
 
     # ADR-0001 / ADR-0002: Tag every event with the effective DB and
     # Redis TLS posture so post-mortem queries can filter "errors while
@@ -253,6 +264,18 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID"],
         max_age=600,  # cache pre-flight results for 10 min
     )
+    # T2 / ADR-0007: query-count gate. Starlette resolves middleware
+    # in the **reverse** of `add_middleware` order — the last add is
+    # the outermost wrapper. We want the request to traverse:
+    #   BotTrap → SecurityHeaders → RequestID → QueryBudget → CORS → endpoint
+    # so QueryBudget runs (a) AFTER `RequestID` has set
+    # `request_id_var` (correlatable breadcrumbs) and (b) AFTER
+    # `BotTrap` has had its chance to short-circuit on bot-probe 404s
+    # (no per-bot ContextVar allocation in production). To produce
+    # that order, `QueryBudgetMiddleware` is added BEFORE the trio
+    # below — the trio later wraps it, in turn wrapped by BotTrap as
+    # the outermost.
+    application.add_middleware(QueryBudgetMiddleware)
     application.add_middleware(RequestIDMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(BotTrapMiddleware)
