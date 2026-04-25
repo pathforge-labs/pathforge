@@ -24,6 +24,7 @@ from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
 from app.services.document_parser import (
+    MAX_FILE_SIZE,
     SUPPORTED_EXTENSIONS,
     DocumentParseError,
     FileTooLargeError,
@@ -162,6 +163,29 @@ async def upload_resume(
 ) -> ResumeUploadResponse:
     """Upload a resume file, extract text, optionally parse structure, and save."""
     _, is_image = _validate_upload_file(file)
+
+    # Sprint 39 audit S-M1 / A-H4: reject oversize uploads from the
+    # ``Content-Length`` header *before* reading the body into memory.
+    # Without this guard a 10 GB POST would buffer fully into the
+    # worker's RAM before ``MAX_FILE_SIZE`` fires inside
+    # ``parse_document``. The header is advisory (clients can lie or
+    # use chunked transfer with no length), so the in-memory check
+    # downstream stays as the second line of defence.
+    declared_size = request.headers.get("content-length")
+    if declared_size is not None:
+        try:
+            declared_int = int(declared_size)
+        except ValueError:
+            declared_int = -1
+        if declared_int > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    f"Declared file size ({declared_int:,} bytes) exceeds "
+                    f"limit ({MAX_FILE_SIZE:,} bytes)."
+                ),
+            )
+
     file_bytes = await file.read()
 
     try:

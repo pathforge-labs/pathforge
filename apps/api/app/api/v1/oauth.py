@@ -77,15 +77,20 @@ def _get_ms_jwks_client() -> PyJWKClient:
 # ── Token Verification ─────────────────────────────────────────
 
 
-async def _verify_google_token(id_token: str) -> dict[str, str]:
+async def _verify_google_token(id_token: str) -> dict[str, str | bool]:
     """Verify a Google ID token and return user info.
 
     Uses google-auth library for OIDC token verification.
-    The verification call is synchronous (uses ``requests`` internally),
-    so we run it in a thread pool to avoid blocking the event loop (F12).
+    ``verify_oauth2_token`` validates issuer (accounts.google.com),
+    audience (our client_id), and signature in one call. The call is
+    synchronous (uses ``requests`` internally) so we run it in a
+    thread pool to avoid blocking the event loop (F12).
 
     Returns:
-        Dict with 'email', 'name', and 'sub' (Google user ID).
+        Dict with ``email``, ``name``, ``sub`` (Google user ID),
+        and ``email_verified`` (bool — Google sets this to True for
+        Workspace accounts and verified consumer accounts; we surface
+        it so the route handler can gate cross-provider linking).
 
     Raises:
         HTTPException: If token verification fails.
@@ -117,7 +122,17 @@ async def _verify_google_token(id_token: str) -> dict[str, str]:
                 detail="Google token does not contain an email address",
             )
 
-        return {"email": email, "name": name, "sub": claims.get("sub", "")}
+        # S-H2: Google asserts ``email_verified=true`` only when it has
+        # confirmed the address (Workspace SSO, or a consumer account
+        # that completed verification). Pass-through for the gate.
+        email_verified = bool(claims.get("email_verified", False))
+
+        return {
+            "email": email,
+            "name": name,
+            "sub": claims.get("sub", ""),
+            "email_verified": email_verified,
+        }
 
     except ValueError as exc:
         logger.warning("Google token verification failed: %s", exc)
@@ -127,15 +142,38 @@ async def _verify_google_token(id_token: str) -> dict[str, str]:
         ) from exc
 
 
-async def _verify_microsoft_token(id_token: str) -> dict[str, str]:
+async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
     """Verify a Microsoft ID token using JWKS and return user info.
 
     Uses PyJWT's PyJWKClient to fetch Microsoft's public signing keys
     and verify the RS256 signature. The JWKS HTTP call is synchronous,
     so we run it in a thread pool to avoid blocking the event loop (F11).
 
+    Sprint 39 audit S-H1 — tenant + issuer validation:
+        ``/common/discovery/v2.0/keys`` serves keys for *every* Azure
+        AD tenant (and for personal Microsoft accounts via
+        ``9188040d-6c67-4c5b-b112-36a304b66dad``). Verifying only the
+        signature + audience lets any tenant whose admin obtains our
+        client_id mint tokens that pass our checks. This function now:
+            (a) decodes the unverified header to extract ``tid``;
+            (b) refuses the token if ``tid`` is not in the
+                ``microsoft_oauth_allowed_tenants`` allowlist;
+            (c) re-decodes with explicit ``issuer=``-binding to the
+                tenant-specific URL so the signed claim must match.
+        Empty allowlist ⇒ reject every Microsoft token (operator
+        must opt in by listing tenant IDs).
+
+    Sprint 39 audit S-H2 — ``email_verified`` gate:
+        Personal MSA tokens may carry a self-asserted ``email``
+        claim. Cross-provider account linking only trusts the
+        provider's email assertion when ``email_verified == True``
+        — that contract belongs in the verifier so the route handler
+        cannot accidentally bypass it. Returned dict carries an
+        explicit ``email_verified`` boolean.
+
     Returns:
-        Dict with 'email', 'name', and 'sub' (Microsoft user ID).
+        Dict with ``email``, ``name``, ``sub`` (subject claim),
+        and ``email_verified`` (bool).
 
     Raises:
         HTTPException: If token verification fails.
@@ -146,7 +184,38 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str]:
             detail="Microsoft OAuth is not configured",
         )
 
+    allowed_tenants = settings.microsoft_oauth_allowed_tenants
+    if not allowed_tenants:
+        # Tenant allowlist is empty — explicit operator opt-in required.
+        # Surface 501 (rather than 401) so the caller knows the
+        # endpoint is reachable but configuration is incomplete.
+        logger.warning(
+            "Microsoft OAuth: client_id is set but allowlist is empty — "
+            "rejecting; set MICROSOFT_OAUTH_ALLOWED_TENANTS to opt in."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Microsoft OAuth tenant allowlist is not configured",
+        )
+
     try:
+        # First pass: read the unverified ``tid`` claim to pick the
+        # tenant-specific issuer. ``options={"verify_signature": False}``
+        # is safe here because we re-verify the signature below — this
+        # decode is purely to learn which issuer string to bind.
+        unverified = pyjwt.decode(
+            id_token, options={"verify_signature": False},
+        )
+        tenant_id = unverified.get("tid")
+        if not tenant_id or tenant_id not in allowed_tenants:
+            logger.warning(
+                "Microsoft OAuth: tenant %r not in allowlist", tenant_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Microsoft tenant is not authorised for this application",
+            )
+
         jwks_client = _get_ms_jwks_client()
 
         # F11: PyJWKClient.get_signing_key_from_jwt() is synchronous HTTP
@@ -155,12 +224,14 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str]:
             jwks_client.get_signing_key_from_jwt, id_token
         )
 
+        expected_issuer = f"https://login.microsoftonline.com/{tenant_id}/v2.0"
         claims = pyjwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
             audience=settings.microsoft_oauth_client_id,
-            options={"verify_exp": True},
+            issuer=expected_issuer,
+            options={"verify_exp": True, "verify_iss": True},
         )
 
         email = claims.get("email") or claims.get("preferred_username")
@@ -172,13 +243,28 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str]:
                 detail="Microsoft token does not contain an email address",
             )
 
-        return {"email": email, "name": name, "sub": claims.get("sub", "")}
+        # S-H2: surface the verifier's belief about email ownership
+        # so the route handler can branch on it.
+        email_verified = bool(claims.get("email_verified", False))
+
+        return {
+            "email": email,
+            "name": name,
+            "sub": claims.get("sub", ""),
+            "email_verified": email_verified,
+        }
 
     except pyjwt.ExpiredSignatureError as exc:
         logger.warning("Microsoft token has expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Microsoft token has expired",
+        ) from exc
+    except pyjwt.InvalidIssuerError as exc:
+        logger.warning("Microsoft token issuer mismatch: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Microsoft token issuer is not trusted",
         ) from exc
     except pyjwt.InvalidTokenError as exc:
         logger.warning("Microsoft token verification failed: %s", exc)
@@ -213,44 +299,78 @@ async def oauth_login(
 
     # Verify the ID token with the provider
     user_info = await verifier(payload.id_token)
-    email = user_info["email"]
-    name = user_info["name"]
+    email = str(user_info["email"])
+    name = str(user_info["name"])
+    # Sprint 39 audit S-H2: only the provider's signed
+    # ``email_verified`` claim authorises us to bind this email to an
+    # existing account or to auto-verify a brand-new one. Without it
+    # the address is self-asserted (typical of Microsoft personal
+    # accounts) and we treat the OAuth login as anonymous-equivalent.
+    email_verified = bool(user_info.get("email_verified", False))
 
     # Check if user already exists
     user = await UserService.get_by_email(db, email)
 
     if user:
-        # Account linking — if user exists but with different provider,
-        # allow login since email is verified by the OAuth provider.
+        # Account linking guards.
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is inactive",
             )
-        # ── Verification cross-provider policy (F16) ───────────────
+
+        # ── Verification cross-provider policy (F16 + S-H2) ────────
         #
-        # If a user initially registered with email+password but never
-        # clicked the verification link, then later signs in via
-        # Google/Microsoft OAuth, the OAuth provider has already
-        # verified the email address by issuing an ID token for it.
-        # We therefore mark the account as verified here.
+        # If a user initially registered with email+password but
+        # never clicked the verification link, then later signs in
+        # via Google/Microsoft OAuth, the OAuth provider's signed
+        # ``email_verified`` claim is treated as equivalent to the
+        # verification link — but ONLY when the claim is present and
+        # true. A self-asserted email from a personal Microsoft
+        # account (``email_verified`` absent or false) does NOT
+        # complete the gate; we surface 403 so the user is told to
+        # complete email verification by the original channel.
         #
-        # Security note (Sprint 39 audit F31): this is intentional
-        # and NOT a verification bypass. The email-based login flow
-        # (``UserService.authenticate``) still enforces
-        # ``is_verified == True`` independently — an attacker who
-        # knew the victim's password but did not control the email
-        # cannot use this path because they cannot complete the
-        # Google/Microsoft OAuth challenge for that address. In
-        # other words, trust is transitively passed from "OAuth
-        # provider asserts control of the inbox" → "inbox owner is
-        # verified", which matches exactly what the email
-        # verification link would have proved.
+        # Security note: even with this guard, the email-based login
+        # flow (``UserService.authenticate``) still enforces
+        # ``is_verified == True`` independently — defence in depth.
         if not user.is_verified:
+            if not email_verified:
+                logger.warning(
+                    "OAuth account-linking blocked: provider=%s did not assert "
+                    "email_verified for existing unverified account",
+                    provider,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Your provider did not confirm this email is verified. "
+                        "Please complete email verification with the link we "
+                        "sent during registration before signing in via "
+                        f"{provider}."
+                    ),
+                )
             user.is_verified = True
             await db.flush()
     else:
-        # Create new OAuth user (no password, auto-verified)
+        # New OAuth user. We require ``email_verified`` here too —
+        # otherwise an attacker can claim any email by signing into a
+        # personal Microsoft account that advertises it.
+        if not email_verified:
+            logger.warning(
+                "OAuth user creation blocked: provider=%s did not assert "
+                "email_verified",
+                provider,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"{provider.title()} did not confirm this email address "
+                    "is verified. Please use a verified account or sign up "
+                    "with email + password."
+                ),
+            )
+
         user = await UserService.create_user(
             db,
             email=email,

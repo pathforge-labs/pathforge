@@ -25,6 +25,7 @@ from app.models.user import User
 from app.schemas.user import TokenResponse
 from app.services.email_service import EmailService, generate_token
 from app.services.user_service_errors import (
+    DuplicateEmailError,
     ExpiredResetTokenError,
     InactiveAccountError,
     InvalidCredentialsError,
@@ -61,7 +62,11 @@ class UserService:
         auth_provider: str = "email",
         is_verified: bool = False,
     ) -> User:
-        """Register a new user. Raises ValueError if email already taken.
+        """Register a new user.
+
+        Raises:
+            DuplicateEmailError: An account already exists for this
+                email. The route handler maps this to HTTP 409.
 
         Args:
             password: Required for email users, None for OAuth users (F24).
@@ -70,7 +75,7 @@ class UserService:
         """
         result = await db.execute(select(User).where(User.email == email))
         if result.scalar_one_or_none():
-            raise ValueError("A user with this email already exists")
+            raise DuplicateEmailError
 
         user = User(
             email=email,

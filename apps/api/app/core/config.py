@@ -220,6 +220,16 @@ class Settings(BaseSettings):  # type: ignore[misc]
     google_oauth_client_id: str = ""
     microsoft_oauth_client_id: str = ""
     microsoft_oauth_client_secret: str = ""
+    # Sprint 39 audit S-H1: tenant allowlist for Microsoft OIDC.
+    # The /common/discovery JWKS endpoint serves keys for every Azure
+    # AD tenant — without an issuer/tid check, any tenant whose admin
+    # acquires our client_id can mint tokens that pass signature
+    # verification. Comma-separated list of allowed tenant IDs (or
+    # "common" / "organizations" / "consumers" if you really do want
+    # to accept every tenant — discouraged in production).
+    # Empty list = reject every Microsoft token (Microsoft OAuth
+    # effectively disabled until the operator opts in).
+    microsoft_oauth_allowed_tenants: list[str] = []
 
     # ── Constants for validators ──────────────────────────────
     # `ClassVar` prevents Pydantic from treating these as settings fields
@@ -280,9 +290,35 @@ class Settings(BaseSettings):  # type: ignore[misc]
         self._reconcile_redis_url_scheme()
         self._guard_production_redis_downgrade()
         self._resolve_redis_ssl_default()
-        # JWT secrets — always last.
+        # JWT secrets.
         self._validate_jwt_secrets()
+        # Sprint 39 audit S-H3 — frontend origin posture.
+        self._guard_production_frontend_origins()
         return self
+
+    # ── Sprint 39 audit S-H3 — frontend origin posture ─────────────
+    # Verification + reset emails embed ``settings.frontend_url`` —
+    # which falls back to ``cors_origins_production[0]``. If that
+    # list is empty in production, the fallback (``http://localhost:3000``
+    # in ``frontend_url`` → see property below) would mean we email
+    # plaintext links. Equally bad: a non-https origin in production.
+    # Refuse to boot rather than ship plaintext credential transport.
+    def _guard_production_frontend_origins(self) -> None:
+        if not self.is_production:
+            return
+        if not self.cors_origins_production:
+            raise ValueError(
+                "CORS_ORIGINS_PRODUCTION must contain at least one origin "
+                "in production — verification + password-reset emails embed "
+                "the first entry as the frontend URL.",
+            )
+        for origin in self.cors_origins_production:
+            if not origin.startswith("https://"):
+                raise ValueError(
+                    f"CORS_ORIGINS_PRODUCTION entry {origin!r} is not "
+                    "HTTPS — production must not embed plaintext links "
+                    "in transactional emails.",
+                )
 
     # ── ADR-0001: Database URL SSL-param sanitiser ─────────────
     # SSL/TLS is controlled exclusively via `database_ssl` (→ asyncpg

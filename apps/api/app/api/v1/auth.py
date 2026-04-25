@@ -42,6 +42,7 @@ from app.schemas.user import (
 from app.services.email_service import EmailService, generate_token
 from app.services.user_service import UserService, _to_aware_utc
 from app.services.user_service_errors import (
+    DuplicateEmailError,
     InactiveAccountError,
     InvalidCredentialsError,
     OAuthOnlyAccountError,
@@ -89,10 +90,12 @@ async def register(
         )
 
         return user
-    except ValueError as exc:
+    except DuplicateEmailError as exc:
+        # Sprint 39 audit A-M1: typed exception (not stringly ValueError)
+        # so the route handler doesn't have to interpret the message.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
+            detail=exc.message,
         ) from exc
 
 
@@ -220,7 +223,23 @@ async def logout(
     token: str = Depends(oauth2_scheme),
     _current_user: User = Depends(get_current_user),
 ) -> None:
-    """Blacklist the current access token and optional refresh token."""
+    """Blacklist the current access token and optional refresh token.
+
+    Redis failure handling (Sprint 39 audit S-M3):
+        Logout MUST revoke the token to honour the user's intent.
+        If the blacklist (Redis) is unavailable, fail-mode policy
+        decides what to do:
+        - ``token_blacklist_fail_mode == "closed"`` (production
+          default): refuse the logout with 503 — the token stays
+          live, but the caller is told. Better than silently
+          succeeding while the session continues.
+        - ``"open"``: log a warning and return 204 — degraded UX
+          but tolerable in dev.
+        Previously the OS/connection error branch was swallowed
+        with ``pass`` regardless of mode.
+    """
+    revoke_errors: list[Exception] = []
+
     # Revoke access token
     try:
         decoded = jwt.decode(
@@ -231,7 +250,10 @@ async def logout(
 
         if jti and exp:
             remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
-            await token_blacklist.revoke(jti, ttl_seconds=remaining)
+            try:
+                await token_blacklist.revoke(jti, ttl_seconds=remaining)
+            except (ConnectionError, OSError) as exc:
+                revoke_errors.append(exc)
     except PyJWTError:
         pass  # Token already invalid — nothing to revoke
 
@@ -247,9 +269,33 @@ async def logout(
             refresh_exp: int | None = refresh_data.get("exp")
             if refresh_jti and refresh_exp:
                 remaining_r = max(int(refresh_exp - datetime.now(UTC).timestamp()), 1)
-                await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
-        except (PyJWTError, ConnectionError, OSError):
-            pass  # Best-effort: JWT decode failure or Redis unavailability
+                try:
+                    await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
+                except (ConnectionError, OSError) as exc:
+                    revoke_errors.append(exc)
+        except PyJWTError:
+            pass  # JWT decode failure — token already useless
+
+    if revoke_errors:
+        # Redis was unreachable for at least one token. Honour the
+        # configured fail-mode (matches ``get_current_user`` semantics).
+        if settings.token_blacklist_fail_mode == "closed":
+            logger.error(
+                "Logout: blacklist unavailable (%d revoke failure(s)) — "
+                "rejecting logout in fail-closed mode",
+                len(revoke_errors),
+                exc_info=revoke_errors[0],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service temporarily unavailable",
+            ) from revoke_errors[0]
+        logger.warning(
+            "Logout: blacklist unavailable (%d revoke failure(s)) — "
+            "completing in fail-open mode (tokens may remain live)",
+            len(revoke_errors),
+            exc_info=revoke_errors[0],
+        )
 
 
 # ── Sprint 39: Password Reset ──────────────────────────────────
@@ -267,6 +313,10 @@ async def forgot_password(
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     """Send password reset email. Always returns 200 to prevent email enumeration."""
+    # Sprint 39 audit S-M4: Turnstile gate (no-op when secret not set).
+    from app.core.turnstile import verify_turnstile_token
+    await verify_turnstile_token(payload.turnstile_token)
+
     user = await UserService.get_by_email(db, payload.email)
 
     if user and user.is_active:

@@ -71,6 +71,15 @@ class UserUpdateRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    # Sprint 39 audit S-M4: optional Turnstile token. The slowapi
+    # rate limit (3/min) caps a single IP, but credential-stuffing
+    # against the forgot-password endpoint from a botnet would still
+    # let attackers fish for valid emails by burning through the
+    # email send budget. CAPTCHA on this endpoint closes that.
+    # Optional in the schema so older clients keep working — the
+    # backend Turnstile verifier no-ops when no secret is set, and
+    # production sets the secret.
+    turnstile_token: str | None = Field(default=None)
 
 
 class ResetPasswordRequest(BaseModel):
