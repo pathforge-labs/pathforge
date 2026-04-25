@@ -1,0 +1,123 @@
+# ─────────────────────────────────────────────────────────────
+# PathForge — CD Pipeline (Deploy to Production)
+# ─────────────────────────────────────────────────────────────
+# Sprint 30 WS-2: Continuous Deployment to Railway
+#
+# Triggered manually or on push to production branch.
+# Deploys API via Railway API with health check verification.
+#
+# Prerequisites:
+#   - RAILWAY_TOKEN: Railway API token (Settings → Tokens)
+#   - RAILWAY_SERVICE_ID: API service ID from Railway dashboard
+#
+# Rollback: Use Railway dashboard to redeploy previous deployment.
+
+name: Deploy
+
+on:
+  push:
+    branches: [production]
+    paths:
+      - "apps/api/**"
+      - "docker/**"
+      - "railway.toml"
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # Never cancel an in-progress deploy
+
+jobs:
+  # ── Pre-flight Checks ───────────────────────────────────
+  preflight:
+    name: Pre-flight Validation
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'deploy')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync --frozen --all-extras
+
+      - name: Lint check
+        working-directory: apps/api
+        run: python -m ruff check app/
+
+      - name: Test suite
+        working-directory: apps/api
+        run: python -m pytest tests/ -v --tb=short -q
+        env:
+          ENVIRONMENT: testing
+          JWT_SECRET: ci-test-secret-minimum-32-characters-long
+          JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
+
+      # Audit H3: Security scan before deploy (see ci.yml for the
+      # full rationale on the ignored CVEs).
+      - name: Security audit (pip-audit)
+        working-directory: apps/api
+        continue-on-error: true
+        run: |
+          uv pip install pip-audit
+          python -m pip_audit --desc --progress-spinner off \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln GHSA-xqmj-j6mv-4862
+
+  # ── Deploy to Railway ───────────────────────────────────
+  deploy:
+    name: Deploy to Railway
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh
+
+      - name: Deploy
+        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Health check verification after deploy
+      - name: Verify deployment health
+        run: |
+          echo "Waiting 60s for deployment to stabilize..."
+          sleep 60
+          HEALTH_URL="${{ vars.API_BASE_URL }}/api/v1/health/ready"
+          echo "Checking: $HEALTH_URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" --max-time 10)
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "✅ Health check passed (HTTP $STATUS)"
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health**: ✅ \`/api/v1/health/ready\` returned 200" >> $GITHUB_STEP_SUMMARY

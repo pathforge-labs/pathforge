@@ -119,6 +119,7 @@ export function WaitlistForm({
           id="waitlist-email-compact"
           name="email"
           type="email"
+          autoComplete="email"
           placeholder="Enter your email"
           value={email}
           onChange={(e) => {
@@ -162,6 +163,7 @@ export function WaitlistForm({
             id="waitlist-email-hero"
             name="email"
             type="email"
+            autoComplete="email"
             placeholder="your@email.com"
             value={email}
             onChange={(e) => {

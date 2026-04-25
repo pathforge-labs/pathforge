@@ -21,9 +21,13 @@ __pycache__/
 # ── IDE ─────────────────────────────────────────────
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~
+
+# ── Windows artifacts ───────────────────────────────
+nul
 
 # ── OS ──────────────────────────────────────────────
 .DS_Store
@@ -44,7 +48,21 @@ yarn-debug.log*
 coverage/
 htmlcov/
 .nyc_output/
+# Python coverage.py artefacts (ADR-0002 companion, Sprint 42 N-2)
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
 
 # ── Docker ──────────────────────────────────────────
 docker-compose.override.yml
 .vercel
+
+# Devran AI Kit (local dev tooling)
+# Install: npx @devran-ai/kit init
+#
+# .codex/, .opencode/, and .cursor/rules/kit-governance.mdc are shared
+# governance configuration and ARE tracked — they were briefly in this
+# ignore list by mistake. Per-developer state lives under .agent/ which
+# stays ignored.
+.agent/

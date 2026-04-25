@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PathForge Email Signatures — Preview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 40px 20px;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+    }
+
+    .card-header {
+      padding: 16px 24px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .card-body {
+      padding: 32px;
+    }
+
+    /* Light theme cards */
+    .light .card-header {
+      background: #f8fafc;
+      color: #64748b;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .light .card-body {
+      background: #ffffff;
+    }
+
+    /* Dark theme cards */
+    .dark .card-header {
+      background: #0c0c1a;
+      color: #64748b;
+      border-bottom: 1px solid rgba(124,58,237,0.12);
+    }
+    .dark .card-body {
+      background: #0f1021;
+    }
+
+    /* Dark mode text overrides */
+    .dark .card-body p,
+    .dark .card-body strong,
+    .dark .card-body div {
+      color: #e2e8f0 !important;
+    }
+    .dark .card-body .sig-name {
+      color: #f1f5f9 !important;
+    }
+    .dark .card-body .sig-title {
+      color: #a78bfa !important;
+    }
+    .dark .card-body .sig-company-name {
+      color: #a78bfa !important;
+    }
+    .dark .card-body .sig-tagline {
+      color: #94a3b8 !important;
+    }
+    .dark .card-body .sig-divider {
+      background-color: #1e293b !important;
+    }
+    .dark .card-body .sig-contact,
+    .dark .card-body .sig-contact a {
+      color: #94a3b8 !important;
+    }
+    .dark .card-body .sig-separator {
+      color: #475569 !important;
+    }
+    .dark .card-body .sig-link {
+      color: #a78bfa !important;
+    }
+    .dark .card-body .sig-social a {
+      color: #94a3b8 !important;
+    }
+    .dark .card-body .sig-location {
+      color: #64748b !important;
+    }
+    .dark .card-body .sig-brand-card {
+      background-color: rgba(139, 92, 246, 0.08) !important;
+    }
+    .dark .card-body .sig-brand-card .sig-tagline {
+      color: #94a3b8 !important;
+    }
+    .dark .card-body td[style*="border-left"] {
+      border-left-color: #334155 !important;
+    }
+    .dark .card-body .sig-social .sig-separator {
+      color: #475569 !important;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 56px auto 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-title:first-of-type {
+      margin-top: 0;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.1);
+      padding: 3px 8px;
+      border-radius: 4px;
+      vertical-align: middle;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .instructions {
+      max-width: 600px;
+      margin: 64px auto 0;
+      padding: 24px 32px;
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.7;
+    }
+
+    .instructions h3 {
+      font-size: 16px;
+      color: #0f172a;
+      margin-bottom: 12px;
+    }
+
+    .instructions ol {
+      padding-left: 20px;
+    }
+
+    .instructions li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <h1>PathForge — Email Signatures</h1>
+    <p>Preview all signature variants in light &amp; dark mode</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- FULL SIGNATURE V1 — STRUCTURED                 -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <h2 class="section-title">Full Signature v1 <span class="badge">Structured</span></h2>
+
+  <div class="grid">
+
+    <!-- Full v1 — Light -->
+    <div class="card light">
+      <div class="card-header">☀️&nbsp; Light Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="max-width: 550px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td align="center" style="vertical-align: middle; padding-right: 20px; width: 68px;">
+                    <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                      <img src="https://pathforge.eu/brand/logo-light.png" alt="PathForge" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; border: 2px solid #8b5cf6;" />
+                    </a>
+                  </td>
+                  <td style="vertical-align: middle; border-left: 2px solid #e2e8f0; padding-left: 20px;">
+                    <div class="sig-name" style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 2px; line-height: 1.2; letter-spacing: -0.02em;">Emre Dursun</div>
+                    <div class="sig-title" style="font-size: 11px; font-weight: 700; color: #8b5cf6; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;">Founder &amp; CEO</div>
+                    <table cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; color: #64748b;">
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; width: 50px; font-weight: 600; vertical-align: top;">Email</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;"><a href="mailto:emre@pathforge.eu" style="color: #334155; text-decoration: none; font-weight: 500;">emre@pathforge.eu</a></td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; font-weight: 600; vertical-align: top;">Phone</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;"><a href="tel:+31686303905" style="color: #334155; text-decoration: none; font-weight: 500;">+31 686 303 905</a></td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; font-weight: 600; vertical-align: top;">Web</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;">
+                          <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none; font-weight: 600; font-size: 13px;">pathforge.eu</a>
+                          <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                          <span class="sig-location" style="font-size: 11px; color: #94a3b8;">&#127475;&#127473; Netherlands</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="color: #94a3b8; font-weight: 600; vertical-align: top;">Social</td>
+                        <td class="sig-social" style="line-height: 1.6;">
+                          <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">LinkedIn</a>
+                          <span class="sig-separator" style="color: #e2e8f0;">&nbsp;/&nbsp;</span>
+                          <a href="https://x.com/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">X</a>
+                          <span class="sig-separator" style="color: #e2e8f0;">&nbsp;/&nbsp;</span>
+                          <a href="https://instagram.com/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">Instagram</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" class="sig-brand-card" style="margin-top: 16px; background-color: #f8fafc; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+                <tr>
+                  <td style="padding: 12px 16px;">
+                    <div class="sig-company-name" style="font-size: 16px; color: #8b5cf6; font-weight: 800; margin-bottom: 3px; letter-spacing: -0.01em;">PathForge</div>
+                    <div class="sig-tagline" style="font-size: 13px; color: #475569; line-height: 1.5;">Career Intelligence for Everyone &mdash; AI-powered career guidance, skill tracking, and salary insights.</div>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 14px;">
+                <tr><td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Full v1 — Dark -->
+    <div class="card dark">
+      <div class="card-header">🌙&nbsp; Dark Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="max-width: 550px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td align="center" style="vertical-align: middle; padding-right: 20px; width: 68px;">
+                    <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                      <img src="https://pathforge.eu/brand/logo-dark.png" alt="PathForge" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; border: 2px solid #8b5cf6;" />
+                    </a>
+                  </td>
+                  <td style="vertical-align: middle; border-left: 2px solid #e2e8f0; padding-left: 20px;">
+                    <div class="sig-name" style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 2px; line-height: 1.2; letter-spacing: -0.02em;">Emre Dursun</div>
+                    <div class="sig-title" style="font-size: 11px; font-weight: 700; color: #8b5cf6; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;">Founder &amp; CEO</div>
+                    <table cellpadding="0" cellspacing="0" border="0" style="font-size: 12px; color: #64748b;">
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; width: 50px; font-weight: 600; vertical-align: top;">Email</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;"><a href="mailto:emre@pathforge.eu" style="color: #334155; text-decoration: none; font-weight: 500;">emre@pathforge.eu</a></td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; font-weight: 600; vertical-align: top;">Phone</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;"><a href="tel:+31686303905" style="color: #334155; text-decoration: none; font-weight: 500;">+31 686 303 905</a></td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 3px; color: #94a3b8; font-weight: 600; vertical-align: top;">Web</td>
+                        <td class="sig-contact" style="padding-bottom: 3px;">
+                          <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none; font-weight: 600; font-size: 13px;">pathforge.eu</a>
+                          <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                          <span class="sig-location" style="font-size: 11px; color: #94a3b8;">&#127475;&#127473; Netherlands</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="color: #94a3b8; font-weight: 600; vertical-align: top;">Social</td>
+                        <td class="sig-social" style="line-height: 1.6;">
+                          <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">LinkedIn</a>
+                          <span class="sig-separator" style="color: #e2e8f0;">&nbsp;/&nbsp;</span>
+                          <a href="https://x.com/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">X</a>
+                          <span class="sig-separator" style="color: #e2e8f0;">&nbsp;/&nbsp;</span>
+                          <a href="https://instagram.com/pathforge" target="_blank" style="color: #334155; text-decoration: none; font-weight: 600;">Instagram</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" class="sig-brand-card" style="margin-top: 16px; background-color: #f8fafc; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+                <tr>
+                  <td style="padding: 12px 16px;">
+                    <div class="sig-company-name" style="font-size: 16px; color: #8b5cf6; font-weight: 800; margin-bottom: 3px; letter-spacing: -0.01em;">PathForge</div>
+                    <div class="sig-tagline" style="font-size: 13px; color: #475569; line-height: 1.5;">Career Intelligence for Everyone &mdash; AI-powered career guidance, skill tracking, and salary insights.</div>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 14px;">
+                <tr><td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- COMPACT SIGNATURE V1 — STRUCTURED              -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <h2 class="section-title">Compact Signature v1 <span class="badge">Structured</span></h2>
+
+  <div class="grid">
+
+    <!-- Compact v1 — Light -->
+    <div class="card light">
+      <div class="card-header">☀️&nbsp; Light Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="max-width: 420px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; border-collapse: collapse;">
+          <tr>
+            <td align="center" style="vertical-align: top; padding-right: 14px; width: 44px; padding-top: 2px;">
+              <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                <img src="https://pathforge.eu/brand/logo-light.png" alt="PathForge" width="46" height="46" style="display: block; width: 46px; height: 46px; border-radius: 12px; border: 2px solid #8b5cf6;" />
+              </a>
+            </td>
+            <td style="vertical-align: top; border-left: 2px solid #e2e8f0; padding-left: 14px;">
+              <p style="margin: 0 0 4px 0; font-size: 15px; line-height: 1.3;">
+                <strong class="sig-name" style="font-weight: 700; color: #1e293b; letter-spacing: -0.01em;">Emre Dursun</strong>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <span class="sig-title" style="font-size: 11px; font-weight: 600; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Founder &amp; CEO</span>
+              </p>
+              <p class="sig-contact" style="margin: 0 0 4px 0; font-size: 12px; line-height: 1.4; color: #64748b;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none; font-weight: 700; font-size: 14px;">PathForge</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;|&nbsp;</span>
+                <a href="mailto:emre@pathforge.eu" style="color: #334155; text-decoration: none;">emre@pathforge.eu</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;|&nbsp;</span>
+                <a href="tel:+31686303905" style="color: #334155; text-decoration: none;">+31 686 303 905</a>
+              </p>
+              <p class="sig-social" style="margin: 0; font-size: 11px; line-height: 1.3; color: #94a3b8;">
+                <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                <span class="sig-separator" style="color: #e2e8f0;">/</span>
+                <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                <span class="sig-separator" style="color: #e2e8f0;">/</span>
+                <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;&middot;&nbsp;</span>
+                <span class="sig-location" style="font-size: 10px; color: #94a3b8;">&#127475;&#127473; NL</span>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding-top: 10px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0;">&nbsp;</td></tr></table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Compact v1 — Dark -->
+    <div class="card dark">
+      <div class="card-header">🌙&nbsp; Dark Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="max-width: 420px; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; border-collapse: collapse;">
+          <tr>
+            <td align="center" style="vertical-align: top; padding-right: 14px; width: 44px; padding-top: 2px;">
+              <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                <img src="https://pathforge.eu/brand/logo-dark.png" alt="PathForge" width="46" height="46" style="display: block; width: 46px; height: 46px; border-radius: 12px; border: 2px solid #8b5cf6;" />
+              </a>
+            </td>
+            <td style="vertical-align: top; border-left: 2px solid #e2e8f0; padding-left: 14px;">
+              <p style="margin: 0 0 4px 0; font-size: 15px; line-height: 1.3;">
+                <strong class="sig-name" style="font-weight: 700; color: #1e293b; letter-spacing: -0.01em;">Emre Dursun</strong>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <span class="sig-title" style="font-size: 11px; font-weight: 600; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Founder &amp; CEO</span>
+              </p>
+              <p class="sig-contact" style="margin: 0 0 4px 0; font-size: 12px; line-height: 1.4; color: #64748b;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none; font-weight: 700; font-size: 14px;">PathForge</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;|&nbsp;</span>
+                <a href="mailto:emre@pathforge.eu" style="color: #334155; text-decoration: none;">emre@pathforge.eu</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;|&nbsp;</span>
+                <a href="tel:+31686303905" style="color: #334155; text-decoration: none;">+31 686 303 905</a>
+              </p>
+              <p class="sig-social" style="margin: 0; font-size: 11px; line-height: 1.3; color: #94a3b8;">
+                <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                <span class="sig-separator" style="color: #e2e8f0;">/</span>
+                <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                <span class="sig-separator" style="color: #e2e8f0;">/</span>
+                <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+                <span class="sig-separator" style="color: #e2e8f0;">&nbsp;&middot;&nbsp;</span>
+                <span class="sig-location" style="font-size: 10px; color: #94a3b8;">&#127475;&#127473; NL</span>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding-top: 10px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0;">&nbsp;</td></tr></table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- FULL SIGNATURE V2 — CLEAN                      -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <h2 class="section-title">Full Signature v2 <span class="badge">Clean</span></h2>
+
+  <div class="grid">
+
+    <!-- Full v2 — Light -->
+    <div class="card light">
+      <div class="card-header">☀️&nbsp; Light Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 420px; border-collapse: collapse;">
+          <!-- Gradient accent bar -->
+          <tr>
+            <td colspan="2" style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0; padding: 0;">&nbsp;</td>
+          </tr>
+          <!-- Spacer -->
+          <tr>
+            <td colspan="2" style="height: 16px; font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+          <!-- Logo + Info -->
+          <tr>
+            <td style="vertical-align: top; padding-right: 16px; width: 56px;">
+              <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                <img src="https://pathforge.eu/brand/logo-light.png" alt="PathForge" width="52" height="52" style="display: block; width: 52px; height: 52px; border-radius: 10px; border: 0;" />
+              </a>
+            </td>
+            <td style="vertical-align: top; padding: 0;">
+              <!-- Name -->
+              <p class="sig-name" style="margin: 0 0 2px 0; font-size: 18px; font-weight: 700; color: #1e293b; line-height: 1.3; letter-spacing: -0.01em;">Emre Dursun</p>
+              <!-- Title -->
+              <p class="sig-title" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 500; color: #7c3aed; line-height: 1.3;">Founder &amp; CEO</p>
+              <!-- Company -->
+              <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: #8b5cf6; line-height: 1.3;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none;">PathForge</a>
+                <span class="sig-tagline" style="font-size: 13px; color: #475569; font-weight: 400;">&nbsp;&mdash;&nbsp;Career Intelligence for Everyone</span>
+              </p>
+              <!-- Divider -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 8px 0; border-collapse: collapse;">
+                <tr><td class="sig-divider" style="height: 1px; width: 200px; background-color: #e2e8f0; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+              <!-- Contact -->
+              <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                <tr>
+                  <td class="sig-contact" style="font-size: 12px; color: #64748b; line-height: 1.6; padding: 0;">
+                    <a href="mailto:emre@pathforge.eu" style="color: #64748b; text-decoration: none;">emre@pathforge.eu</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                    <a href="tel:+31686303905" style="color: #64748b; text-decoration: none;">+31 686 303 905</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="sig-contact" style="font-size: 13px; color: #64748b; line-height: 1.6; padding: 1px 0 0 0;">
+                    <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none; font-weight: 500;">pathforge.eu</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                    <span class="sig-location" style="font-size: 11px; color: #94a3b8;">&#127475;&#127473; Netherlands</span>
+                  </td>
+                </tr>
+              </table>
+              <!-- Spacer -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 0 0; border-collapse: collapse;">
+                <tr><td style="height: 0; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+              <!-- Social -->
+              <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                <tr>
+                  <td class="sig-social" style="font-size: 11px; line-height: 1; padding: 0;">
+                    <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                    <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                    <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Full v2 — Dark -->
+    <div class="card dark">
+      <div class="card-header">🌙&nbsp; Dark Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 420px; border-collapse: collapse;">
+          <!-- Gradient accent bar -->
+          <tr>
+            <td colspan="2" style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0; padding: 0;">&nbsp;</td>
+          </tr>
+          <!-- Spacer -->
+          <tr>
+            <td colspan="2" style="height: 16px; font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+          <!-- Logo + Info -->
+          <tr>
+            <td style="vertical-align: top; padding-right: 16px; width: 56px;">
+              <a href="https://pathforge.eu" target="_blank" style="text-decoration: none;">
+                <img src="https://pathforge.eu/brand/logo-dark.png" alt="PathForge" width="52" height="52" style="display: block; width: 52px; height: 52px; border-radius: 10px; border: 0;" />
+              </a>
+            </td>
+            <td style="vertical-align: top; padding: 0;">
+              <!-- Name -->
+              <p class="sig-name" style="margin: 0 0 2px 0; font-size: 18px; font-weight: 700; color: #1e293b; line-height: 1.3; letter-spacing: -0.01em;">Emre Dursun</p>
+              <!-- Title -->
+              <p class="sig-title" style="margin: 0 0 8px 0; font-size: 13px; font-weight: 500; color: #7c3aed; line-height: 1.3;">Founder &amp; CEO</p>
+              <!-- Company -->
+              <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: #8b5cf6; line-height: 1.3;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none;">PathForge</a>
+                <span class="sig-tagline" style="font-size: 13px; color: #475569; font-weight: 400;">&nbsp;&mdash;&nbsp;Career Intelligence for Everyone</span>
+              </p>
+              <!-- Divider -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 8px 0; border-collapse: collapse;">
+                <tr><td class="sig-divider" style="height: 1px; width: 200px; background-color: #e2e8f0; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+              <!-- Contact -->
+              <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                <tr>
+                  <td class="sig-contact" style="font-size: 12px; color: #64748b; line-height: 1.6; padding: 0;">
+                    <a href="mailto:emre@pathforge.eu" style="color: #64748b; text-decoration: none;">emre@pathforge.eu</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                    <a href="tel:+31686303905" style="color: #64748b; text-decoration: none;">+31 686 303 905</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="sig-contact" style="font-size: 13px; color: #64748b; line-height: 1.6; padding: 1px 0 0 0;">
+                    <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none; font-weight: 500;">pathforge.eu</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                    <span class="sig-location" style="font-size: 11px; color: #94a3b8;">&#127475;&#127473; Netherlands</span>
+                  </td>
+                </tr>
+              </table>
+              <!-- Spacer -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 0 0; border-collapse: collapse;">
+                <tr><td style="height: 0; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+              </table>
+              <!-- Social -->
+              <table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                <tr>
+                  <td class="sig-social" style="font-size: 11px; line-height: 1; padding: 0;">
+                    <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                    <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                    <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                    <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- COMPACT SIGNATURE V2 — MINIMAL                 -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <h2 class="section-title">Compact Signature v2 <span class="badge">Minimal</span></h2>
+
+  <div class="grid">
+
+    <!-- Compact v2 — Light -->
+    <div class="card light">
+      <div class="card-header">☀️&nbsp; Light Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 360px; border-collapse: collapse;">
+          <!-- Gradient accent bar -->
+          <tr>
+            <td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0; padding: 0;">&nbsp;</td>
+          </tr>
+          <!-- Spacer -->
+          <tr>
+            <td style="height: 12px; font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+          <!-- Name + Title -->
+          <tr>
+            <td style="padding: 0;">
+              <p style="margin: 0 0 4px 0; font-size: 15px; line-height: 1.3; color: #1e293b;">
+                <strong class="sig-name" style="font-weight: 700; letter-spacing: -0.01em;">Emre Dursun</strong>
+                <span class="sig-separator" style="color: #94a3b8;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                <span class="sig-title" style="color: #7c3aed; font-weight: 500;">Founder &amp; CEO</span>
+              </p>
+            </td>
+          </tr>
+          <!-- Company + Contact -->
+          <tr>
+            <td style="padding: 0;">
+              <p class="sig-contact" style="margin: 0 0 6px 0; font-size: 13px; line-height: 1.4; color: #64748b;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none; font-weight: 700; font-size: 14px;">PathForge</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none;">pathforge.eu</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="tel:+31686303905" style="color: #64748b; text-decoration: none;">+31 686 303 905</a>
+              </p>
+            </td>
+          </tr>
+          <!-- Social -->
+          <tr>
+            <td style="padding: 0;">
+              <p class="sig-social" style="margin: 0; font-size: 11px; line-height: 1.3; color: #94a3b8;">
+                <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Compact v2 — Dark -->
+    <div class="card dark">
+      <div class="card-header">🌙&nbsp; Dark Mode</div>
+      <div class="card-body">
+        <table cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 360px; border-collapse: collapse;">
+          <!-- Gradient accent bar -->
+          <tr>
+            <td style="height: 2px; background: linear-gradient(90deg, #7c3aed, #06b6d4); font-size: 0; line-height: 0; padding: 0;">&nbsp;</td>
+          </tr>
+          <!-- Spacer -->
+          <tr>
+            <td style="height: 12px; font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+          <!-- Name + Title -->
+          <tr>
+            <td style="padding: 0;">
+              <p style="margin: 0 0 4px 0; font-size: 15px; line-height: 1.3; color: #1e293b;">
+                <strong class="sig-name" style="font-weight: 700; letter-spacing: -0.01em;">Emre Dursun</strong>
+                <span class="sig-separator" style="color: #94a3b8;">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                <span class="sig-title" style="color: #7c3aed; font-weight: 500;">Founder &amp; CEO</span>
+              </p>
+            </td>
+          </tr>
+          <!-- Company + Contact -->
+          <tr>
+            <td style="padding: 0;">
+              <p class="sig-contact" style="margin: 0 0 6px 0; font-size: 13px; line-height: 1.4; color: #64748b;">
+                <a href="https://pathforge.eu" target="_blank" class="sig-company-name" style="color: #8b5cf6; text-decoration: none; font-weight: 700; font-size: 14px;">PathForge</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://pathforge.eu" target="_blank" class="sig-link" style="color: #8b5cf6; text-decoration: none;">pathforge.eu</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="tel:+31686303905" style="color: #64748b; text-decoration: none;">+31 686 303 905</a>
+              </p>
+            </td>
+          </tr>
+          <!-- Social -->
+          <tr>
+            <td style="padding: 0;">
+              <p class="sig-social" style="margin: 0; font-size: 11px; line-height: 1.3; color: #94a3b8;">
+                <a href="https://linkedin.com/company/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://x.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">X</a>
+                <span class="sig-separator" style="color: #cbd5e1;">&nbsp;&middot;&nbsp;</span>
+                <a href="https://instagram.com/pathforge" target="_blank" style="color: #64748b; text-decoration: none; font-weight: 500;">Instagram</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- INSTRUCTIONS                                    -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <div class="instructions">
+    <h3>📋 How to Use</h3>
+    <ol>
+      <li>Open any <strong>signature-*.html</strong> file in a browser</li>
+      <li>Select all content (<kbd>Ctrl+A</kbd>) and copy (<kbd>Ctrl+C</kbd>)</li>
+      <li>Go to <strong>Gmail → Settings → General → Signature</strong></li>
+      <li>Paste (<kbd>Ctrl+V</kbd>) into the signature editor</li>
+      <li>Click <strong>Save Changes</strong> at the bottom of the page</li>
+    </ol>
+  </div>
+
+</body>
+</html>

@@ -8,9 +8,10 @@ Create Date: 2026-02-14
 Sprint 6b — Analytics (ARCHITECTURE.md §7)
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSON
+from sqlalchemy.dialects.postgresql import JSON, UUID
+
+from alembic import op
 
 # revision identifiers
 revision = "4c5d6e7f8g9h"

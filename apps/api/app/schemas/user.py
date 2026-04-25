@@ -7,7 +7,9 @@ Request/response DTOs for authentication and user management.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.core.password_policy import validate_password_complexity
 
 # ── Auth Schemas ────────────────────────────────────────────────
 
@@ -15,6 +17,14 @@ class UserRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
+    invite_token: str | None = Field(default=None, max_length=64)  # F17: backward compatible
+    turnstile_token: str | None = Field(default=None)  # F19/F20: Turnstile CAPTCHA
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        """Delegate to shared password policy (see ``core.password_policy``)."""
+        return validate_password_complexity(value)
 
 
 class UserLoginRequest(BaseModel):
@@ -30,6 +40,11 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Optional body for logout — include refresh_token for full revocation."""
+    refresh_token: str | None = None
 
 
 # ── User Schemas ────────────────────────────────────────────────
@@ -50,3 +65,49 @@ class UserResponse(BaseModel):
 class UserUpdateRequest(BaseModel):
     full_name: str | None = None
     avatar_url: str | None = None
+
+
+# ── Sprint 39: Password Reset & Email Verification ──────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    # Sprint 39 audit S-M4: optional Turnstile token. The slowapi
+    # rate limit (3/min) caps a single IP, but credential-stuffing
+    # against the forgot-password endpoint from a botnet would still
+    # let attackers fish for valid emails by burning through the
+    # email send budget. CAPTCHA on this endpoint closes that.
+    # Optional in the schema so older clients keep working — the
+    # backend Turnstile verifier no-ops when no secret is set, and
+    # production sets the secret.
+    turnstile_token: str | None = Field(default=None)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        """Delegate to shared password policy (see ``core.password_policy``)."""
+        return validate_password_complexity(value)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1)
+
+
+class MessageResponse(BaseModel):
+    """Generic message response for endpoints that don't return data."""
+    message: str
+
+
+# ── Sprint 40 (Audit P0-1): GDPR Account Deletion ──────────────
+
+class AccountDeletionResponse(BaseModel):
+    """Response confirming account and data deletion."""
+    deleted: bool
+    message: str
+    records_deleted: int
+    tables_affected: int
+

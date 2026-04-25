@@ -109,6 +109,7 @@ export function ContactForm({ className = "" }: ContactFormProps): ReactElement 
             <Input
               id="contact-name"
               type="text"
+              autoComplete="name"
               placeholder="Your name"
               value={name}
               onChange={(event) => {
@@ -130,6 +131,7 @@ export function ContactForm({ className = "" }: ContactFormProps): ReactElement 
             <Input
               id="contact-email"
               type="email"
+              autoComplete="email"
               placeholder="your@email.com"
               value={email}
               onChange={(event) => {
@@ -153,6 +155,7 @@ export function ContactForm({ className = "" }: ContactFormProps): ReactElement 
           <div className="relative">
             <select
               id="contact-subject"
+              autoComplete="off"
               value={subject}
               onChange={(event) => {
                 setSubject(event.target.value);
@@ -183,6 +186,7 @@ export function ContactForm({ className = "" }: ContactFormProps): ReactElement 
           </label>
           <textarea
             id="contact-message"
+            autoComplete="off"
             placeholder="Tell us more about your inquiry..."
             value={message}
             onChange={(event) => {

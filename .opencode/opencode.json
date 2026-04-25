@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "instructions": [
+    ".agent/rules.md"
+  ],
+  "agent": {
+    "build": {
+      "description": "Primary development agent with Devran AI Kit governance",
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "planner": {
+      "description": "Task breakdown, Socratic analysis",
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "reviewer": {
+      "description": "Quality + security review",
+      "model": "anthropic/claude-sonnet-4-5"
+    }
+  }
+}

@@ -1,0 +1,101 @@
+/**
+ * PathForge — Resilience Trend Styles
+ * ======================================
+ * Sprint 36 WS-5: Chart container with range selector.
+ */
+
+.container {
+  background: var(--card-bg, #1E293B);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #F8FAFC);
+  margin: 0;
+}
+
+.rangeSelector {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.rangeButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #94A3B8);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rangeButton:hover {
+  color: var(--text-primary, #F8FAFC);
+}
+
+.rangeActive {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+}
+
+.chartWrapper {
+  min-height: 280px;
+}
+
+/* Skeleton */
+.skeleton {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 280px;
+  padding: 20px;
+}
+
+.skeletonBar {
+  flex: 1;
+  height: 80%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+}
+
+.emptyText {
+  color: var(--text-secondary, #64748B);
+  text-align: center;
+  font-size: 0.875rem;
+  max-width: 280px;
+  line-height: 1.5;
+}

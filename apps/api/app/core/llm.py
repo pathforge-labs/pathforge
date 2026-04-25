@@ -15,15 +15,25 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import base64
+import collections
 import enum
 import json
 import logging
 import time
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, cast
 
 import litellm
+import redis.asyncio as aioredis
 
 from app.core.config import settings
+from app.core.llm_observability import (
+    TransparencyRecord,
+    compute_confidence_score,
+    confidence_label,
+    get_collector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +65,180 @@ _FALLBACK_CHAIN: dict[LLMTier, list[LLMTier]] = {
     LLMTier.FAST: [],
 }
 
+_TIER_RPM_MAP: dict[LLMTier, int] = {
+    LLMTier.PRIMARY: settings.llm_primary_rpm,
+    LLMTier.FAST: settings.llm_fast_rpm,
+    LLMTier.DEEP: settings.llm_deep_rpm,
+}
+
 
 def _resolve_model(tier: LLMTier) -> str:
     """Resolve a tier to its configured model name."""
     return _TIER_MODEL_MAP[tier]
+
+
+# ── Budget & Rate Limit Guards (Sprint 29) ─────────────────────
+
+
+class BudgetExceededError(Exception):
+    """Raised when monthly LLM budget is exhausted."""
+
+    def __init__(self, spent: float, budget: float) -> None:
+        self.spent = spent
+        self.budget = budget
+        super().__init__(
+            f"Monthly LLM budget exhausted: ${spent:.2f} / ${budget:.2f}"
+        )
+
+
+class RateLimitExceededError(Exception):
+    """Raised when per-tier RPM limit is exceeded."""
+
+    def __init__(self, tier: str, rpm: int) -> None:
+        self.tier = tier
+        self.rpm = rpm
+        super().__init__(f"Tier '{tier}' rate limit exceeded: {rpm} RPM")
+
+
+# Redis-backed monthly budget counter (audit C3)
+_budget_redis: aioredis.Redis | None = None
+
+
+async def _get_budget_redis() -> aioredis.Redis:
+    """Lazy Redis connection for budget tracking.
+
+    ADR-0002: route the URL through `resolve_redis_url` so the TLS
+    posture matches every other Redis consumer in the app. Prior to
+    this change, the budget guard connected with the raw
+    `settings.redis_url` and silently traveled plaintext even when
+    `redis_ssl=True` was configured — a split-brain bug.
+    """
+    global _budget_redis
+    if _budget_redis is None:
+        from app.core.redis_ssl import resolve_redis_url
+
+        url = resolve_redis_url(
+            settings.redis_url,
+            settings.redis_ssl_enabled,
+            settings.environment,
+        )
+        _budget_redis = cast(
+            aioredis.Redis,
+            aioredis.from_url(url, decode_responses=True),  # type: ignore[no-untyped-call]  # redis-ssl-exempt: reconciled URL
+        )
+    return _budget_redis
+
+
+def _reset_budget_redis_for_tests() -> None:
+    """Test-only hook: clear the cached budget Redis connection so each
+    test sees a fresh `_get_budget_redis` call (and therefore the current
+    `settings.redis_ssl_enabled` / `settings.redis_url` values).
+
+    Not part of the public module API.
+    """
+    global _budget_redis
+    _budget_redis = None
+
+
+def _budget_key() -> str:
+    """Redis key for current month's LLM cost."""
+    month = datetime.now(UTC).strftime("%Y-%m")
+    return f"pathforge:llm_cost:{month}"
+
+
+async def _check_budget() -> float:
+    """Check if monthly LLM budget allows another call.
+
+    Returns:
+        Current month's spend in USD.
+
+    Raises:
+        BudgetExceededError: If budget is exhausted.
+    """
+    if settings.llm_monthly_budget_usd <= 0:
+        return 0.0  # Budget guard disabled
+
+    try:
+        r = await _get_budget_redis()
+        spent_raw = await r.get(_budget_key())
+    except Exception as exc:
+        # Redis unavailable — fail-open: allow LLM call, skip budget enforcement.
+        logger.warning("Budget check skipped (Redis unavailable): %s", type(exc).__name__)
+        return 0.0
+
+    spent = float(spent_raw) if spent_raw else 0.0
+
+    if spent >= settings.llm_monthly_budget_usd:
+        raise BudgetExceededError(spent, settings.llm_monthly_budget_usd)
+
+    # R5: Sentry alert when spend crosses 80% threshold (once per month, deduped via Redis).
+    budget = settings.llm_monthly_budget_usd
+    if budget > 0 and spent >= 0.8 * budget:
+        alert_key = f"pathforge:llm_budget_alert:80pct:{_budget_key()}"
+        try:
+            if not await r.exists(alert_key):
+                await r.set(alert_key, "1", ex=40 * 86400)
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_message(
+                        f"LLM monthly budget at {spent / budget * 100:.0f}%"
+                        f" — ${spent:.2f} of ${budget:.2f} spent.",
+                        level="warning",
+                    )
+                except Exception:
+                    pass  # Sentry not configured — log and continue
+                logger.warning(
+                    "LLM budget warning: %.0f%% spent ($%.2f / $%.2f)",
+                    spent / budget * 100, spent, budget,
+                )
+        except Exception:
+            pass  # Redis hiccup — skip alert, don't block the call
+
+    return spent
+
+
+async def _record_cost(response_cost: float) -> None:
+    """Increment monthly spend in Redis after a successful LLM call."""
+    if response_cost <= 0:
+        return
+
+    r = await _get_budget_redis()
+    key = _budget_key()
+    await r.incrbyfloat(key, response_cost)
+    # TTL: 40 days — auto-cleanup after month rolls over
+    await r.expire(key, 40 * 86400)
+
+
+# In-memory sliding window RPM tracker
+_rpm_windows: dict[str, collections.deque[float]] = {}
+
+
+def _check_rpm(tier: LLMTier) -> None:
+    """Check if tier's RPM limit allows another call.
+
+    Uses a 60-second sliding window with in-memory timestamps.
+    Resets conservatively on restart (safe default).
+
+    Raises:
+        RateLimitExceededError: If RPM is exceeded.
+    """
+    rpm_limit = _TIER_RPM_MAP.get(tier, 60)
+    now = time.monotonic()
+    window_key = tier.value
+
+    if window_key not in _rpm_windows:
+        _rpm_windows[window_key] = collections.deque()
+
+    window = _rpm_windows[window_key]
+
+    # Evict timestamps older than 60 seconds
+    while window and (now - window[0]) > 60.0:
+        window.popleft()
+
+    if len(window) >= rpm_limit:
+        raise RateLimitExceededError(tier.value, rpm_limit)
+
+    window.append(now)
 
 
 # ── Core Completion Function ───────────────────────────────────
@@ -100,11 +280,18 @@ async def complete(
     tiers_to_try = [tier, *_FALLBACK_CHAIN.get(tier, [])]
     last_error: Exception | None = None
 
+    # Budget check (audit C3) — fail fast before attempting any call
+    await _check_budget()
+
     for attempt_tier in tiers_to_try:
         model = _resolve_model(attempt_tier)
         try:
+            # RPM check — per-tier sliding window
+            _check_rpm(attempt_tier)
+
             result = await _call_with_retry(
                 model=model,
+                tier=attempt_tier.value,
                 prompt=prompt,
                 system_prompt=system_prompt,
                 response_format=response_format,
@@ -174,11 +361,154 @@ async def complete_json(
         ) from exc
 
 
+
+# ── AI Trust Layer™ — Transparency Wrappers ────────────────────
+
+
+async def complete_with_transparency(
+    *,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.PRIMARY,
+    response_format: dict[str, Any] | None = None,
+    temperature: float = 0.1,
+    max_tokens: int = 4096,
+    analysis_type: str = "",
+    data_sources: list[str] | None = None,
+) -> tuple[str, TransparencyRecord]:
+    """Call complete() and return both the result and transparency metadata.
+
+    This wrapper captures latency, token usage, retry count, and computes
+    an algorithmic confidence score — enabling the AI Trust Layer™ to
+    show users how and why AI reached its conclusions.
+
+    Args:
+        prompt: The user prompt.
+        system_prompt: Optional system prompt.
+        tier: Which model tier to use.
+        response_format: Optional JSON schema for structured output.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        analysis_type: Human-readable analysis label (e.g., 'career_dna.hidden_skills').
+        data_sources: List of data sources feeding this analysis.
+
+    Returns:
+        Tuple of (response_text, TransparencyRecord).
+    """
+    collector = get_collector()
+    calls_before = collector._global.total_calls
+
+    start = time.monotonic()
+    try:
+        result = await complete(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tier=tier,
+            response_format=response_format,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        elapsed = time.monotonic() - start
+        success = True
+    except LLMError:
+        elapsed = time.monotonic() - start
+        success = False
+        raise
+    finally:
+        # Calculate retries from how many new calls the collector tracked
+        calls_after = collector._global.total_calls
+        retries = max(0, (calls_after - calls_before) - 1)
+
+    # Extract token usage from the collector's latest metrics
+    metrics = collector.get_metrics()
+    tier_metrics = metrics.get("by_tier", {}).get(tier.value, {})
+    prompt_tokens = tier_metrics.get("total_prompt_tokens", 0)
+    completion_tokens = tier_metrics.get("total_completion_tokens", 0)
+
+    # Compute confidence
+    score = compute_confidence_score(
+        tier=tier.value,
+        retries=retries,
+        latency_seconds=elapsed,
+        completion_tokens=completion_tokens,
+        max_tokens=max_tokens,
+    )
+
+    record = TransparencyRecord(
+        analysis_type=analysis_type,
+        model=_resolve_model(tier),
+        tier=tier.value,
+        confidence_score=score,
+        confidence_label=confidence_label(score),
+        data_sources=data_sources or [],
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        latency_ms=int(elapsed * 1000),
+        success=success,
+        retries=retries,
+    )
+
+    return result, record
+
+
+async def complete_json_with_transparency(
+    *,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.FAST,
+    temperature: float = 0.0,
+    max_tokens: int = 4096,
+    analysis_type: str = "",
+    data_sources: list[str] | None = None,
+) -> tuple[dict[str, Any], TransparencyRecord]:
+    """Call complete_json() and return both the result and transparency metadata.
+
+    Convenience wrapper for JSON responses with the AI Trust Layer™.
+
+    Args:
+        prompt: The user prompt.
+        system_prompt: Optional system prompt.
+        tier: Which model tier to use.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        analysis_type: Human-readable analysis label.
+        data_sources: List of data sources feeding this analysis.
+
+    Returns:
+        Tuple of (parsed_json_dict, TransparencyRecord).
+    """
+    raw_result, record = await complete_with_transparency(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        tier=tier,
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        max_tokens=max_tokens,
+        analysis_type=analysis_type,
+        data_sources=data_sources,
+    )
+
+    # Strip markdown code fences if present
+    cleaned = raw_result.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        cleaned = "\n".join(lines[1:-1]).strip()
+
+    try:
+        parsed: dict[str, Any] = json.loads(cleaned)
+        return parsed, record
+    except json.JSONDecodeError as exc:
+        raise LLMError(
+            f"LLM returned invalid JSON: {str(exc)[:200]}"
+        ) from exc
+
+
 # ── Internal Retry Logic ───────────────────────────────────────
 
 async def _call_with_retry(
     *,
     model: str,
+    tier: str,
     prompt: str,
     system_prompt: str,
     response_format: dict[str, Any] | None,
@@ -212,25 +542,65 @@ async def _call_with_retry(
             elapsed = time.monotonic() - start
 
             # Extract response text
-            content = response.choices[0].message.content or ""
+            content: str = response.choices[0].message.content or "" if response.choices else ""
 
-            # Log usage
+            # Log usage + record metrics
             usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+
             if usage:
                 logger.info(
                     "LLM [%s] %d prompt + %d completion tokens, %.2fs",
                     model,
-                    usage.prompt_tokens,
-                    usage.completion_tokens,
+                    prompt_tokens,
+                    completion_tokens,
                     elapsed,
                 )
             else:
                 logger.info("LLM [%s] completed in %.2fs", model, elapsed)
 
+            # Record success metrics
+            get_collector().record_call(
+                model=model,
+                tier=tier,
+                latency_seconds=elapsed,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                success=True,
+            )
+
+            # Record cost in Redis (audit C3)
+            response_cost = getattr(
+                getattr(response, "_hidden_params", None),
+                "response_cost", 0.0
+            )
+            if not response_cost:
+                # Fallback: estimate from litellm cost tracker
+                response_cost = getattr(response, "_response_cost", 0.0) or 0.0
+            if response_cost > 0:
+                try:
+                    await _record_cost(response_cost)
+                except Exception:
+                    # Sprint 39 audit A-H2: keep traceback in the log so
+                    # silent budget drift is debuggable.
+                    logger.exception("Failed to record LLM cost in Redis")
+
             return content
 
         except Exception as exc:
+            elapsed = time.monotonic() - start
             last_error = exc
+
+            # Record failure metrics
+            get_collector().record_call(
+                model=model,
+                tier=tier,
+                latency_seconds=elapsed,
+                success=False,
+                error_type=type(exc).__name__,
+            )
+
             if attempt < max_retries:
                 wait = 2 ** attempt  # 1s, 2s, 4s
                 logger.warning(
@@ -246,7 +616,168 @@ async def _call_with_retry(
     raise last_error  # type: ignore[misc]
 
 
-# ── Custom Exception ───────────────────────────────────────────
+# ── Custom Exceptions ──────────────────────────────────────────
 
 class LLMError(Exception):
     """Raised when LLM completion fails after all retries and fallbacks."""
+
+
+async def complete_vision(
+    *,
+    image_bytes: bytes,
+    image_mime: str,
+    prompt: str,
+    system_prompt: str = "",
+    tier: LLMTier = LLMTier.FAST,
+    temperature: float = 0.0,
+    max_tokens: int = 4096,
+) -> str:
+    """
+    Send an image + text prompt to a vision-capable model.
+
+    Uses the same budget guard, RPM check, and fallback chain as
+    ``complete()``. Image bytes are base64-encoded and sent as a
+    multimodal ``image_url`` message block.
+
+    Args:
+        image_bytes: Raw bytes of the image.
+        image_mime: MIME type (e.g. "image/jpeg", "image/png").
+        prompt: Text instruction accompanying the image.
+        system_prompt: Optional system-level instructions.
+        tier: Which model tier to use.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+
+    Returns:
+        The model's text response.
+
+    Raises:
+        LLMError: If all tiers fail.
+    """
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    data_url = f"data:{image_mime};base64,{b64}"
+
+    content: list[dict[str, Any]] = [  # Multimodal content blocks (Any required for LiteLLM)
+        {
+            "type": "image_url",
+            "image_url": {"url": data_url},
+        },
+        {"type": "text", "text": prompt},
+    ]
+
+    messages: list[dict[str, Any]] = []  # Standard LiteLLM message format
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": content})
+
+    await _check_budget()
+
+    tiers_to_try = [tier, *_FALLBACK_CHAIN.get(tier, [])]
+    last_error: Exception | None = None
+
+    max_retries = settings.llm_max_retries
+
+    for attempt_tier in tiers_to_try:
+        model = _resolve_model(attempt_tier)
+
+        # Per-tier RPM check (Sprint 39 audit A-H1 + PR #23 review):
+        # the check belongs OUTSIDE the retry loop so a logical
+        # request consumes exactly one slot from the sliding window
+        # — not one per retry. We also need it INSIDE a try/except
+        # that triggers the next-tier fallback so a rate-limited
+        # primary tier doesn't short-circuit the whole call. Without
+        # this wrapper a ``RateLimitExceededError`` would propagate
+        # out of ``complete_vision`` instead of letting the loop
+        # break and try the next tier (Style Guide §"tiered fallback").
+        try:
+            _check_rpm(attempt_tier)
+        except RateLimitExceededError as exc:
+            last_error = exc
+            logger.warning(
+                "LLM Vision tier %s rate-limited; trying next tier",
+                attempt_tier.value,
+            )
+            continue
+
+        for attempt in range(max_retries + 1):
+            start = time.monotonic()
+            try:
+                response = await litellm.acompletion(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=settings.llm_timeout,
+                )
+                elapsed = time.monotonic() - start
+
+                content_text: str = (response.choices[0].message.content or "") if response.choices else ""
+
+                usage = getattr(response, "usage", None)
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+                logger.info(
+                    "LLM Vision [%s] %d prompt + %d completion tokens, %.2fs",
+                    model, prompt_tokens, completion_tokens, elapsed,
+                )
+
+                get_collector().record_call(
+                    model=model,
+                    tier=attempt_tier.value,
+                    latency_seconds=elapsed,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    success=True,
+                )
+
+                # Record cost in Redis (audit C3)
+                vision_cost = getattr(
+                    getattr(response, "_hidden_params", None),
+                    "response_cost", 0.0
+                )
+                if not vision_cost:
+                    vision_cost = getattr(response, "_response_cost", 0.0) or 0.0
+                if vision_cost > 0:
+                    try:
+                        await _record_cost(vision_cost)
+                    except Exception:
+                        # Sprint 39 audit A-H2: keep the exception details
+                        # in the log — silent budget drift is hard to
+                        # debug otherwise. ``logger.exception`` logs the
+                        # full traceback at WARNING level via exc_info.
+                        logger.exception("Failed to record vision LLM cost in Redis")
+
+                return content_text
+
+            except Exception as exc:
+                elapsed = time.monotonic() - start
+                last_error = exc
+
+                get_collector().record_call(
+                    model=model,
+                    tier=attempt_tier.value,
+                    latency_seconds=elapsed,
+                    success=False,
+                    error_type=type(exc).__name__,
+                )
+
+                if attempt < max_retries:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "LLM Vision retry %d/%d for %s after error: %s (wait %ds)",
+                        attempt + 1,
+                        max_retries,
+                        model,
+                        str(exc)[:100],
+                        wait,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    logger.warning(
+                        "LLM Vision tier %s exhausted retries: %s",
+                        attempt_tier.value, str(exc)[:200],
+                    )
+
+    raise LLMError(
+        f"Vision LLM: all tiers exhausted. Last error: {last_error}"
+    ) from last_error

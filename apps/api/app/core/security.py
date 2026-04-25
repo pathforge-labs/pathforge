@@ -14,11 +14,13 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import bcrypt
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -30,18 +32,25 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def hash_password(password: str) -> str:
-    """Hash a plain-text password using bcrypt."""
+    """Hash a plain-text password using bcrypt.
+
+    Uses 4 rounds in testing mode for performance (~60x faster).
+    Production uses bcrypt default (12 rounds).
+    """
+    import os
+
     password_bytes = password.encode("utf-8")
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
+    rounds = 4 if os.environ.get("ENVIRONMENT") == "testing" else 12
+    salt = bcrypt.gensalt(rounds=rounds)
+    return str(bcrypt.hashpw(password_bytes, salt).decode("utf-8"))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain-text password against a hashed password."""
-    return bcrypt.checkpw(
+    return bool(bcrypt.checkpw(
         plain_password.encode("utf-8"),
         hashed_password.encode("utf-8"),
-    )
+    ))
 
 
 def create_access_token(
@@ -52,9 +61,11 @@ def create_access_token(
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes)
     )
+    now = datetime.now(UTC)
     to_encode = {
         "sub": subject,
         "exp": expire,
+        "iat": now,
         "type": "access",
         "jti": str(_uuid.uuid4()),
     }
@@ -63,10 +74,12 @@ def create_access_token(
 
 def create_refresh_token(subject: str) -> str:
     """Create a JWT refresh token with longer expiry and unique jti."""
-    expire = datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
+    now = datetime.now(UTC)
+    expire = now + timedelta(days=settings.jwt_refresh_token_expire_days)
     to_encode = {
         "sub": subject,
         "exp": expire,
+        "iat": now,
         "type": "refresh",
         "jti": str(_uuid.uuid4()),  # unique ID for token rotation/revocation
     }
@@ -97,10 +110,10 @@ async def get_current_user(
         jti: str | None = payload.get("jti")
         if user_id is None or token_type != "access":
             raise credentials_exception
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise credentials_exception from exc
 
-    # Check token blacklist (graceful degradation if Redis unavailable)
+    # Check token blacklist (Sprint 40 Audit P1-1: configurable fail mode)
     if jti:
         try:
             if await token_blacklist.is_revoked(jti):
@@ -112,9 +125,29 @@ async def get_current_user(
         except HTTPException:
             raise
         except Exception:
-            logger.warning("Token blacklist check failed — allowing request (degraded mode)")
+            if settings.token_blacklist_fail_mode == "closed":
+                logger.error("Token blacklist check failed — rejecting request (fail-closed mode)")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable",
+                ) from None
+            logger.warning("Token blacklist check failed — allowing request (fail-open mode)")
 
-    result = await db.execute(select(User).where(User.id == _uuid.UUID(user_id)))
+    # Sprint 39 audit S-M5: a malformed ``sub`` claim (non-UUID) used
+    # to surface as a 500 via the global handler. Treat it as a
+    # credential failure — the token is shaped wrong, exactly the
+    # scenario ``credentials_exception`` is for.
+    try:
+        user_uuid = _uuid.UUID(user_id)
+    except (ValueError, AttributeError, TypeError) as exc:
+        logger.warning("JWT 'sub' claim is not a valid UUID")
+        raise credentials_exception from exc
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.subscription))
+        .where(User.id == user_uuid)
+    )
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -124,4 +157,16 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user account",
         )
+
+    # Sprint 41: Reject tokens issued before a global invalidation event
+    # (password reset, security lockout) — ensures all pre-existing sessions
+    # are terminated after credential change.
+    iat = payload.get("iat")
+    if user.tokens_invalidated_at and iat and iat < user.tokens_invalidated_at.timestamp():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been invalidated. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user

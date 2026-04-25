@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "PathForge",
+    "slug": "pathforge-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pathforge",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "eu.pathforge.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PathForge uses your camera to capture resume documents for career intelligence analysis.",
+        "NSPhotoLibraryUsageDescription": "PathForge accesses your photo library to select resume documents for career intelligence analysis."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "eu.pathforge.mobile",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "@sentry/react-native/expo",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3B82F6"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PathForge accesses your photos to select resume documents.",
+          "cameraPermission": "PathForge uses your camera to capture resume documents."
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "${EXPO_PUBLIC_API_URL}",
+      "eas": {
+        "projectId": ""
+      },
+      "router": {
+        "origin": false
+      }
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

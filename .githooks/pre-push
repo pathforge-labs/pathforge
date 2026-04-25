@@ -160,7 +160,7 @@ echo "║  Changed: $API_FILES api, $WEB_FILES web, $(echo "$ROOT_FILES" | grep 
 if [ -z "$FAST_FLAG" ]; then
 echo "║  Mode: FULL (lint + types + tests)       ║"
 else
-echo "║  Mode: FAST (lint + types only)          ║"
+echo "║  Mode: FAST (lint only)                  ║"
 fi
 echo "╚══════════════════════════════════════════╝"
 echo ""

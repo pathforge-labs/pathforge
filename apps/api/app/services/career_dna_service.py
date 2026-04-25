@@ -3,6 +3,11 @@ PathForge — Career DNA Service
 =================================
 Business logic orchestrating Career DNA™ profile creation,
 dimension computation, and lifecycle management.
+
+AI Trust Layer™ Integration:
+    Each dimension computation logs a TransparencyRecord into the
+    per-user TransparencyLog, enabling user-facing explainability
+    for all AI-driven analyses.
 """
 
 import logging
@@ -15,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.ai.career_dna_analyzer import CareerDNAAnalyzer
+from app.core.llm_observability import TransparencyRecord, get_transparency_log
 from app.models.career_dna import (
     CareerDNA,
     ExperienceBlueprint,
@@ -40,6 +46,20 @@ VALID_DIMENSIONS = frozenset(
         "market_position",
     }
 )
+
+
+def _log_transparency(
+    user_id: uuid.UUID,
+    record: TransparencyRecord | None,
+) -> None:
+    """Log a TransparencyRecord to the per-user transparency log.
+
+    Silently skips if record is None (e.g. empty input fallback).
+    """
+    if record is None:
+        return
+    log = get_transparency_log()
+    log.record(user_id=str(user_id), entry=record)
 
 
 class CareerDNAService:
@@ -122,7 +142,8 @@ class CareerDNAService:
         Generate or refresh Career DNA dimensions.
 
         Collects user data (resumes, skills, preferences, job listings),
-        dispatches AI analysis for each dimension, and persists results.
+        dispatches AI analysis for each dimension, persists results,
+        and logs TransparencyRecords for the AI Trust Layer™.
 
         Args:
             db: Database session.
@@ -148,13 +169,13 @@ class CareerDNAService:
         # ── Skill Genome ───────────────────────────────────────
         if "skill_genome" in target_dims:
             await _compute_skill_genome(
-                db, career_dna, explicit_skills, experience_text
+                db, career_dna, explicit_skills, experience_text, user_id
             )
 
         # ── Experience Blueprint ───────────────────────────────
         if "experience_blueprint" in target_dims:
             await _compute_experience_blueprint(
-                db, career_dna, experience_text
+                db, career_dna, experience_text, user_id
             )
 
         # ── Growth Vector ──────────────────────────────────────
@@ -163,13 +184,14 @@ class CareerDNAService:
                 s.get("name", "") for s in explicit_skills
             )
             await _compute_growth_vector(
-                db, career_dna, experience_text, skills_text, preferences_text
+                db, career_dna, experience_text,
+                skills_text, preferences_text, user_id,
             )
 
         # ── Values Profile ─────────────────────────────────────
         if "values_profile" in target_dims:
             await _compute_values_profile(
-                db, career_dna, experience_text, preferences_text
+                db, career_dna, experience_text, preferences_text, user_id
             )
 
         # ── Market Position ────────────────────────────────────
@@ -315,6 +337,7 @@ async def _compute_skill_genome(
     career_dna: CareerDNA,
     explicit_skills: list[dict[str, Any]],
     experience_text: str,
+    user_id: uuid.UUID,
 ) -> None:
     """Populate skill genome from explicit skills + hidden skills discovery."""
     # Clear existing entries
@@ -337,12 +360,13 @@ async def _compute_skill_genome(
         )
         db.add(entry)
 
-    # Discover hidden skills via LLM
+    # Discover hidden skills via LLM (with transparency)
     explicit_names = [s["name"] for s in explicit_skills]
-    hidden_results = await CareerDNAAnalyzer.discover_hidden_skills(
+    hidden_results, record = await CareerDNAAnalyzer.discover_hidden_skills(
         explicit_skills=explicit_names,
         experience_text=experience_text,
     )
+    _log_transparency(user_id, record)
 
     for hidden_data in hidden_results:
         hidden = HiddenSkill(
@@ -364,9 +388,13 @@ async def _compute_experience_blueprint(
     db: AsyncSession,
     career_dna: CareerDNA,
     experience_text: str,
+    user_id: uuid.UUID,
 ) -> None:
     """Analyze experience patterns."""
-    data = await CareerDNAAnalyzer.analyze_experience_blueprint(experience_text)
+    data, record = await CareerDNAAnalyzer.analyze_experience_blueprint(
+        experience_text,
+    )
+    _log_transparency(user_id, record)
 
     if career_dna.experience_blueprint:
         blueprint = career_dna.experience_blueprint
@@ -391,11 +419,13 @@ async def _compute_growth_vector(
     experience_text: str,
     skills_text: str,
     preferences_text: str,
+    user_id: uuid.UUID,
 ) -> None:
     """Compute career trajectory projection."""
-    data = await CareerDNAAnalyzer.compute_growth_vector(
-        experience_text, skills_text, preferences_text
+    data, record = await CareerDNAAnalyzer.compute_growth_vector(
+        experience_text, skills_text, preferences_text,
     )
+    _log_transparency(user_id, record)
 
     if career_dna.growth_vector:
         vector = career_dna.growth_vector
@@ -417,11 +447,13 @@ async def _compute_values_profile(
     career_dna: CareerDNA,
     experience_text: str,
     preferences_text: str,
+    user_id: uuid.UUID,
 ) -> None:
     """Extract values from career patterns."""
-    data = await CareerDNAAnalyzer.extract_values_profile(
-        experience_text, preferences_text
+    data, record = await CareerDNAAnalyzer.extract_values_profile(
+        experience_text, preferences_text,
     )
+    _log_transparency(user_id, record)
 
     if career_dna.values_profile:
         profile = career_dna.values_profile

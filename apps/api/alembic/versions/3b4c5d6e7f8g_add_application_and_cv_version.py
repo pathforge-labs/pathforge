@@ -6,9 +6,10 @@ Revises: 2a3b4c5d6e7f
 Create Date: 2026-02-13
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSON
+from sqlalchemy.dialects.postgresql import JSON, UUID
+
+from alembic import op
 
 # revision identifiers
 revision = "3b4c5d6e7f8g"

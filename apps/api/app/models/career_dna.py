@@ -36,6 +36,59 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.career_action_planner import (
+        CareerActionPlan,
+        CareerActionPlannerPreference,
+    )
+    from app.models.career_passport import (
+        CareerPassportPreference,
+        CountryComparison,
+        CredentialMapping,
+        MarketDemandEntry,
+        VisaAssessment,
+    )
+    from app.models.career_simulation import (
+        CareerSimulation,
+        SimulationPreference,
+    )
+    from app.models.collective_intelligence import (
+        CareerPulseEntry,
+        CollectiveIntelligencePreference,
+        IndustrySnapshot,
+        PeerCohortAnalysis,
+    )
+    from app.models.collective_intelligence import (
+        SalaryBenchmark as CISalaryBenchmark,
+    )
+    from app.models.hidden_job_market import (
+        CompanySignal,
+        HiddenJobMarketPreference,
+    )
+    from app.models.interview_intelligence import (
+        InterviewPreference,
+        InterviewPrep,
+    )
+    from app.models.predictive_career import (
+        CareerForecast,
+        DisruptionForecast,
+        EmergingRole,
+        OpportunitySurface,
+        PredictiveCareerPreference,
+    )
+    from app.models.salary_intelligence import (
+        SalaryEstimate,
+        SalaryHistoryEntry,
+        SalaryPreference,
+        SalaryScenario,
+        SkillSalaryImpact,
+    )
+    from app.models.skill_decay import (
+        MarketDemandSnapshot,
+        ReskillingPathway,
+        SkillDecayPreference,
+        SkillFreshness,
+        SkillVelocityEntry,
+    )
     from app.models.threat_radar import (
         AlertPreference,
         AutomationRisk,
@@ -43,6 +96,10 @@ if TYPE_CHECKING:
         IndustryTrend,
         SkillShieldEntry,
         ThreatAlert,
+    )
+    from app.models.transition_pathways import (
+        TransitionPath,
+        TransitionPreference,
     )
     from app.models.user import User
 
@@ -156,6 +213,20 @@ class CareerDNA(UUIDMixin, TimestampMixin, Base):
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Profile context (populated during Career DNA analysis)
+    primary_industry: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    primary_role: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    location: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    seniority_level: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+
     # Relationships
     user: Mapped[User] = relationship(
         "User", back_populates="career_dna"
@@ -220,6 +291,211 @@ class CareerDNA(UUIDMixin, TimestampMixin, Base):
     )
     alert_preference: Mapped[AlertPreference | None] = relationship(
         "AlertPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Skill Decay & Growth Tracker™ relationships
+    skill_freshness: Mapped[list[SkillFreshness]] = relationship(
+        "SkillFreshness",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    market_demand_snapshots: Mapped[list[MarketDemandSnapshot]] = relationship(
+        "MarketDemandSnapshot",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    skill_velocity_entries: Mapped[list[SkillVelocityEntry]] = relationship(
+        "SkillVelocityEntry",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    reskilling_pathways: Mapped[list[ReskillingPathway]] = relationship(
+        "ReskillingPathway",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    decay_preference: Mapped[SkillDecayPreference | None] = relationship(
+        "SkillDecayPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Salary Intelligence Engine™ relationships
+    salary_estimates: Mapped[list[SalaryEstimate]] = relationship(
+        "SalaryEstimate",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    skill_salary_impacts: Mapped[list[SkillSalaryImpact]] = relationship(
+        "SkillSalaryImpact",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    salary_history: Mapped[list[SalaryHistoryEntry]] = relationship(
+        "SalaryHistoryEntry",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    salary_scenarios: Mapped[list[SalaryScenario]] = relationship(
+        "SalaryScenario",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    salary_preference: Mapped[SalaryPreference | None] = relationship(
+        "SalaryPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Transition Pathways relationships
+    transition_paths: Mapped[list[TransitionPath]] = relationship(
+        "TransitionPath",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    transition_preference: Mapped[TransitionPreference | None] = relationship(
+        "TransitionPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Career Simulation Engine™ relationships
+    simulations: Mapped[list[CareerSimulation]] = relationship(
+        "CareerSimulation",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    simulation_preference: Mapped[SimulationPreference | None] = relationship(
+        "SimulationPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Interview Intelligence™ relationships
+    interview_preps: Mapped[list[InterviewPrep]] = relationship(
+        "InterviewPrep",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    interview_preference: Mapped[InterviewPreference | None] = relationship(
+        "InterviewPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Hidden Job Market Detector™ relationships
+    company_signals: Mapped[list[CompanySignal]] = relationship(
+        "CompanySignal",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    hidden_job_market_preference: Mapped[HiddenJobMarketPreference | None] = relationship(
+        "HiddenJobMarketPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Cross-Border Career Passport™ relationships
+    credential_mappings: Mapped[list[CredentialMapping]] = relationship(
+        "CredentialMapping",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    country_comparisons: Mapped[list[CountryComparison]] = relationship(
+        "CountryComparison",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    visa_assessments: Mapped[list[VisaAssessment]] = relationship(
+        "VisaAssessment",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    passport_market_demand: Mapped[list[MarketDemandEntry]] = relationship(
+        "MarketDemandEntry",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_passport_preference: Mapped[CareerPassportPreference | None] = relationship(
+        "CareerPassportPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Collective Intelligence Engine™ relationships
+    industry_snapshots: Mapped[list[IndustrySnapshot]] = relationship(
+        "IndustrySnapshot",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    ci_salary_benchmarks: Mapped[list[CISalaryBenchmark]] = relationship(
+        "SalaryBenchmark",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    peer_cohort_analyses: Mapped[list[PeerCohortAnalysis]] = relationship(
+        "PeerCohortAnalysis",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_pulse_entries: Mapped[list[CareerPulseEntry]] = relationship(
+        "CareerPulseEntry",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    ci_preference: Mapped[CollectiveIntelligencePreference | None] = relationship(
+        "CollectiveIntelligencePreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Predictive Career Engine™ relationships
+    emerging_roles: Mapped[list[EmergingRole]] = relationship(
+        "EmergingRole",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    disruption_forecasts: Mapped[list[DisruptionForecast]] = relationship(
+        "DisruptionForecast",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    opportunity_surfaces: Mapped[list[OpportunitySurface]] = relationship(
+        "OpportunitySurface",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_forecasts: Mapped[list[CareerForecast]] = relationship(
+        "CareerForecast",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    predictive_career_preference: Mapped[PredictiveCareerPreference | None] = relationship(
+        "PredictiveCareerPreference",
+        back_populates="career_dna",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Career Action Planner™ relationships
+    career_action_plans: Mapped[list[CareerActionPlan]] = relationship(
+        "CareerActionPlan",
+        back_populates="career_dna",
+        cascade="all, delete-orphan",
+    )
+    career_action_planner_preference: Mapped[CareerActionPlannerPreference | None] = relationship(
+        "CareerActionPlannerPreference",
         back_populates="career_dna",
         uselist=False,
         cascade="all, delete-orphan",
@@ -384,6 +660,10 @@ class GrowthVector(UUIDMixin, TimestampMixin, Base):
     skill_velocity: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     growth_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
     analysis_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Sprint 36 WS-6 / Audit F25: User-editable target role
+    target_role: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, doc="User-set career target role"
+    )
 
     # Relationships
     career_dna: Mapped[CareerDNA] = relationship(

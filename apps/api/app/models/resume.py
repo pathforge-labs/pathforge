@@ -14,6 +14,7 @@ from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import EMBEDDING_DIM
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ class Resume(UUIDMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(255), default="Main Resume", nullable=False)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     structured_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    embedding = mapped_column(Vector(3072), nullable=True)
+    embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     file_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 

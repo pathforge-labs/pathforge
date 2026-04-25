@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auth } from "@/lib/api";
+import { authApi } from "@/lib/api-client/auth";
+import { validatePasswordComplexity } from "@/lib/auth/password-policy";
+import OAuthButtons from "@/components/auth/oauth-buttons";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -27,20 +29,18 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    const complexityError = validatePasswordComplexity(password);
+    if (complexityError) {
+      setError(complexityError);
       return;
     }
 
     setLoading(true);
 
     try {
-      await auth.register({ email, password, full_name: fullName });
-      // Auto-login after registration
-      const tokens = await auth.login({ email, password });
-      localStorage.setItem("pathforge_access_token", tokens.access_token);
-      localStorage.setItem("pathforge_refresh_token", tokens.refresh_token);
-      router.push("/dashboard");
+      await authApi.register({ email, password, full_name: fullName });
+      // F28: Redirect to verification instead of auto-login
+      router.push(`/check-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -57,12 +57,26 @@ export default function RegisterPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
+        {/* Sprint 39 F5: OAuth-first — lower registration friction */}
+        <OAuthButtons mode="register" />
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Or continue with email
+            </span>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
             <Input
               id="fullName"
               type="text"
+              autoComplete="name"
               placeholder="Jane Doe"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -74,6 +88,7 @@ export default function RegisterPage() {
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -85,6 +100,7 @@ export default function RegisterPage() {
             <Input
               id="password"
               type="password"
+              autoComplete="new-password"
               placeholder="Min. 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -97,6 +113,7 @@ export default function RegisterPage() {
             <Input
               id="confirmPassword"
               type="password"
+              autoComplete="new-password"
               placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

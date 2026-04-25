@@ -22,12 +22,14 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
     outputs:
       api: ${{ steps.filter.outputs.api }}
       web: ${{ steps.filter.outputs.web }}
+      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -44,6 +46,9 @@ jobs:
               - 'docker/Dockerfile.web'
               - 'package.json'
               - 'pnpm-lock.yaml'
+            mobile:
+              - 'apps/mobile/**'
+              - 'packages/shared/**'
 
   # ── API Quality Gate ─────────────────────────────────────
   api-quality:
@@ -51,20 +56,24 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
 
       - name: Install dependencies
         working-directory: apps/api
-        run: pip install ".[dev,ai]"
+        run: uv pip install ".[dev,ai]" --system
 
       - name: Lint (ruff)
         working-directory: apps/api
@@ -72,16 +81,197 @@ jobs:
 
       - name: Type check (mypy)
         working-directory: apps/api
-        continue-on-error: true # Non-blocking: pre-existing type gaps tracked as tech debt
         run: python -m mypy app/ --ignore-missing-imports
 
-      - name: Test (pytest)
+      # Sprint 42–44 N-2: coverage gate with ratchet policy.
+      #
+      # --cov-branch enabled Sprint 44. Line-only baseline (Sprint 42): 66%.
+      # Line+branch baseline measured pre-Sprint-43 test additions: 61%.
+      # Sprint 44 floor: 62% (1% above pre-Sprint-43 combined baseline;
+      # Sprint 43 added ~55 new tests — circuit breaker, providers,
+      # embeddings, intelligence_cache — pushing combined coverage up).
+      #
+      # Ratchet policy (do not lower without an ADR):
+      #   Sprint 42           → 65%  line only    (baseline lock)
+      #   Sprint 43           → 65%  line only    (branch deferred to avoid
+      #                               conflating floor raise + branch enable
+      #                               into one unverifiable ratchet step)
+      #   Sprint 44           → 62%  line+branch  (--cov-branch enabled;
+      #                               floor set conservatively at 62% —
+      #                               1% above last combined measurement.)
+      #   Sprint 45           → 70%  line+branch  (confirmed: 1757 tests,
+      #                               TOTAL=70%, 2026-04-23. PR #6 merged.)
+      #   Sprint 46           → 77%  line+branch  (confirmed: 2494+ tests,
+      #                               TOTAL=77%, 2026-04-23. PR #7 merged.)
+      #   Sprint 47 (current) → 80%  line+branch  (confirmed: 2578 tests,
+      #                               TOTAL=80.1%, 2026-04-24. PR #7 merged.
+      #                               Original N-2 target achieved.)
+      #
+      # Each ratchet PR must include tests proving the new floor is
+      # sustainable (full suite green with `--cov-fail-under=N` set to
+      # the new floor on at least three consecutive green CI runs).
+      - name: Test (pytest + coverage gate)
         working-directory: apps/api
-        run: python -m pytest tests/ -v --tb=short -q
+        run: |
+          python -m pytest tests/ -v --tb=short -q --timeout=120 \
+            --cov=app \
+            --cov-branch \
+            --cov-report=term \
+            --cov-report=xml \
+            --cov-fail-under=80
         env:
           ENVIRONMENT: testing
           JWT_SECRET: ci-test-secret-minimum-32-characters-long
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-min
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-xml
+          path: apps/api/coverage.xml
+          retention-days: 30
+          # Degrade to a warning instead of a red step when pytest
+          # crashed before writing coverage.xml (import/collection
+          # error, segfault, etc.). The gate itself still fails the
+          # build via the prior step.
+          if-no-files-found: warn
+
+      - name: Migration SQL validation (Sprint 36 WS-2)
+        run: python scripts/alembic_verify.py --sql-only
+        env:
+          ENVIRONMENT: testing
+
+      # Sprint 30 Audit H3: Dependency vulnerability scan
+      # Sprint 40 Audit P1-3: Made blocking — CVEs must not ship to production
+      # Ignored CVE rationale (keep in sync with SECURITY.md):
+      #
+      # CVE-2026-3219 — pip tarball/ZIP ambiguity in installer only.
+      #   pip is a build-time tool, not a runtime dependency. No fix
+      #   released upstream as of 2026-04-24. Re-evaluate on next pip
+      #   release.
+      #
+      # GHSA-xqmj-j6mv-4862 — LiteLLM Proxy /prompts/test sandbox
+      #   escape (authenticated RCE). Applies only when running the
+      #   LiteLLM Proxy *server*. PathForge uses LiteLLM as an SDK
+      #   (``litellm.acompletion``, success/failure callbacks) — the
+      #   vulnerable HTTP route is never exposed. A direct bump to
+      #   1.83.7 is blocked by litellm's downgrade of python-dotenv
+      #   to 1.0.1, which would re-expose us to CVE-2026-28684.
+      - name: Security audit (pip-audit)
+        working-directory: apps/api
+        run: |
+          uv pip install pip-audit --system
+          python -m pip_audit --desc --progress-spinner off \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln GHSA-xqmj-j6mv-4862
+
+      # ADR-0001: boot-time config-guards. Fail the build if the
+      # production TLS posture regresses.
+      - name: Boot-time config guards (ADR-0001)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Shared fake secrets — must not collide with _INSECURE_JWT_DEFAULTS
+          # and must be distinct from each other.
+          export JWT_SECRET="ci-guard-jwt-secret-aaaaaaaaaaaaaaaaaaaa"
+          export JWT_REFRESH_SECRET="ci-guard-jwt-refresh-bbbbbbbbbbbbbbbbb"
+          export DATABASE_URL="postgresql+asyncpg://u:p@h:5432/db"
+
+          echo "::group::prod + unset DATABASE_SSL → auto-enables TLS"
+          ENVIRONMENT=production python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.database_ssl is True, f'expected True, got {s.database_ssl!r}'
+          print('OK: database_ssl auto-resolved to True in production')
+          "
+          echo "::endgroup::"
+
+          echo "::group::prod + DATABASE_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production DATABASE_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised ValueError"
+            exit 1
+          fi
+          echo "OK: production downgrade correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::dev + unset DATABASE_SSL → TLS off (local-friendly)"
+          ENVIRONMENT=development python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.database_ssl is False, f'expected False, got {s.database_ssl!r}'
+          print('OK: database_ssl auto-resolved to False in development')
+          "
+          echo "::endgroup::"
+
+          echo "::group::DATABASE_URL ssl-param stripping"
+          ENVIRONMENT=development python -c "
+          from app.core.config import Settings
+          s = Settings(database_url='postgresql+asyncpg://u:p@h:5432/db?sslmode=require')
+          assert 'sslmode' not in s.database_url.lower()
+          assert 'ssl=' not in s.database_url.lower()
+          print('OK: DATABASE_URL ssl params stripped')
+          "
+          echo "::endgroup::"
+
+          # ADR-0002: boot-time Redis config-guards.
+          echo "::group::prod + unset REDIS_SSL → auto-enables TLS"
+          ENVIRONMENT=production python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.redis_ssl_enabled is True, f'expected True, got {s.redis_ssl_enabled!r}'
+          print('OK: redis_ssl auto-resolved to True in production')
+          "
+          echo "::endgroup::"
+
+          echo "::group::prod + REDIS_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production REDIS_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised ValueError"
+            exit 1
+          fi
+          echo "OK: Redis production downgrade correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::prod + REDIS_URL=rediss:// + REDIS_SSL=false → fails fast"
+          set +e
+          ENVIRONMENT=production REDIS_URL='rediss://h:6379/0' REDIS_SSL=false python -c "
+          from app.core.config import Settings
+          Settings()
+          " 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: Settings() should have raised on scheme/flag conflict"
+            exit 1
+          fi
+          echo "OK: Redis scheme/flag conflict correctly blocked (exit=$rc)"
+          echo "::endgroup::"
+
+          echo "::group::dev + redis:// + REDIS_SSL=true → scheme upgraded"
+          ENVIRONMENT=development REDIS_URL='redis://h:6379/0' REDIS_SSL=true python -c "
+          from app.core.config import Settings
+          s = Settings()
+          assert s.redis_url.startswith('rediss://'), f'expected rediss://, got {s.redis_url!r}'
+          assert s.redis_ssl_enabled is True
+          print('OK: REDIS_URL scheme upgraded to rediss://')
+          "
+          echo "::endgroup::"
 
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
@@ -89,6 +279,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -109,8 +300,143 @@ jobs:
         working-directory: apps/web
         run: pnpm lint
 
+      - name: Test
+        working-directory: apps/web
+        run: pnpm test
+
       - name: Build
         working-directory: apps/web
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      # Sprint 30 Audit H3: Dependency vulnerability scan
+      # Sprint 40 Audit P1-3: Made blocking — CVEs must not ship to production
+      - name: Security audit (pnpm audit)
+        run: pnpm audit --prod --no-optional
+
+  # ── Mobile Quality Gate ───────────────────────────────────
+  mobile-quality:
+    name: Mobile — Lint & Typecheck
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: apps/mobile
+        run: pnpm lint
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: pnpm typecheck
+
+      - name: Test
+        working-directory: apps/mobile
+        run: pnpm test
+
+  # Visual regression tests only run when baselines exist (checked at step
+  # level). Without baselines the steps are skipped and the job succeeds.
+  # Failures are blocking — review artifacts and run update-baselines.yml.
+  visual-regression:
+    name: Visual Regression & Performance Baselines
+    needs: [changes, web-quality]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          # Route API calls through localhost:3000 so the production-mode CSP
+          # doesn't block fetches to localhost:8000 (dev-only in connect-src).
+          NEXT_PUBLIC_API_URL: "http://localhost:3000"
+
+      - name: Check for existing baselines
+        id: baselines
+        working-directory: apps/web
+        run: |
+          if [ -d "e2e/__screenshots__" ] && [ "$(find e2e/__screenshots__ -name '*.png' -type f 2>/dev/null | head -1)" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ Baselines found — running strict comparison"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No baselines found — run 'Update Visual Regression Baselines' workflow first"
+          fi
+
+      # webServer: pnpm start auto-started by playwright.config.ts
+      - name: Run visual regression tests
+        id: visual-tests
+        if: steps.baselines.outputs.found == 'true'
+        working-directory: apps/web
+        run: npx playwright test e2e/visual-regression.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "false"
+
+      - name: Run performance & accessibility baselines
+        id: perf-tests
+        if: steps.baselines.outputs.found == 'true'
+        working-directory: apps/web
+        run: npx playwright test e2e/performance-baseline.spec.ts --project=chromium
+        env:
+          CI: "true"
+          UPDATE_SNAPSHOTS: "false"
+
+      - name: Upload visual diff results
+        if: always() && (steps.visual-tests.outcome == 'failure' || steps.perf-tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-report
+          path: apps/web/test-results/
+          retention-days: 14
+
+      - name: Report visual regression status
+        if: always()
+        run: |
+          if [ "${{ steps.baselines.outputs.found }}" != "true" ]; then
+            echo "⚠️ SKIPPED: No baselines exist yet."
+            echo "   Run the 'Update Visual Regression Baselines' workflow to bootstrap."
+          elif [ "${{ steps.visual-tests.outcome }}" == "failure" ] || [ "${{ steps.perf-tests.outcome }}" == "failure" ]; then
+            echo "⚠️ Visual regression or performance tests detected differences."
+            echo "   Review the uploaded artifacts for diff images."
+            echo "   To update baselines, run the 'Update Visual Regression Baselines' workflow."
+          else
+            echo "✅ All visual regression and performance tests passed."
+          fi

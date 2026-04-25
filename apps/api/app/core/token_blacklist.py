@@ -36,14 +36,43 @@ class TokenBlacklist:
 
     @classmethod
     async def get_redis(cls) -> Redis:
-        """Lazily initialize and return the Redis connection."""
+        """Lazily initialize and return the Redis connection.
+
+        Routes through `app.core.redis_ssl.resolve_redis_url` so the TLS
+        posture is reconciled by a single shared helper (ADR-0002). Any
+        direct `Redis.from_url(settings.redis_url, ...)` call would
+        bypass the reconciliation and reopen the split-brain bug pattern
+        the ADR closed.
+        """
         if cls._redis is None:
-            cls._redis = Redis.from_url(
+            from app.core.redis_ssl import resolve_redis_url
+
+            url = resolve_redis_url(
                 settings.redis_url,
+                settings.redis_ssl_enabled,
+                settings.environment,
+            )
+            cls._redis = Redis.from_url(  # redis-ssl-exempt: reconciled URL
+                url,
                 decode_responses=True,
                 socket_connect_timeout=5,
             )
         return cls._redis
+
+    @classmethod
+    async def consume_once(cls, jti: str, ttl_seconds: int) -> bool:
+        """Atomically mark a JTI as consumed. Returns True if this was the
+        first consumer (token is valid), False if already consumed (replay).
+
+        Uses Redis SET NX (set-if-not-exists) to collapse the check and
+        revoke into a single atomic operation with no TOCTOU race window.
+        """
+        redis = await cls.get_redis()
+        key = f"{_PREFIX}{jti}"
+        was_set = await redis.set(key, "revoked", nx=True, ex=ttl_seconds)
+        if was_set:
+            logger.info("Token %s consumed + blacklisted (TTL=%ds)", jti[:8], ttl_seconds)
+        return bool(was_set)
 
     @classmethod
     async def revoke(cls, jti: str, ttl_seconds: int) -> None:

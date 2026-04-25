@@ -117,13 +117,13 @@ class TestJWTSecretSeparation:
 
     def test_access_token_uses_jwt_secret(self):
         """Access tokens should decode with jwt_secret."""
-        from jose import jwt as jose_jwt
+        import jwt
 
         from app.core.config import settings
         from app.core.security import create_access_token
 
         token = create_access_token("test-user-id")
-        payload = jose_jwt.decode(
+        payload = jwt.decode(
             token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
         )
         assert payload["sub"] == "test-user-id"
@@ -131,8 +131,8 @@ class TestJWTSecretSeparation:
 
     def test_refresh_token_uses_refresh_secret(self):
         """Refresh tokens should decode with jwt_refresh_secret, not jwt_secret."""
-        from jose import JWTError
-        from jose import jwt as jose_jwt
+        import jwt
+        from jwt import PyJWTError
 
         from app.core.config import settings
         from app.core.security import create_refresh_token
@@ -140,7 +140,7 @@ class TestJWTSecretSeparation:
         token = create_refresh_token("test-user-id")
 
         # Should succeed with refresh secret
-        payload = jose_jwt.decode(
+        payload = jwt.decode(
             token, settings.jwt_refresh_secret, algorithms=[settings.jwt_algorithm]
         )
         assert payload["sub"] == "test-user-id"
@@ -149,14 +149,14 @@ class TestJWTSecretSeparation:
 
         # Should fail with access secret (different from refresh secret)
         if settings.jwt_secret != settings.jwt_refresh_secret:
-            with pytest.raises(JWTError):
-                jose_jwt.decode(
+            with pytest.raises(PyJWTError):
+                jwt.decode(
                     token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
                 )
 
     def test_refresh_token_has_unique_jti(self):
         """Each refresh token should have a unique jti claim."""
-        from jose import jwt as jose_jwt
+        import jwt
 
         from app.core.config import settings
         from app.core.security import create_refresh_token
@@ -164,8 +164,8 @@ class TestJWTSecretSeparation:
         token1 = create_refresh_token("test-user-id")
         token2 = create_refresh_token("test-user-id")
 
-        p1 = jose_jwt.decode(token1, settings.jwt_refresh_secret, algorithms=[settings.jwt_algorithm])
-        p2 = jose_jwt.decode(token2, settings.jwt_refresh_secret, algorithms=[settings.jwt_algorithm])
+        p1 = jwt.decode(token1, settings.jwt_refresh_secret, algorithms=[settings.jwt_algorithm])
+        p2 = jwt.decode(token2, settings.jwt_refresh_secret, algorithms=[settings.jwt_algorithm])
 
         assert p1["jti"] != p2["jti"]
 

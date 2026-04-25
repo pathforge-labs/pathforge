@@ -4,6 +4,11 @@ PathForge — Services Package
 Central import point for all business logic services.
 """
 
+from app.services import (
+    career_simulation_service,
+    interview_intelligence_service,
+    transition_pathways_service,
+)
 from app.services.preference_service import BlacklistService, PreferenceService
 from app.services.resume_service import ResumeService
 from app.services.threat_radar_service import ThreatRadarService
@@ -15,4 +20,7 @@ __all__ = [
     "ResumeService",
     "ThreatRadarService",
     "UserService",
+    "career_simulation_service",
+    "interview_intelligence_service",
+    "transition_pathways_service",
 ]

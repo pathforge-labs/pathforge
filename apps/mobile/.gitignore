@@ -1,0 +1,32 @@
+# PathForge Mobile — .gitignore
+# ================================
+
+# Node
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds
+ios/
+android/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Assets (generated)
+*.jsbundle
+*.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

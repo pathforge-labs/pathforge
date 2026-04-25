@@ -7,6 +7,7 @@ license = "LicenseRef-Proprietary"
 authors = [{ name = "PathForge", email = "hello@pathforge.eu" }]
 
 dependencies = [
+    "google-auth>=2.37.0",
     "fastapi[standard]>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -14,7 +15,7 @@ dependencies = [
     "alembic>=1.14.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
-    "python-jose[cryptography]>=3.3.0",
+    "PyJWT[crypto]>=2.12.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.18",
     "httpx>=0.28.0",
@@ -24,12 +25,22 @@ dependencies = [
     "structlog>=24.4.0",
     "arq>=0.26.0",
     "bcrypt>=4.2.0",
+    # Sprint 30: Error tracking
+    "sentry-sdk[fastapi]>=2.19.0",
+    # Sprint 34: Stripe billing
+    "stripe>=14.0.0",
+    "resend>=2.23.0",
+    # Security: CVE-2026-28684 (symlink TOCTOU in set_key/unset_key).
+    # pydantic-settings + litellm both pull this transitively; pin the
+    # floor here so pip-audit passes in CI.
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "mypy>=1.14.0",
@@ -37,11 +48,30 @@ dev = [
     "aiosqlite>=0.21.0",
 ]
 ai = [
+    # GHSA-xqmj-j6mv-4862 (sandbox escape in LiteLLM Proxy's
+    # /prompts/test endpoint — authenticated RCE) applies only when
+    # running the LiteLLM Proxy server. PathForge uses LiteLLM as an
+    # SDK (``litellm.acompletion``, success/failure callbacks) — the
+    # vulnerable HTTP route is never exposed. A straight bump to
+    # 1.83.7 is blocked by litellm's downgrade of python-dotenv to
+    # 1.0.1, which would re-expose us to CVE-2026-28684. The CVE is
+    # therefore ignored in CI (pip-audit --ignore-vuln) with
+    # justification documented next to the ignore flag.
     "litellm>=1.55.0",
+    "langfuse>=2.50.0",
     "langchain>=0.3.0",
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=2.0.0",
     "voyageai>=0.3.0",
+    # Security: CVE-2026-22815, 34513..34520, 34525 (10 aiohttp CVEs —
+    # NTLM leak, DNS cache DoS, multipart memory, header injection, ...).
+    # litellm + voyageai pull aiohttp transitively; pin the floor so
+    # pip-audit passes in CI.
+    "aiohttp>=3.13.4",
+    # Sprint 29: Document parsing
+    "pdfplumber>=0.11.0",
+    "python-docx>=1.1.0",
+    "filetype>=1.2.0",
 ]
 
 [build-system]
@@ -75,7 +105,59 @@ python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+# Disabled: local stubs (newer) and CI stubs (older) differ in coverage.
+# type: ignore comments needed for CI may be flagged as unused locally.
+warn_unused_ignores = false
+
+# ── Third-party libraries without type stubs ───────────────
+# slowapi has no py.typed marker or stub package.
+# stripe SDK has partial typing gaps (construct_event, etc.).
+[[tool.mypy.overrides]]
+module = ["slowapi.*", "stripe.*"]
+ignore_missing_imports = true
+follow_imports = "silent"
+
+# ── Route modules: slowapi decorator typing ────────────────
+# @limiter.limit (slowapi) returns an untyped decorator that
+# infects @router.get/post stacks. FastAPI ships inline stubs,
+# but stacked untyped + typed decorators propagate the untyped
+# status. All route handler function bodies remain fully typed.
+[[tool.mypy.overrides]]
+module = "app.api.v1.*"
+disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+timeout = 120
+timeout_method = "thread"
+filterwarnings = [
+    "ignore:.*HTTP_422_UNPROCESSABLE_ENTITY.*:DeprecationWarning:slowapi",
+    "ignore::DeprecationWarning:pytest_asyncio.plugin",
+    "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
+markers = [
+    "no_auto_verify: disable the _auto_verify_on_login autouse fixture so the test can exercise the real unverified-account rejection path",
+]
+
+# ── Coverage (Sprint 42 N-2) ──────────────────────────────────────
+# Minimal config: make industry-standard exclusions explicit.
+# Deliberately NOT adding an `omit` list — that would artificially
+# inflate the baseline. The ratchet policy (65 → 70 → 75 → 80 across
+# Sprints 42–45) is documented in .github/workflows/ci.yml and
+# docs/ROADMAP.md. Enable branch coverage + raise floor together in
+# the Sprint 43 ratchet PR.
+[tool.coverage.run]
+branch = false
+source = ["app"]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == ['\"]__main__['\"]:",
+    "@(abc\\.)?abstractmethod",
+]

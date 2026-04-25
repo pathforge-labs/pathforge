@@ -12,7 +12,7 @@ REST endpoints for Career DNA™ profile management.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.intelligence_cache import ic_cache
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -35,6 +36,7 @@ from app.schemas.career_dna import (
     SkillGenomeResponse,
     ValuesProfileResponse,
 )
+from app.services.billing_service import BillingService
 from app.services.career_dna_service import CareerDNAService
 
 if TYPE_CHECKING:
@@ -57,6 +59,11 @@ async def get_career_dna(
     db: AsyncSession = Depends(get_db),
 ) -> CareerDNAResponse:
     """Retrieve the full Career DNA profile with all dimensions."""
+    cache_key = ic_cache.key(current_user.id, "career_dna")
+    cached = await ic_cache.get(cache_key)
+    if cached is not None:
+        return CareerDNAResponse.model_validate(cached)
+
     career_dna = await CareerDNAService.get_full_profile(
         db, user_id=current_user.id
     )
@@ -65,7 +72,9 @@ async def get_career_dna(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Career DNA profile not found. Generate one first.",
         )
-    return _build_full_response(career_dna)
+    result = _build_full_response(career_dna)
+    await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_CAREER_DNA)
+    return result
 
 
 @router.get(
@@ -117,13 +126,26 @@ async def generate_career_dna(
     Trigger full Career DNA analysis from user's resume data.
 
     Optionally specify a subset of dimensions to refresh.
+    Sprint 38 C2/C5: Scan limit enforcement + usage tracking.
     """
+    # C5: Pre-check scan limit before AI call
+    if settings.billing_enabled:
+        await BillingService.check_scan_limit(db, current_user, "career_dna")
+
     dimensions = payload.dimensions if payload else None
     career_dna = await CareerDNAService.generate_full_profile(
         db, user_id=current_user.id, dimensions=dimensions
     )
+
+    # C2: Record usage after successful scan
+    if settings.billing_enabled:
+        await BillingService.record_usage(db, current_user, "career_dna")
+
     await db.commit()
-    return _build_full_response(career_dna)
+    result = _build_full_response(career_dna)
+    # Invalidate stale cache — newly generated profile replaces prior entry.
+    await ic_cache.invalidate_user(current_user.id)
+    return result
 
 
 @router.delete(
@@ -223,6 +245,80 @@ async def get_growth_vector(
     return GrowthVectorResponse.model_validate(career_dna.growth_vector)
 
 
+# ── Sprint 36 WS-6: Target Role Update ────────────────────────
+
+
+@router.put(
+    "/growth/target-role",
+    response_model=GrowthVectorResponse,
+    summary="Update target career role",
+)
+@limiter.limit("10/minute")
+async def update_target_role(
+    request: Request,
+    payload: dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GrowthVectorResponse:
+    """
+    Set or update the user's target career role.
+
+    Triggers async recalculation of growth trajectory.
+    Logs the change to UserActivityLog (not AdminAuditLog — Audit F24).
+    """
+    import re
+
+    from app.models.user_activity import UserActivityLog
+
+    # Validate + sanitize input
+    raw_target_role = payload.get("target_role", "")
+    if not isinstance(raw_target_role, str):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="target_role must be a string.",
+        )
+
+    # Sprint 36 Audit F29: sanitize user text — strip HTML tags
+    sanitized_role = re.sub(r"<[^>]+>", "", raw_target_role).strip()
+
+    if not sanitized_role or len(sanitized_role) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="target_role must be 1-255 characters after sanitization.",
+        )
+
+    # Load growth vector
+    career_dna = await CareerDNAService.get_full_profile(
+        db, user_id=current_user.id,
+    )
+    if career_dna is None or career_dna.growth_vector is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Growth vector not found. Generate Career DNA first.",
+        )
+
+    previous_role = career_dna.growth_vector.target_role
+    career_dna.growth_vector.target_role = sanitized_role
+
+    # Log activity (Audit F24: UserActivityLog, not AdminAuditLog)
+    activity = UserActivityLog(
+        user_id=current_user.id,
+        action="target_role_update",
+        entity_type="growth_vector",
+        entity_id=career_dna.growth_vector.id,
+        details={
+            "previous": previous_role,
+            "new": sanitized_role,
+        },
+    )
+    db.add(activity)
+
+    await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
+
+    return GrowthVectorResponse.model_validate(career_dna.growth_vector)
+
+
 @router.get(
     "/values",
     response_model=ValuesProfileResponse,
@@ -292,6 +388,7 @@ async def confirm_hidden_skill(
             detail="Hidden skill not found.",
         )
     await db.commit()
+    await ic_cache.invalidate_user(current_user.id)
     return _hidden_skill_response(skill)
 
 
