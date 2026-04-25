@@ -222,6 +222,64 @@ async def list_templates(
     return [WorkflowTemplateInfo(**tmpl) for tmpl in templates]
 
 
+# ── Preferences ──────────────────────────────────────────────
+
+
+@router.get(
+    "/preferences",
+    response_model=WorkflowPreferenceResponse,
+    summary="Get workflow preferences",
+    description="Get user's Workflow Automation preferences.",
+)
+@limiter.limit(settings.rate_limit_parse)
+async def get_preferences(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> WorkflowPreferenceResponse:
+    """Get Workflow Automation preferences."""
+    pref = await WorkflowAutomationService.get_preferences(
+        database, user_id=current_user.id,
+    )
+    if pref is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No preferences found. Set preferences first.",
+        )
+    return WorkflowPreferenceResponse.model_validate(pref)
+
+
+@router.put(
+    "/preferences",
+    response_model=WorkflowPreferenceResponse,
+    summary="Update workflow preferences",
+    description=(
+        "Update Workflow Automation preferences including "
+        "automation toggles, trigger sensitivity, and limits."
+    ),
+)
+@limiter.limit(settings.rate_limit_embed)
+async def update_preferences(
+    request: Request,
+    body: WorkflowPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> WorkflowPreferenceResponse:
+    """Update Workflow Automation preferences."""
+    try:
+        pref = await WorkflowAutomationService.update_preferences(
+            database,
+            user_id=current_user.id,
+            updates=body.model_dump(exclude_unset=True),
+        )
+        return WorkflowPreferenceResponse.model_validate(pref)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
 # ── Workflow Detail ──────────────────────────────────────────
 
 
@@ -351,61 +409,3 @@ async def get_executions(
         WorkflowExecutionResponse.model_validate(ex)
         for ex in executions
     ]
-
-
-# ── Preferences ──────────────────────────────────────────────
-
-
-@router.get(
-    "/preferences",
-    response_model=WorkflowPreferenceResponse,
-    summary="Get workflow preferences",
-    description="Get user's Workflow Automation preferences.",
-)
-@limiter.limit(settings.rate_limit_parse)
-async def get_preferences(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> WorkflowPreferenceResponse:
-    """Get Workflow Automation preferences."""
-    pref = await WorkflowAutomationService.get_preferences(
-        database, user_id=current_user.id,
-    )
-    if pref is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No preferences found. Set preferences first.",
-        )
-    return WorkflowPreferenceResponse.model_validate(pref)
-
-
-@router.put(
-    "/preferences",
-    response_model=WorkflowPreferenceResponse,
-    summary="Update workflow preferences",
-    description=(
-        "Update Workflow Automation preferences including "
-        "automation toggles, trigger sensitivity, and limits."
-    ),
-)
-@limiter.limit(settings.rate_limit_embed)
-async def update_preferences(
-    request: Request,
-    body: WorkflowPreferenceUpdate,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> WorkflowPreferenceResponse:
-    """Update Workflow Automation preferences."""
-    try:
-        pref = await WorkflowAutomationService.update_preferences(
-            database,
-            user_id=current_user.id,
-            updates=body.model_dump(exclude_unset=True),
-        )
-        return WorkflowPreferenceResponse.model_validate(pref)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
