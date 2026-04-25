@@ -37,7 +37,8 @@ mark the test instead with ``@pytest.mark.no_query_budget``.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import inspect
+from collections.abc import Callable
 from typing import Any, TypeVar
 
 # Lower bound: `route_query_budget(max_queries=0)` is almost certainly a
@@ -59,7 +60,11 @@ _MAX_BUDGET = 100
 #: without re-importing the symbol.
 QUERY_BUDGET_ATTR = "__query_budget__"
 
-_F = TypeVar("_F", bound=Callable[..., Awaitable[Any]])
+# Bound is `Callable[..., Any]` (not `Awaitable[...]`) so synchronous
+# FastAPI handlers — fully supported by the framework — can also be
+# annotated. The decorator is identity-preserving regardless of
+# coroutine-ness.
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 class NoQueryBudgetDeclaredError(LookupError):
@@ -124,7 +129,19 @@ def get_route_query_budget(endpoint: object) -> int:
         raise NoQueryBudgetDeclaredError(
             f"Cannot read query budget from non-callable: {endpoint!r}"
         )
-    budget = getattr(endpoint, QUERY_BUDGET_ATTR, None)
+    # `inspect.unwrap` peels off intermediate decorators (e.g.
+    # `@limiter.limit`, `@functools.wraps`-style wrappers) so the
+    # budget annotation is found on the underlying handler regardless
+    # of decoration order. The unwrap walks `__wrapped__` chains and
+    # stops at the first object without one, so a bare endpoint is
+    # returned unchanged.
+    target = inspect.unwrap(endpoint)
+    budget = getattr(target, QUERY_BUDGET_ATTR, None)
+    if budget is None:
+        # Fall back to the original object: callers that intentionally
+        # stamp on the wrapper (rare, but the API allows it) still get
+        # picked up.
+        budget = getattr(endpoint, QUERY_BUDGET_ATTR, None)
     if budget is None:
         qualname = getattr(endpoint, "__qualname__", repr(endpoint))
         raise NoQueryBudgetDeclaredError(

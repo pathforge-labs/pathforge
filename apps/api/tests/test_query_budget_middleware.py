@@ -34,7 +34,6 @@ from app.core.query_recorder import (
     register_query_counter_listener,
 )
 
-
 # This module exercises overage paths intentionally — opt the whole
 # file out of the autouse enforcement fixture in conftest.
 pytestmark = pytest.mark.no_query_budget
@@ -93,9 +92,7 @@ class TestNonProductionHeader:
     developer sees the cost of the request without a tail-tap.
     """
 
-    def test_header_reports_actual_count_under_budget(
-        self, app_with_middleware: FastAPI
-    ) -> None:
+    def test_header_reports_actual_count_under_budget(self, app_with_middleware: FastAPI) -> None:
         with patch("app.core.middleware.settings.environment", "development"):
             client = TestClient(app_with_middleware)
             resp = client.get("/api/v1/career-dna/dashboard")
@@ -105,9 +102,7 @@ class TestNonProductionHeader:
         # Engine name is also exposed for ad-hoc telemetry parsing.
         assert resp.headers["x-query-engine"] == "career_dna"
 
-    def test_header_reports_overage_in_non_prod(
-        self, app_with_middleware: FastAPI
-    ) -> None:
+    def test_header_reports_overage_in_non_prod(self, app_with_middleware: FastAPI) -> None:
         with patch("app.core.middleware.settings.environment", "development"):
             client = TestClient(app_with_middleware)
             resp = client.get("/api/v1/threat-radar/scan")
@@ -117,9 +112,7 @@ class TestNonProductionHeader:
         assert resp.status_code == 200
         assert resp.headers["x-query-count"] == "5"
 
-    def test_header_omitted_for_unannotated_route(
-        self, app_with_middleware: FastAPI
-    ) -> None:
+    def test_header_omitted_for_unannotated_route(self, app_with_middleware: FastAPI) -> None:
         """Without an annotation we can't compare to a budget, but the
         actual count is still useful for inventory work.  Header is
         present; no overage warning.
@@ -148,9 +141,7 @@ class TestProductionBreadcrumb:
         assert "x-query-count" not in resp.headers
         assert "x-query-engine" not in resp.headers
 
-    def test_overage_emits_breadcrumb_in_production(
-        self, app_with_middleware: FastAPI
-    ) -> None:
+    def test_overage_emits_breadcrumb_in_production(self, app_with_middleware: FastAPI) -> None:
         with (
             patch("app.core.middleware.settings.environment", "production"),
             patch("app.core.middleware._emit_budget_overage_breadcrumb") as mock_bc,
@@ -166,9 +157,7 @@ class TestProductionBreadcrumb:
         assert kwargs["engine_name"] == "threat_radar"
         assert kwargs["path"] == "/api/v1/threat-radar/scan"
 
-    def test_no_breadcrumb_when_under_budget(
-        self, app_with_middleware: FastAPI
-    ) -> None:
+    def test_no_breadcrumb_when_under_budget(self, app_with_middleware: FastAPI) -> None:
         with (
             patch("app.core.middleware.settings.environment", "production"),
             patch("app.core.middleware._emit_budget_overage_breadcrumb") as mock_bc,

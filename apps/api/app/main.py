@@ -264,14 +264,21 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID"],
         max_age=600,  # cache pre-flight results for 10 min
     )
+    # T2 / ADR-0007: query-count gate. Starlette resolves middleware
+    # in the **reverse** of `add_middleware` order — the last add is
+    # the outermost wrapper. We want the request to traverse:
+    #   BotTrap → SecurityHeaders → RequestID → QueryBudget → CORS → endpoint
+    # so QueryBudget runs (a) AFTER `RequestID` has set
+    # `request_id_var` (correlatable breadcrumbs) and (b) AFTER
+    # `BotTrap` has had its chance to short-circuit on bot-probe 404s
+    # (no per-bot ContextVar allocation in production). To produce
+    # that order, `QueryBudgetMiddleware` is added BEFORE the trio
+    # below — the trio later wraps it, in turn wrapped by BotTrap as
+    # the outermost.
+    application.add_middleware(QueryBudgetMiddleware)
     application.add_middleware(RequestIDMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(BotTrapMiddleware)
-    # T2 / ADR-0007: query-count gate. Mounted *after* RequestID so
-    # breadcrumbs can correlate to request_id, *before* BotTrap so 404s
-    # from bot trapping don't go through the counter (saves a per-bot
-    # ContextVar allocation in production).
-    application.add_middleware(QueryBudgetMiddleware)
 
     # ── Error Handlers ─────────────────────────────────────────
     register_error_handlers(application)

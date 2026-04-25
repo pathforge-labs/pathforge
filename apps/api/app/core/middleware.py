@@ -357,10 +357,14 @@ class QueryBudgetMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         finally:
             query_counter_var.reset(token)
 
-        # Resolve the dispatched route handler (may be ``None`` for
-        # 404s and OPTIONS preflight). When unresolved we still surface
-        # the count as an inventory aid in non-prod.
-        endpoint = getattr(request.scope.get("route"), "endpoint", None)
+        # Resolve the dispatched route handler. ``request.scope.get
+        # ("route")`` returns ``None`` for unmatched paths (404, bot
+        # probes) and for OPTIONS preflight; we explicitly guard before
+        # touching ``.endpoint`` so a None route can't shadow into an
+        # AttributeError under future Starlette versions where the
+        # attribute access surfaces a stricter type.
+        route = request.scope.get("route")
+        endpoint = getattr(route, "endpoint", None) if route is not None else None
         try:
             budget = get_route_query_budget(endpoint) if endpoint else None
         except NoQueryBudgetDeclaredError:
