@@ -12,7 +12,6 @@ import React from "react";
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   type PressableProps,
   type StyleProp,

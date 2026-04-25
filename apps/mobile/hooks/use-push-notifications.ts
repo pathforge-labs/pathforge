@@ -129,7 +129,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
         Notifications.removeNotificationSubscription(notificationResponseRef.current);
       }
     };
-  }, []);
+  }, [router]);
 
   // Check permission on mount
   useEffect(() => {

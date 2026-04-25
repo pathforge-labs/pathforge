@@ -192,12 +192,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: SPACING.lg,
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
   sectionTitle: {
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.semibold,
@@ -227,9 +221,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: FONT_WEIGHT.medium,
-  },
-  comingSoon: {
-    fontSize: FONT_SIZE.sm,
   },
   tokenText: {
     fontSize: FONT_SIZE.xs,

@@ -21,7 +21,6 @@ import { IntelligenceBlock } from "../../../components/intelligence-block";
 import { BRAND, FONT_SIZE, FONT_WEIGHT, SPACING } from "../../../constants/theme";
 
 import { buildDimensions } from "../../../lib/career-dna-helpers";
-import type { DimensionCard } from "../../../lib/career-dna-helpers";
 
 // ── Screen ──────────────────────────────────────────────────
 
