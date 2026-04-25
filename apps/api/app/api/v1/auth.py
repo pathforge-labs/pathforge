@@ -9,19 +9,24 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.csrf import csrf_protect
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.core.security import (
+    ACCESS_COOKIE_NAME,
+    REFRESH_COOKIE_NAME,
+    clear_auth_cookies,
     create_access_token,
     create_refresh_token,
     get_current_user,
     oauth2_scheme,
+    set_auth_cookies,
 )
 from app.core.token_blacklist import token_blacklist
 from app.models.user import User
@@ -107,11 +112,19 @@ async def register(
 @limiter.limit(settings.rate_limit_login)
 async def login(
     request: Request,
+    response: Response,
     payload: UserLoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """Authenticate and return tokens.
+
+    Track 1 / ADR-0006: tokens are returned in *both* the JSON body
+    (legacy clients) and as `httpOnly` cookies (cookie-first clients).
+    Returning both during the migration window means a client can pick
+    its path with no server-side feature flag.
+    """
     try:
-        return await UserService.authenticate(
+        tokens = await UserService.authenticate(
             db, email=payload.email, password=payload.password
         )
     except InvalidCredentialsError as exc:
@@ -137,6 +150,13 @@ async def login(
             detail=exc.message,
         ) from exc
 
+    set_auth_cookies(
+        response,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    return tokens
+
 
 @router.post(
     "/refresh",
@@ -146,12 +166,32 @@ async def login(
 @limiter.limit(settings.rate_limit_refresh)
 async def refresh_token(
     request: Request,
-    payload: RefreshTokenRequest,
+    response: Response,
+    payload: RefreshTokenRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """Rotate the refresh + access token pair.
+
+    Track 1 / ADR-0006: the refresh token is accepted from *either* the
+    `pathforge_refresh` cookie (cookie-first path) or the JSON body
+    (legacy path). Body wins if both are present so an explicit client
+    request is always honoured. Empty / missing → 401.
+    """
+    # Cookie-first; body falls back. Body has precedence on conflict so
+    # a client that explicitly passes a token is never overridden by a
+    # stale cookie.
+    body_token = payload.refresh_token if payload else None
+    cookie_token = request.cookies.get(REFRESH_COOKIE_NAME) or None
+    refresh_input = body_token or cookie_token
+    if not refresh_input:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required",
+        )
+
     try:
         token_data = jwt.decode(
-            payload.refresh_token,
+            refresh_input,
             settings.jwt_refresh_secret,
             algorithms=[settings.jwt_algorithm],
         )
@@ -207,7 +247,11 @@ async def refresh_token(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
     )
-
+    set_auth_cookies(
+        response,
+        access_token=new_tokens.access_token,
+        refresh_token=new_tokens.refresh_token,
+    )
     return new_tokens
 
 
@@ -215,12 +259,14 @@ async def refresh_token(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke current access token and optional refresh token",
+    dependencies=[Depends(csrf_protect)],
 )
 @limiter.limit(settings.rate_limit_logout)
 async def logout(
     request: Request,
+    response: Response,
     payload: LogoutRequest | None = None,
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     _current_user: User = Depends(get_current_user),
 ) -> None:
     """Blacklist the current access token and optional refresh token.
@@ -240,28 +286,40 @@ async def logout(
     """
     revoke_errors: list[Exception] = []
 
+    # Track 1 / ADR-0006: token may arrive via cookie, header, or both.
+    # Prefer header (oauth2_scheme) when present so an explicit caller's
+    # intent is honoured; fall back to cookie for cookie-first clients.
+    cookie_access = request.cookies.get(ACCESS_COOKIE_NAME) or None
+    access_token = token or cookie_access
+
     # Revoke access token
-    try:
-        decoded = jwt.decode(
-            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
-        )
-        jti: str | None = decoded.get("jti")
-        exp: int | None = decoded.get("exp")
+    if access_token:
+        try:
+            decoded = jwt.decode(
+                access_token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+            )
+            jti: str | None = decoded.get("jti")
+            exp: int | None = decoded.get("exp")
 
-        if jti and exp:
-            remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
-            try:
-                await token_blacklist.revoke(jti, ttl_seconds=remaining)
-            except (ConnectionError, OSError) as exc:
-                revoke_errors.append(exc)
-    except PyJWTError:
-        pass  # Token already invalid — nothing to revoke
+            if jti and exp:
+                remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
+                try:
+                    await token_blacklist.revoke(jti, ttl_seconds=remaining)
+                except (ConnectionError, OSError) as exc:
+                    revoke_errors.append(exc)
+        except PyJWTError:
+            pass  # Token already invalid — nothing to revoke
 
-    # Sprint 41 P1: Also revoke refresh token if provided
-    if payload and payload.refresh_token:
+    # Sprint 41 P1: Also revoke refresh token if provided.
+    # Track 1 / ADR-0006: refresh from cookie also revoked.
+    cookie_refresh = request.cookies.get(REFRESH_COOKIE_NAME) or None
+    refresh_token_to_revoke = (
+        payload.refresh_token if payload and payload.refresh_token else cookie_refresh
+    )
+    if refresh_token_to_revoke:
         try:
             refresh_data = jwt.decode(
-                payload.refresh_token,
+                refresh_token_to_revoke,
                 settings.jwt_refresh_secret,
                 algorithms=[settings.jwt_algorithm],
             )
@@ -286,6 +344,8 @@ async def logout(
                 len(revoke_errors),
                 exc_info=revoke_errors[0],
             )
+            # Do NOT clear cookies here — the user's intent (logout)
+            # was not honoured and the session is still live server-side.
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication service temporarily unavailable",
@@ -296,6 +356,11 @@ async def logout(
             len(revoke_errors),
             exc_info=revoke_errors[0],
         )
+
+    # Track 1 / ADR-0006: clear auth cookies on successful logout (or
+    # fail-open path). The client is told the session is dead even if
+    # Redis-side revocation degraded.
+    clear_auth_cookies(response)
 
 
 # ── Sprint 39: Password Reset ──────────────────────────────────

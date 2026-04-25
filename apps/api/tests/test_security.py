@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -21,6 +21,19 @@ from app.core.security import (
 from app.models.user import User
 
 pytestmark = pytest.mark.asyncio
+
+
+def _make_request(cookies: dict[str, str] | None = None) -> Request:
+    """Build a minimal Starlette Request fixture.
+
+    Track 1 / ADR-0006: ``get_current_user`` now reads from the cookie
+    jar in addition to the bearer header; tests that call it directly
+    must provide a Request whose ``.cookies`` attribute returns the
+    expected jar (empty by default — pure bearer-path tests).
+    """
+    request = MagicMock(spec=Request)
+    request.cookies = cookies or {}
+    return request
 
 
 def test_hash_password_returns_string() -> None:
@@ -144,7 +157,7 @@ async def test_get_current_user_valid_token(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=False,
     ):
-        result = await get_current_user(token=token, db=db_session)
+        result = await get_current_user(_make_request(), token=token, db=db_session)
 
     assert result.id == user.id
     assert result.email == user.email
@@ -161,7 +174,7 @@ async def test_get_current_user_expired_token(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -175,7 +188,7 @@ async def test_get_current_user_revoked_token(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=True,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
     assert "revoked" in exc.value.detail.lower()
@@ -201,7 +214,7 @@ async def test_get_current_user_wrong_type(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -223,7 +236,7 @@ async def test_get_current_user_missing_sub(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -247,7 +260,7 @@ async def test_get_current_user_invalid_signature(db_session: AsyncSession) -> N
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -258,7 +271,7 @@ async def test_get_current_user_malformed_token(db_session: AsyncSession) -> Non
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token="not-a-jwt-token", db=db_session)
+        await get_current_user(_make_request(), token="not-a-jwt-token", db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -274,7 +287,7 @@ async def test_get_current_user_inactive_user(db_session: AsyncSession) -> None:
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 403
 
@@ -290,7 +303,7 @@ async def test_get_current_user_user_not_found(db_session: AsyncSession) -> None
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
 
@@ -312,7 +325,7 @@ async def test_get_current_user_invalidated_token(
         new_callable=AsyncMock,
         return_value=False,
     ), pytest.raises(HTTPException) as exc:
-        await get_current_user(token=token, db=db_session)
+        await get_current_user(_make_request(), token=token, db=db_session)
 
     assert exc.value.status_code == 401
     assert "invalidated" in exc.value.detail.lower()
@@ -335,6 +348,6 @@ async def test_get_current_user_invalidated_before_issue(
         new_callable=AsyncMock,
         return_value=False,
     ):
-        result = await get_current_user(token=token, db=db_session)
+        result = await get_current_user(_make_request(), token=token, db=db_session)
 
     assert result.id == user.id

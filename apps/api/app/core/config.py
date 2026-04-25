@@ -12,6 +12,7 @@ Usage:
 """
 
 import logging
+from datetime import date
 from typing import ClassVar
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -80,6 +81,12 @@ class Settings(BaseSettings):  # type: ignore[misc]
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
     jwt_refresh_token_expire_days: int = 30
+
+    # Track 1 / ADR-0006: cookie-first auth with a 30-day legacy header
+    # fallback. After this date, any bearer-header request emits a Sentry
+    # warning so we can observe the long tail of un-migrated clients.
+    # `None` disables the deprecation telemetry (default until launch).
+    auth_legacy_header_deprecated_after: date | None = None
 
     # ── CORS ────────────────────────────────────────────────────
     cors_origins: list[str] = [

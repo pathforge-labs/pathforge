@@ -23,7 +23,7 @@ import logging
 from typing import Literal
 
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import limiter
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    set_auth_cookies,
+)
 from app.schemas.user import TokenResponse
 from app.services.user_service import UserService
 
@@ -284,6 +288,7 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
 @limiter.limit(settings.rate_limit_login)
 async def oauth_login(
     request: Request,
+    response: Response,
     provider: OAuthProvider,
     payload: OAuthTokenRequest,
     db: AsyncSession = Depends(get_db),
@@ -379,7 +384,15 @@ async def oauth_login(
             is_verified=True,
         )
 
-    return TokenResponse(
+    tokens = TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
     )
+    # Track 1 / ADR-0006: OAuth login also sets the cookie pair so the
+    # post-OAuth web flow can switch transparently.
+    set_auth_cookies(
+        response,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    return tokens
