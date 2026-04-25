@@ -64,17 +64,33 @@ async def test_csp_dev_profile_allows_self_and_jsdelivr(
 async def test_csp_production_profile_is_strict(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Production CSP forbids everything by default."""
+    """Production CSP forbids everything by default.
+
+    Only the directives that cannot inherit from ``default-src`` are
+    stated explicitly (``frame-ancestors``, ``form-action``,
+    ``base-uri``). Every fetch directive — script-src, img-src,
+    connect-src, style-src — is intentionally absent so the
+    ``default-src 'none'`` inheritance is the only allow-list.
+    """
     monkeypatch.setattr(settings, "environment", "production")
     response = await client.get("/api/v1/health")
     csp = response.headers["content-security-policy"]
 
     # Lock down the unscoped default — the most important directive.
     assert "default-src 'none'" in csp
-    # No script source in production — JSON responses never execute JS.
-    assert "script-src" not in csp
-    # Inline event handlers and external CDNs are forbidden by the
-    # absence of a permissive script/style allow-list.
+    # No fetch directives are stated, so they all inherit 'none'.
+    for directive in (
+        "script-src",
+        "style-src",
+        "img-src",
+        "connect-src",
+        "font-src",
+        "media-src",
+    ):
+        assert directive not in csp, (
+            f"production CSP unexpectedly relaxes {directive!r}: {csp!r}"
+        )
+    # No external CDN allow-listing in production.
     assert "cdn.jsdelivr.net" not in csp
     assert "'unsafe-inline'" not in csp
 

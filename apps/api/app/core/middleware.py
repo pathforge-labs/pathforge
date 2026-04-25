@@ -121,25 +121,27 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
     # different CSP profiles:
     #
     # PROD: ultra-strict — there is no documented browser context that
-    # legitimately renders an API response, so we forbid everything.
-    # If an attacker manages to convince a browser to render a JSON
-    # response inline (e.g. via a content-sniffing exploit) the CSP
-    # forbids loading any scripts, styles, frames, or form posts.
+    # legitimately renders an API response, so we forbid everything
+    # that the W3C spec lets us forbid. ``default-src 'none'`` is the
+    # blanket; the ``-src`` directives that *would* have inherited
+    # from it (img-src, script-src, connect-src, …) are deliberately
+    # left out so the inheritance fires. Only the directives that
+    # cannot inherit from default-src are stated explicitly:
+    # ``frame-ancestors``, ``form-action``, ``base-uri``.
     #
     # DEV: relaxed enough to let Swagger UI / ReDoc load from
-    # ``cdn.jsdelivr.net``, since those endpoints exist *only* in
-    # non-production environments (see ``main.create_app``).
-    #
-    # ``frame-ancestors 'none'`` mirrors ``X-Frame-Options: DENY`` for
-    # browsers that prefer the modern directive; together they block
-    # iframe embedding regardless of which check the browser honours.
+    # ``cdn.jsdelivr.net``. ``'unsafe-inline'`` is required because
+    # the FastAPI-generated docs page mounts inline event handlers
+    # and inline ``<style>`` blocks. Switching to nonces would mean
+    # forking the FastAPI docs renderer, which is disproportionate
+    # for a dev-only profile that never ships to production
+    # (``main.create_app`` already gates ``/docs`` and ``/redoc`` on
+    # ``not is_production``).
     _CSP_PRODUCTION = (
         "default-src 'none'; "
         "frame-ancestors 'none'; "
         "form-action 'none'; "
-        "base-uri 'none'; "
-        "img-src 'self' data:; "
-        "connect-src 'self'"
+        "base-uri 'none'"
     )
     _CSP_DEVELOPMENT = (
         "default-src 'self'; "
