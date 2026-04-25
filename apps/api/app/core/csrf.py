@@ -45,7 +45,7 @@ import logging
 
 from fastapi import HTTPException, Request, status
 
-from app.core.security import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+from app.core.security import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ async def csrf_protect(request: Request) -> None:
     #     unchanged during the 30-day legacy window.
     #   - Cookie present, no `Authorization` header → cookie path; enforce.
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
-    has_access_cookie = bool(request.cookies.get("pathforge_access"))
+    has_access_cookie = bool(request.cookies.get(ACCESS_COOKIE_NAME))
     has_bearer_header = bool(request.headers.get("authorization"))
     if not has_access_cookie or has_bearer_header:
         return

@@ -19,6 +19,8 @@ from app.core.csrf import csrf_protect
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.core.security import (
+    ACCESS_COOKIE_NAME,
+    REFRESH_COOKIE_NAME,
     clear_auth_cookies,
     create_access_token,
     create_refresh_token,
@@ -179,7 +181,7 @@ async def refresh_token(
     # a client that explicitly passes a token is never overridden by a
     # stale cookie.
     body_token = payload.refresh_token if payload else None
-    cookie_token = request.cookies.get("pathforge_refresh") or None
+    cookie_token = request.cookies.get(REFRESH_COOKIE_NAME) or None
     refresh_input = body_token or cookie_token
     if not refresh_input:
         raise HTTPException(
@@ -287,7 +289,7 @@ async def logout(
     # Track 1 / ADR-0006: token may arrive via cookie, header, or both.
     # Prefer header (oauth2_scheme) when present so an explicit caller's
     # intent is honoured; fall back to cookie for cookie-first clients.
-    cookie_access = request.cookies.get("pathforge_access") or None
+    cookie_access = request.cookies.get(ACCESS_COOKIE_NAME) or None
     access_token = token or cookie_access
 
     # Revoke access token
@@ -310,7 +312,7 @@ async def logout(
 
     # Sprint 41 P1: Also revoke refresh token if provided.
     # Track 1 / ADR-0006: refresh from cookie also revoked.
-    cookie_refresh = request.cookies.get("pathforge_refresh") or None
+    cookie_refresh = request.cookies.get(REFRESH_COOKIE_NAME) or None
     refresh_token_to_revoke = (
         payload.refresh_token if payload and payload.refresh_token else cookie_refresh
     )

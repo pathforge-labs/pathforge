@@ -44,20 +44,32 @@ CSRF_COOKIE_NAME = "pathforge_csrf"
 CSRF_HEADER_NAME = "x-csrf-token"
 
 
-def _cookie_security_kwargs() -> dict[str, str | bool | None]:
-    """Common cookie attributes shared by every Set-Cookie call.
+def _set_secure_cookie(
+    response: Response,
+    *,
+    key: str,
+    value: str,
+    max_age: int,
+    httponly: bool = True,
+) -> None:
+    """Apply the canonical Set-Cookie attributes for this app.
 
     `secure` and `samesite="strict"` are always set in production; in
     development the secure flag relaxes so cookies still work over the
     plaintext localhost dev loop. `domain` is left unset to bind cookies
-    to the API host — cross-subdomain sharing is opt-in via config.
+    to the API host — cross-subdomain sharing is opt-in via config. The
+    `httponly` flag is opt-out so the CSRF cookie can flip it without
+    redefining every other attribute.
     """
-    return {
-        "httponly": True,
-        "secure": settings.environment == "production",
-        "samesite": "strict",
-        "path": "/",
-    }
+    response.set_cookie(
+        key=key,
+        value=value,
+        max_age=max_age,
+        httponly=httponly,
+        secure=settings.environment == "production",
+        samesite="strict",
+        path="/",
+    )
 
 
 def set_auth_cookies(
@@ -70,39 +82,54 @@ def set_auth_cookies(
     the cookie. The CSRF cookie itself is intentionally NOT httpOnly so
     JS can read it for the double-submit echo header.
     """
-    response.set_cookie(
+    _set_secure_cookie(
+        response,
         key=ACCESS_COOKIE_NAME,
         value=access_token,
         max_age=settings.jwt_access_token_expire_minutes * 60,
-        **_cookie_security_kwargs(),
     )
-    response.set_cookie(
+    _set_secure_cookie(
+        response,
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
-        **_cookie_security_kwargs(),
     )
     csrf_token = secrets.token_urlsafe(32)
-    csrf_kwargs = _cookie_security_kwargs()
-    csrf_kwargs["httponly"] = False  # readable by JS for double-submit echo
-    response.set_cookie(
+    _set_secure_cookie(
+        response,
         key=CSRF_COOKIE_NAME,
         value=csrf_token,
         max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
-        **csrf_kwargs,
+        httponly=False,  # readable by JS for double-submit echo
     )
     return csrf_token
 
 
 def clear_auth_cookies(response: Response) -> None:
-    """Delete the auth cookie pair and CSRF cookie on logout."""
-    for name in (ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, CSRF_COOKIE_NAME):
+    """Delete the auth cookie pair and CSRF cookie on logout.
+
+    The `httponly` flag must match the original Set-Cookie header so the
+    browser correctly identifies which cookie to delete (Gemini review on
+    PR #28). The CSRF cookie was set with `httponly=False`, so its
+    deletion must also drop the flag — otherwise Chrome and Safari skip
+    the deletion silently and the session lingers after logout.
+    """
+    secure = settings.environment == "production"
+    for name in (ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME):
         response.delete_cookie(
             key=name,
             path="/",
             samesite="strict",
-            secure=settings.environment == "production",
+            secure=secure,
+            httponly=True,
         )
+    response.delete_cookie(
+        key=CSRF_COOKIE_NAME,
+        path="/",
+        samesite="strict",
+        secure=secure,
+        httponly=False,
+    )
 
 
 def hash_password(password: str) -> str:
