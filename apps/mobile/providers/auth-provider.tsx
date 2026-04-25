@@ -221,16 +221,15 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
     } catch {
       // Logout API call is best-effort
     }
-    // Push-token deregistration happens inside ``usePushNotifications``
-    // because that hook owns the Expo push-token state — the
-    // auth-provider has no direct access to it. The previous
-    // ``notificationsApi.deregisterPushToken()`` call here was a
-    // placeholder that compiled before the API was made
-    // token-required (it now needs ``{ token: string }``). The hook
-    // observes the LOGOUT dispatch via auth state and tears down its
-    // registration there. Server-side, the JWT is already blacklisted
-    // by the logout call above, so any straggling push delivery to
-    // this device fails fast even if cleanup is interrupted.
+    // Push-token deregistration is the responsibility of the caller
+    // that owns the ``usePushNotifications`` hook (currently the
+    // settings screen). That caller MUST invoke ``handleDeregister``
+    // before this ``logout()`` so the request still carries a valid
+    // session. The auth-provider cannot do it here because the Expo
+    // push token lives inside the hook, not in auth state.
+    // Server-side, the JWT is blacklisted by ``authApi.logout()``
+    // above, so any straggling push delivery to this device fails
+    // fast even if client-side deregister is skipped.
     await clearTokens();
     dispatch({ type: "LOGOUT" });
   }, []);
