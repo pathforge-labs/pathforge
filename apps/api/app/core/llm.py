@@ -680,13 +680,24 @@ async def complete_vision(
     for attempt_tier in tiers_to_try:
         model = _resolve_model(attempt_tier)
 
-        # Per-tier RPM check (Sprint 39 audit A-H1): the check belongs
-        # OUTSIDE the retry loop so a logical request consumes exactly
-        # one slot from the sliding window — not one per retry. The
-        # earlier shape spuriously tripped ``RateLimitExceededError``
-        # at ~1/N of the configured RPM under transient upstream
-        # errors, mirroring ``complete()``'s contract above.
-        _check_rpm(attempt_tier)
+        # Per-tier RPM check (Sprint 39 audit A-H1 + PR #23 review):
+        # the check belongs OUTSIDE the retry loop so a logical
+        # request consumes exactly one slot from the sliding window
+        # — not one per retry. We also need it INSIDE a try/except
+        # that triggers the next-tier fallback so a rate-limited
+        # primary tier doesn't short-circuit the whole call. Without
+        # this wrapper a ``RateLimitExceededError`` would propagate
+        # out of ``complete_vision`` instead of letting the loop
+        # break and try the next tier (Style Guide §"tiered fallback").
+        try:
+            _check_rpm(attempt_tier)
+        except RateLimitExceededError as exc:
+            last_error = exc
+            logger.warning(
+                "LLM Vision tier %s rate-limited; trying next tier",
+                attempt_tier.value,
+            )
+            continue
 
         for attempt in range(max_retries + 1):
             start = time.monotonic()
