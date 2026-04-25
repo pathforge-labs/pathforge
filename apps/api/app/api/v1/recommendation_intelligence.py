@@ -226,6 +226,95 @@ async def list_recommendations(
     ]
 
 
+# ── Batches ──────────────────────────────────────────────────
+
+
+@router.get(
+    "/batches",
+    response_model=list[RecommendationBatchResponse],
+    summary="List recommendation batches",
+    description=(
+        "List Intelligence Fusion Engine™ analysis batches "
+        "in reverse chronological order."
+    ),
+)
+@limiter.limit(settings.rate_limit_parse)
+async def list_batches(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> list[RecommendationBatchResponse]:
+    """List recommendation batches."""
+    batches = await RecommendationIntelligenceService.get_batches(
+        database,
+        user_id=current_user.id,
+        limit=limit,
+    )
+    return [
+        RecommendationBatchResponse.model_validate(batch)
+        for batch in batches
+    ]
+
+
+# ── Preferences ──────────────────────────────────────────────
+
+
+@router.get(
+    "/preferences",
+    response_model=RecommendationPreferenceResponse,
+    summary="Get recommendation preferences",
+    description="Get user's Recommendation Intelligence filtering preferences.",
+)
+@limiter.limit(settings.rate_limit_parse)
+async def get_preferences(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> RecommendationPreferenceResponse:
+    """Get Recommendation Intelligence preferences."""
+    pref = await RecommendationIntelligenceService.get_preferences(
+        database, user_id=current_user.id,
+    )
+    if pref is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No preferences found. Set preferences first.",
+        )
+    return RecommendationPreferenceResponse.model_validate(pref)
+
+
+@router.put(
+    "/preferences",
+    response_model=RecommendationPreferenceResponse,
+    summary="Update recommendation preferences",
+    description=(
+        "Update Recommendation Intelligence filtering preferences "
+        "including enabled categories, priority thresholds, and limits."
+    ),
+)
+@limiter.limit(settings.rate_limit_embed)
+async def update_preferences(
+    request: Request,
+    body: RecommendationPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> RecommendationPreferenceResponse:
+    """Update Recommendation Intelligence preferences."""
+    try:
+        pref = await RecommendationIntelligenceService.update_preferences(
+            database,
+            user_id=current_user.id,
+            updates=body.model_dump(exclude_unset=True),
+        )
+        return RecommendationPreferenceResponse.model_validate(pref)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
 # ── Recommendation Detail ────────────────────────────────────
 
 
@@ -326,95 +415,6 @@ async def get_correlations(
             RecommendationCorrelationResponse.model_validate(corr)
             for corr in correlations
         ]
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-
-
-# ── Batches ──────────────────────────────────────────────────
-
-
-@router.get(
-    "/batches",
-    response_model=list[RecommendationBatchResponse],
-    summary="List recommendation batches",
-    description=(
-        "List Intelligence Fusion Engine™ analysis batches "
-        "in reverse chronological order."
-    ),
-)
-@limiter.limit(settings.rate_limit_parse)
-async def list_batches(
-    request: Request,
-    limit: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> list[RecommendationBatchResponse]:
-    """List recommendation batches."""
-    batches = await RecommendationIntelligenceService.get_batches(
-        database,
-        user_id=current_user.id,
-        limit=limit,
-    )
-    return [
-        RecommendationBatchResponse.model_validate(batch)
-        for batch in batches
-    ]
-
-
-# ── Preferences ──────────────────────────────────────────────
-
-
-@router.get(
-    "/preferences",
-    response_model=RecommendationPreferenceResponse,
-    summary="Get recommendation preferences",
-    description="Get user's Recommendation Intelligence filtering preferences.",
-)
-@limiter.limit(settings.rate_limit_parse)
-async def get_preferences(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> RecommendationPreferenceResponse:
-    """Get Recommendation Intelligence preferences."""
-    pref = await RecommendationIntelligenceService.get_preferences(
-        database, user_id=current_user.id,
-    )
-    if pref is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No preferences found. Set preferences first.",
-        )
-    return RecommendationPreferenceResponse.model_validate(pref)
-
-
-@router.put(
-    "/preferences",
-    response_model=RecommendationPreferenceResponse,
-    summary="Update recommendation preferences",
-    description=(
-        "Update Recommendation Intelligence filtering preferences "
-        "including enabled categories, priority thresholds, and limits."
-    ),
-)
-@limiter.limit(settings.rate_limit_embed)
-async def update_preferences(
-    request: Request,
-    body: RecommendationPreferenceUpdate,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> RecommendationPreferenceResponse:
-    """Update Recommendation Intelligence preferences."""
-    try:
-        pref = await RecommendationIntelligenceService.update_preferences(
-            database,
-            user_id=current_user.id,
-            updates=body.model_dump(exclude_unset=True),
-        )
-        return RecommendationPreferenceResponse.model_validate(pref)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

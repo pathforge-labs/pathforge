@@ -156,6 +156,91 @@ async def create_plan_scan(
     )
 
 
+# ── Plan Comparison ───────────────────────────────────────────
+
+
+@router.post(
+    "/compare",
+    response_model=PlanComparisonResponse,
+    status_code=HTTP_200_OK,
+    summary="Compare plan scenarios",
+)
+@limiter.limit("3/minute")
+async def compare_plans(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> PlanComparisonResponse:
+    """Compare all user plans and recommend the best option."""
+    result = await compare_plans_fn(
+        database, user_id=current_user.id,
+    )
+
+    plan_responses = [
+        CareerActionPlanResponse.model_validate(plan)
+        for plan in result.plans
+    ]
+
+    return PlanComparisonResponse(
+        plans=plan_responses,
+        recommended_plan_id=result.recommended_plan_id,
+        recommendation_reasoning=result.recommendation_reasoning,
+    )
+
+
+# ── Preferences ────────────────────────────────────────────────
+
+
+@router.get(
+    "/preferences",
+    response_model=CareerActionPlannerPreferenceResponse | None,
+    status_code=HTTP_200_OK,
+    summary="Get Career Action Planner preferences",
+)
+@limiter.limit("30/minute")
+async def get_preferences(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> CareerActionPlannerPreferenceResponse | None:
+    """Get user's Career Action Planner preferences."""
+    pref = await service.get_preferences(
+        database, user_id=current_user.id,
+    )
+    if not pref:
+        return None
+    return CareerActionPlannerPreferenceResponse.model_validate(pref)
+
+
+@router.put(
+    "/preferences",
+    response_model=CareerActionPlannerPreferenceResponse,
+    status_code=HTTP_200_OK,
+    summary="Update Career Action Planner preferences",
+)
+@limiter.limit("20/minute")
+async def update_preferences(
+    request: Request,
+    body: CareerActionPlannerPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    database: AsyncSession = Depends(get_db),
+) -> CareerActionPlannerPreferenceResponse:
+    """Update or create Career Action Planner preferences."""
+    try:
+        pref = await service.update_preferences(
+            database,
+            user_id=current_user.id,
+            update_data=body,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return CareerActionPlannerPreferenceResponse.model_validate(pref)
+
+
 # ── Plan Detail ────────────────────────────────────────────────
 
 
@@ -323,88 +408,3 @@ async def log_milestone_progress(
         ) from exc
 
     return MilestoneProgressResponse.model_validate(entry)
-
-
-# ── Plan Comparison ───────────────────────────────────────────
-
-
-@router.post(
-    "/compare",
-    response_model=PlanComparisonResponse,
-    status_code=HTTP_200_OK,
-    summary="Compare plan scenarios",
-)
-@limiter.limit("3/minute")
-async def compare_plans(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> PlanComparisonResponse:
-    """Compare all user plans and recommend the best option."""
-    result = await compare_plans_fn(
-        database, user_id=current_user.id,
-    )
-
-    plan_responses = [
-        CareerActionPlanResponse.model_validate(plan)
-        for plan in result.plans
-    ]
-
-    return PlanComparisonResponse(
-        plans=plan_responses,
-        recommended_plan_id=result.recommended_plan_id,
-        recommendation_reasoning=result.recommendation_reasoning,
-    )
-
-
-# ── Preferences ────────────────────────────────────────────────
-
-
-@router.get(
-    "/preferences",
-    response_model=CareerActionPlannerPreferenceResponse | None,
-    status_code=HTTP_200_OK,
-    summary="Get Career Action Planner preferences",
-)
-@limiter.limit("30/minute")
-async def get_preferences(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> CareerActionPlannerPreferenceResponse | None:
-    """Get user's Career Action Planner preferences."""
-    pref = await service.get_preferences(
-        database, user_id=current_user.id,
-    )
-    if not pref:
-        return None
-    return CareerActionPlannerPreferenceResponse.model_validate(pref)
-
-
-@router.put(
-    "/preferences",
-    response_model=CareerActionPlannerPreferenceResponse,
-    status_code=HTTP_200_OK,
-    summary="Update Career Action Planner preferences",
-)
-@limiter.limit("20/minute")
-async def update_preferences(
-    request: Request,
-    body: CareerActionPlannerPreferenceUpdate,
-    current_user: User = Depends(get_current_user),
-    database: AsyncSession = Depends(get_db),
-) -> CareerActionPlannerPreferenceResponse:
-    """Update or create Career Action Planner preferences."""
-    try:
-        pref = await service.update_preferences(
-            database,
-            user_id=current_user.id,
-            update_data=body,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-
-    return CareerActionPlannerPreferenceResponse.model_validate(pref)
