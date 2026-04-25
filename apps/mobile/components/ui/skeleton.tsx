@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from "react";
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -39,7 +39,7 @@ export function Skeleton({
   borderRadius = RADIUS.md,
   style,
 }: SkeletonProps): React.JSX.Element {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
