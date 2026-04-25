@@ -239,7 +239,28 @@ class TestSendVerificationEmail:
             )
         html = mock_send.call_args.kwargs["html"]
         assert "tok-XYZ" in html
-        assert "/verify-email?token=tok-XYZ" in html
+        # F34 (Sprint 39 audit): verify URL now carries both ``token``
+        # and ``email`` query params so the verify-email page can
+        # offer one-click resend if the link expires. The recipient
+        # already controls this address, so re-including it in the
+        # URL is not an information disclosure.
+        assert "token=tok-XYZ" in html
+        assert "email=user%40example.com" in html
+        assert "/verify-email?" in html
+
+    def test_verify_url_url_encodes_email_with_special_chars(self) -> None:
+        """Plus-sign aliases (e.g. user+tag@…) must round-trip safely."""
+        with patch.object(EmailService, "_send", return_value=True) as mock_send:
+            EmailService.send_verification_email(
+                to="user+tag@example.com",
+                token="abc",
+                name="Alice",
+            )
+        html = mock_send.call_args.kwargs["html"]
+        # ``+`` must be percent-encoded as ``%2B`` to survive the
+        # query-string parser on the frontend; raw ``+`` would be
+        # decoded to a space.
+        assert "email=user%2Btag%40example.com" in html
 
     def test_returns_false_when_not_configured(self) -> None:
         original = settings.resend_api_key

@@ -107,11 +107,52 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
 
     Applies protective HTTP headers to all responses:
     - Prevents MIME-type sniffing (X-Content-Type-Options)
-    - Prevents clickjacking (X-Frame-Options)
+    - Prevents clickjacking (X-Frame-Options + CSP frame-ancestors)
     - Enforces HTTPS in production (Strict-Transport-Security)
     - Controls referrer information leakage
     - Restricts browser feature access (Permissions-Policy)
+    - Locks down browser execution context (Content-Security-Policy)
     """
+
+    # ── Content-Security-Policy (Sprint 39 audit F33) ─────────────
+    #
+    # PathForge's API returns JSON for every endpoint *except* the
+    # interactive OpenAPI documentation. We therefore ship two
+    # different CSP profiles:
+    #
+    # PROD: ultra-strict — there is no documented browser context that
+    # legitimately renders an API response, so we forbid everything
+    # that the W3C spec lets us forbid. ``default-src 'none'`` is the
+    # blanket; the ``-src`` directives that *would* have inherited
+    # from it (img-src, script-src, connect-src, …) are deliberately
+    # left out so the inheritance fires. Only the directives that
+    # cannot inherit from default-src are stated explicitly:
+    # ``frame-ancestors``, ``form-action``, ``base-uri``.
+    #
+    # DEV: relaxed enough to let Swagger UI / ReDoc load from
+    # ``cdn.jsdelivr.net``. ``'unsafe-inline'`` is required because
+    # the FastAPI-generated docs page mounts inline event handlers
+    # and inline ``<style>`` blocks. Switching to nonces would mean
+    # forking the FastAPI docs renderer, which is disproportionate
+    # for a dev-only profile that never ships to production
+    # (``main.create_app`` already gates ``/docs`` and ``/redoc`` on
+    # ``not is_production``).
+    _CSP_PRODUCTION = (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'none'; "
+        "base-uri 'none'"
+    )
+    _CSP_DEVELOPMENT = (
+        "default-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "img-src 'self' data: https://fastapi.tiangolo.com; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "connect-src 'self'"
+    )
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -125,6 +166,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+
+        # CSP: stricter profile in production, looser in dev to keep
+        # interactive OpenAPI docs functional. The header name is the
+        # same in either branch — browsers don't see the env split.
+        response.headers["Content-Security-Policy"] = (
+            self._CSP_PRODUCTION
+            if settings.is_production
+            else self._CSP_DEVELOPMENT
+        )
 
         # HSTS: only in production to avoid HTTPS enforcement in local dev
         if settings.is_production:
