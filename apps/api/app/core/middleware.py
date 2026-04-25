@@ -256,3 +256,134 @@ def get_request_id() -> str:
 def get_correlation_id() -> str:
     """Get the current correlation ID (trace_id) from contextvars."""
     return correlation_id_var.get("")
+
+
+# ── Query Budget Enforcement (T2 / Sprint 55, ADR-0007) ─────────
+# Records actual DB query count per request via the SQLAlchemy
+# ``after_cursor_execute`` listener registered in
+# :mod:`app.core.query_recorder`. The middleware compares the count to
+# the route's declared budget (``@route_query_budget``) and surfaces
+# the result as either an HTTP header (non-prod) or a Sentry breadcrumb
+# (prod). Routes without an annotation are recorded but not gated, so
+# the rollout can be incremental.
+
+# Headers attached in non-production. Names use ``x-`` prefix per
+# ad-hoc convention; not part of the public API contract — clients
+# should not depend on them.
+_HEADER_QUERY_COUNT = "x-query-count"
+_HEADER_QUERY_ENGINE = "x-query-engine"
+
+
+def _emit_budget_overage_breadcrumb(
+    *,
+    path: str,
+    engine_name: str,
+    endpoint_qualname: str,
+    actual: int,
+    budget: int,
+) -> None:
+    """Emit a Sentry breadcrumb for a budget overage in production.
+
+    Isolated as a module-level function so unit tests can patch it
+    cleanly without monkey-patching the Sentry SDK.  The breadcrumb is
+    structured (level=warning, category=query_budget) and tagged with
+    the engine name so the Causality Ledger can attribute the event to
+    the correct engine principal.
+    """
+    try:  # pragma: no cover — exercised via patch in unit tests
+        import sentry_sdk
+
+        sentry_sdk.add_breadcrumb(
+            category="query_budget",
+            level="warning",
+            message=(
+                f"Query budget exceeded: {actual} > {budget} on "
+                f"{endpoint_qualname} ({path})"
+            ),
+            data={
+                "actual": actual,
+                "budget": budget,
+                "engine": engine_name,
+                "path": path,
+                "endpoint": endpoint_qualname,
+            },
+        )
+    except ImportError:  # pragma: no cover
+        # Sentry not installed in some test contexts — log and move on.
+        logger.warning(
+            "Query budget exceeded (sentry not installed): "
+            "%s > %s on %s (%s)",
+            actual,
+            budget,
+            endpoint_qualname,
+            path,
+        )
+
+
+class QueryBudgetMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
+    """Per-request DB query counter + budget gate.
+
+    Pipeline order: must run **after** :class:`RequestIDMiddleware` so
+    request IDs are available for breadcrumb correlation, and **before**
+    any handler-invoking middleware so the contextvar is set before the
+    dispatched route opens its DB session.
+
+    See :mod:`app.core.query_recorder` for the counter mechanics and
+    :mod:`app.core.query_budget` for the decorator that declares per-
+    route budgets.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        # Local imports keep middleware.py importable when the recorder
+        # module isn't yet wired (early test bootstrap).
+        from app.core.query_budget import (
+            NoQueryBudgetDeclaredError,
+            get_route_query_budget,
+        )
+        from app.core.query_recorder import (
+            QueryCounter,
+            derive_engine_name,
+            query_counter_var,
+        )
+
+        engine_name = derive_engine_name(request.url.path)
+        counter = QueryCounter(engine_name=engine_name)
+        token = query_counter_var.set(counter)
+
+        try:
+            response = await call_next(request)
+        finally:
+            query_counter_var.reset(token)
+
+        # Resolve the dispatched route handler (may be ``None`` for
+        # 404s and OPTIONS preflight). When unresolved we still surface
+        # the count as an inventory aid in non-prod.
+        endpoint = getattr(request.scope.get("route"), "endpoint", None)
+        try:
+            budget = get_route_query_budget(endpoint) if endpoint else None
+        except NoQueryBudgetDeclaredError:
+            budget = None
+
+        if not settings.is_production:
+            # Header surface: developers see the actual cost of every
+            # response without needing a tail-tap or Sentry login.
+            response.headers[_HEADER_QUERY_COUNT] = str(counter.count)
+            response.headers[_HEADER_QUERY_ENGINE] = counter.engine_name
+            return response
+
+        # Production: silent on the wire, breadcrumb on overage.
+        if budget is not None and counter.count > budget:
+            endpoint_qualname = (
+                getattr(endpoint, "__qualname__", "") or "unknown"
+            )
+            _emit_budget_overage_breadcrumb(
+                path=request.url.path,
+                engine_name=counter.engine_name,
+                endpoint_qualname=endpoint_qualname,
+                actual=counter.count,
+                budget=budget,
+            )
+
+        return response

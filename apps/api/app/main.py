@@ -58,7 +58,12 @@ from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
 from app.core.llm_observability import initialize_observability
 from app.core.logging_config import setup_logging
-from app.core.middleware import BotTrapMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import (
+    BotTrapMiddleware,
+    QueryBudgetMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -82,6 +87,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Sprint 30 WS-1: Initialize Sentry error tracking
     from app.core.sentry import init_sentry
     init_sentry()
+
+    # T2 / Sprint 55, ADR-0007: Register the per-request DB query
+    # counter listener on the SQLAlchemy Engine class. Idempotent;
+    # safe to call before any engine instance is opened.
+    from app.core.query_recorder import register_query_counter_listener
+    register_query_counter_listener()
 
     # ADR-0001 / ADR-0002: Tag every event with the effective DB and
     # Redis TLS posture so post-mortem queries can filter "errors while
@@ -256,6 +267,11 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestIDMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(BotTrapMiddleware)
+    # T2 / ADR-0007: query-count gate. Mounted *after* RequestID so
+    # breadcrumbs can correlate to request_id, *before* BotTrap so 404s
+    # from bot trapping don't go through the counter (saves a per-bot
+    # ContextVar allocation in production).
+    application.add_middleware(QueryBudgetMiddleware)
 
     # ── Error Handlers ─────────────────────────────────────────
     register_error_handlers(application)
