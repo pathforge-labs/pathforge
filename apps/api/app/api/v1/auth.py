@@ -40,7 +40,7 @@ from app.schemas.user import (
     VerifyEmailRequest,
 )
 from app.services.email_service import EmailService, generate_token
-from app.services.user_service import UserService
+from app.services.user_service import UserService, _to_aware_utc
 from app.services.user_service_errors import (
     InactiveAccountError,
     InvalidCredentialsError,
@@ -350,7 +350,10 @@ async def verify_email(
 
     # Check token expiry
     if user.verification_sent_at:
-        expiry = user.verification_sent_at + timedelta(
+        # SQLite drops tzinfo even with DateTime(timezone=True). Coerce to
+        # aware-UTC so the comparison with datetime.now(UTC) below is valid
+        # under both Postgres (prod) and SQLite (tests).
+        expiry = _to_aware_utc(user.verification_sent_at) + timedelta(
             hours=settings.email_verification_token_expire_hours
         )
         if datetime.now(UTC) > expiry:
