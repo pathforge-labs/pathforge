@@ -51,12 +51,16 @@ export default function SettingsScreen(): React.JSX.Element {
           style: "destructive",
           onPress: async () => {
             setIsLoggingOut(true);
+            // Deregister the Expo push token before clearing auth.
+            // The hook owns the token and the API call is best-effort
+            // (it must still happen with a valid session, hence pre-logout).
+            await pushState.handleDeregister();
             await logout();
           },
         },
       ],
     );
-  }, [logout]);
+  }, [logout, pushState]);
 
   return (
     <ScrollView

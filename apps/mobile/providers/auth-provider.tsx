@@ -22,7 +22,6 @@ import { AppState } from "react-native";
 import type { UserResponse } from "@pathforge/shared/types/api/auth";
 
 import * as authApi from "../lib/api-client/auth";
-import * as notificationsApi from "../lib/api-client/notifications";
 import {
   clearTokens,
   hasTokens,
@@ -222,12 +221,15 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
     } catch {
       // Logout API call is best-effort
     }
-    // Deregister push token on logout (Audit Fix #8, best-effort)
-    try {
-      await notificationsApi.deregisterPushToken();
-    } catch {
-      // Push deregister is best-effort — do not block logout
-    }
+    // Push-token deregistration is the responsibility of the caller
+    // that owns the ``usePushNotifications`` hook (currently the
+    // settings screen). That caller MUST invoke ``handleDeregister``
+    // before this ``logout()`` so the request still carries a valid
+    // session. The auth-provider cannot do it here because the Expo
+    // push token lives inside the hook, not in auth state.
+    // Server-side, the JWT is blacklisted by ``authApi.logout()``
+    // above, so any straggling push delivery to this device fails
+    // fast even if client-side deregister is skipped.
     await clearTokens();
     dispatch({ type: "LOGOUT" });
   }, []);

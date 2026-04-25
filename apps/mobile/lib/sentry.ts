@@ -37,7 +37,20 @@ const PII_DATA_KEYS = new Set([
 
 // ── PII Scrubber ─────────────────────────────────────────────
 
-export function scrubPii(event: Sentry.Event): Sentry.Event | null {
+/**
+ * Scrub PII from an outbound Sentry event.
+ *
+ * Signature note: ``@sentry/react-native`` 7.x narrowed the
+ * ``beforeSend`` callback to ``ErrorEvent``-only (the broader
+ * ``Sentry.Event`` includes transactions and profiles, which Sentry
+ * no longer forwards through ``beforeSend``). The runtime payload we
+ * actually inspect (request, extra, breadcrumbs) is shape-compatible
+ * across both, so this function still works on every event Sentry
+ * delivers — only the type signature needed updating.
+ */
+export function scrubPii(
+  event: Sentry.ErrorEvent,
+): Sentry.ErrorEvent | null {
   // Scrub request headers
   if (event.request?.headers) {
     for (const key of Object.keys(event.request.headers)) {

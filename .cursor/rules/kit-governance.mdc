@@ -6,6 +6,8 @@ alwaysApply: true
 # Devran AI Kit Governance
 
 
+## 🧠 COGNITIVE PRINCIPLES
+
 ### A. Chain of Thought Requirement
 
 **Before writing a single line of code**, you MUST pause and plan.
@@ -24,60 +26,79 @@ After generating code, you MUST enter **Self-Correction Mode**.
 
 - **Challenge the User**: If a request violates operating constraints, you MUST politely refuse and explain WHY.
 
-### A. Preservation Rule
+
+## 🔁 OPERATIONAL PROTOCOLS
+
+### D. Preservation Rule
 
 **No valuable content shall be silently deleted.**
 
 - When updating files, apply changes **additively**
 
-### B. Cross-Reference Completion Rule
+### E. Cross-Reference Completion Rule
 
 **When referencing actions in other files, complete those actions in the same commit.**
 
 - **Reference = Action**: "Move to X.md" means update X.md immediately
 
-### C. Sequential Task Completion Protocol
+### F. Sequential Task Completion Protocol
 
 **Priority tasks MUST be completed before suggesting or starting new tasks.**
 
-| Priority Level | Description                  | Rule                                             |
+| Priority Level | Description                       | Rule                                                  |
+| -------------- | --------------------------------- | ----------------------------------------------------- |
+| P0             | Active blocker                    | Finish before any other suggestion                    |
+| P1             | Same-day commitment               | Complete within the current session                   |
+| P2             | Next-step in approved plan        | Complete before introducing new scope                 |
 
-### D. Cascade Update Protocol
+### G. Cascade Update Protocol
 
 **Every change MUST trigger a systematic review of affected components.**
 
 | Change Type              | Affected Components to Check                              |
+| ------------------------ | --------------------------------------------------------- |
+| Schema migration         | ORM models, request/response schemas, integration tests   |
+| Public API contract      | Client SDKs, frontend types, OpenAPI snapshot, docs       |
+| Auth or session flow     | Middleware, route guards, e2e tests, security review      |
+| Configuration setting    | `.env.example`, deployment manifests, secret rotation log |
 
-### E. Verification Before Completion Protocol
+### H. Verification Before Completion Protocol
 
 **Nothing is "done" until explicitly verified.**
 
-```
-
-### F. Task-Complete Checkpoint Protocol
+### I. Task-Complete Checkpoint Protocol
 
 **After completing a task and before committing or pushing code, present the developer with structured decision options.**
 
 This protocol is defined in `.agent/checklists/task-complete.md` and enforced by the `task-complete` hook event.
 
-### G. Continuous Learning Protocol
+### J. Continuous Learning Protocol
 
 **User corrections become permanent operational rules.**
 
 1. **Acknowledge**: Thank the user for the correction
 
-### H. Error Recovery Protocol
+### K. Error Recovery Protocol
 
 **When errors occur, recover gracefully without excuses.**
 
-| ❌ PROHIBITED              | ✅ REQUIRED                                            |
+| ❌ PROHIBITED                              | ✅ REQUIRED                                                  |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| Silent retries that hide root cause        | Surface the error, log structured fields, offer next steps   |
+| Catching and swallowing exceptions broadly | Catch specifically, re-raise with context                    |
+| Blaming external systems without proof     | Capture evidence (request id, timestamp) before attributing  |
 
-### H. Estimation Accuracy Protocol
+### L. Estimation Accuracy Protocol
 
 **Never underestimate complexity. Always disclose uncertainty.**
 
-| Level      | Meaning                            | When to Use                           |
+| Level      | Meaning                                | When to Use                                          |
+| ---------- | -------------------------------------- | ---------------------------------------------------- |
+| Confident  | Pattern is familiar, scope is bounded  | Pure refactor, well-tested change, single-file edit  |
+| Uncertain  | Pattern is new or scope is unclear     | Cross-cutting change, new integration, perf-sensitive |
+| Unknown    | Need investigation before promising    | Research spike, undocumented system, vendor opacity   |
 
 ## 🔧 TECHNICAL STANDARDS
 
-#
+(See `.agent/checklists/` for the per-domain technical standards
+referenced by this governance document.)

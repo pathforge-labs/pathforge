@@ -60,7 +60,9 @@ docker-compose.override.yml
 
 # Devran AI Kit (local dev tooling)
 # Install: npx @devran-ai/kit init
+#
+# .codex/, .opencode/, and .cursor/rules/kit-governance.mdc are shared
+# governance configuration and ARE tracked — they were briefly in this
+# ignore list by mistake. Per-developer state lives under .agent/ which
+# stays ignored.
 .agent/
-.codex/
-.opencode/
-.cursor/rules/kit-governance.mdc
