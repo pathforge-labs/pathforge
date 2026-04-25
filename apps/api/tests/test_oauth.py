@@ -28,6 +28,21 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+# Sprint 39 audit S-H1: tests need the Microsoft tenant allowlist
+# populated so the new tenant-validation gate doesn't reject every
+# mocked token. Apply to the whole module.
+_TEST_MS_TENANT = "test-tenant-id"
+
+
+@pytest.fixture(autouse=True)
+def _enable_ms_tenant_allowlist() -> None:
+    """Allow the test tenant ID through ``_verify_microsoft_token``."""
+    from app.core.config import settings
+    object.__setattr__(
+        settings, "microsoft_oauth_allowed_tenants", [_TEST_MS_TENANT],
+    )
+
+
 # ── Google OAuth Tests ─────────────────────────────────────────
 
 
@@ -35,10 +50,13 @@ class TestGoogleOAuth:
     """Google OAuth token verification and user management."""
 
     ENDPOINT = "/api/v1/auth/oauth/google"
-    GOOGLE_CLAIMS: ClassVar[dict[str, str]] = {
+    GOOGLE_CLAIMS: ClassVar[dict[str, str | bool]] = {
         "email": "new-oauth@google.test",
         "name": "Google User",
         "sub": "google-uid-123",
+        # Sprint 39 audit S-H2: gate requires the provider to assert
+        # ``email_verified`` before we trust the email claim.
+        "email_verified": True,
     }
 
     # F8: google.oauth2.id_token is lazily imported INSIDE _verify_google_token
@@ -72,6 +90,7 @@ class TestGoogleOAuth:
             "email": oauth_user.email,
             "name": oauth_user.full_name,
             "sub": "google-uid-existing",
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -94,6 +113,7 @@ class TestGoogleOAuth:
             "email": registered_user["email"],
             "name": "Google User",
             "sub": "google-uid-verify",
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -113,6 +133,7 @@ class TestGoogleOAuth:
             "email": inactive_user.email,
             "name": "Inactive",
             "sub": "google-uid-inactive",
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -176,10 +197,17 @@ class TestMicrosoftOAuth:
     """Microsoft OAuth token verification and user management."""
 
     ENDPOINT = "/api/v1/auth/oauth/microsoft"
-    MS_CLAIMS: ClassVar[dict[str, str]] = {
+    MS_CLAIMS: ClassVar[dict[str, str | bool]] = {
         "email": "new-oauth@microsoft.test",
         "name": "Microsoft User",
         "sub": "ms-uid-456",
+        # Sprint 39 audit S-H1: ``tid`` is read from the unverified
+        # decode pass to pick the tenant-specific issuer; tests run
+        # under the autouse fixture that allows ``_TEST_MS_TENANT``.
+        "tid": _TEST_MS_TENANT,
+        # Sprint 39 audit S-H2: ``email_verified`` gates account
+        # creation + cross-provider linking.
+        "email_verified": True,
     }
 
     # Microsoft: pyjwt is module-level alias (L25), _get_ms_jwks_client is
@@ -229,6 +257,8 @@ class TestMicrosoftOAuth:
             "email": oauth_user.email,
             "name": oauth_user.full_name,
             "sub": "ms-uid-existing",
+            "tid": _TEST_MS_TENANT,
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -254,6 +284,8 @@ class TestMicrosoftOAuth:
             "preferred_username": "fallback@microsoft.test",
             "name": "Fallback User",
             "sub": "ms-uid-fallback",
+            "tid": _TEST_MS_TENANT,
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -280,6 +312,8 @@ class TestMicrosoftOAuth:
             "email": inactive_user.email,
             "name": "Inactive",
             "sub": "ms-uid-inactive",
+            "tid": _TEST_MS_TENANT,
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -367,6 +401,7 @@ class TestOAuthCrossProvider:
             "email": registered_user["email"],
             "name": "Linked User",
             "sub": "google-uid-link",
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -395,6 +430,8 @@ class TestOAuthCrossProvider:
             "email": registered_user["email"],
             "name": "Linked User",
             "sub": "ms-uid-link",
+            "tid": _TEST_MS_TENANT,
+            "email_verified": True,
         }
 
         response = await client.post(
@@ -424,3 +461,178 @@ class TestOAuthCrossProvider:
         )
 
         assert response.status_code == 422
+
+
+# ── Sprint 39 audit S-H1 / S-H2: gate rejection tests ────────────
+
+
+class TestOAuthVerificationGates:
+    """Coverage for the new tenant-allowlist + email_verified guards."""
+
+    GOOGLE_MOCK = "google.oauth2.id_token.verify_oauth2_token"
+    MS_JWKS_MOCK = "app.api.v1.oauth._get_ms_jwks_client"
+    MS_DECODE_MOCK = "app.api.v1.oauth.pyjwt.decode"
+
+    @pytest.mark.asyncio
+    @patch(GOOGLE_MOCK)
+    async def test_google_email_unverified_blocks_new_user(
+        self, mock_verify: MagicMock, client: AsyncClient,
+    ) -> None:
+        """S-H2: provider says ``email_verified=False`` → 403, no user created."""
+        mock_verify.return_value = {
+            "email": "self-asserted@example.test",
+            "name": "Spoofer",
+            "sub": "g-uid-unverified",
+            "email_verified": False,
+        }
+
+        response = await client.post(
+            "/api/v1/auth/oauth/google",
+            json={"id_token": "mock-google-token"},
+        )
+
+        assert response.status_code == 403
+        assert "verified" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    @patch(GOOGLE_MOCK)
+    async def test_google_missing_email_verified_blocks_new_user(
+        self, mock_verify: MagicMock, client: AsyncClient,
+    ) -> None:
+        """S-H2: claim absent → treated as not verified → 403."""
+        mock_verify.return_value = {
+            "email": "noflag@example.test",
+            "name": "Flagless",
+            "sub": "g-uid-noflag",
+            # email_verified intentionally omitted
+        }
+
+        response = await client.post(
+            "/api/v1/auth/oauth/google",
+            json={"id_token": "mock-google-token"},
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    @patch(GOOGLE_MOCK)
+    async def test_google_unverified_blocks_existing_unverified_link(
+        self,
+        mock_verify: MagicMock,
+        client: AsyncClient,
+        db_session: object,
+    ) -> None:
+        """S-H2: cross-provider link refused when provider hasn't verified.
+
+        Builds an unverified email-registered user directly in the
+        database (avoiding the register endpoint and therefore the
+        Resend quota). Then the OAuth callback with
+        ``email_verified=False`` must NOT flip ``is_verified``.
+        """
+        from app.core.security import hash_password
+        from app.models.user import User as UserModel
+
+        user = UserModel(
+            email="link-target@example.test",
+            hashed_password=hash_password("DummyPass1!"),
+            full_name="Existing Email User",
+            is_active=True,
+            is_verified=False,
+            auth_provider="email",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        mock_verify.return_value = {
+            "email": user.email,
+            "name": "Spoofer",
+            "sub": "g-uid-link-unverified",
+            "email_verified": False,
+        }
+
+        response = await client.post(
+            "/api/v1/auth/oauth/google",
+            json={"id_token": "mock-google-token"},
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    @patch(MS_DECODE_MOCK)
+    @patch(MS_JWKS_MOCK)
+    async def test_microsoft_tenant_not_in_allowlist_returns_401(
+        self,
+        mock_jwks: MagicMock,
+        mock_decode: MagicMock,
+        client: AsyncClient,
+    ) -> None:
+        """S-H1: tenant id not allowlisted → reject before signature verify."""
+        mock_jwks.return_value.get_signing_key_from_jwt.return_value = MagicMock(
+            key="fake-rsa-key",
+        )
+        # Unverified-decode pass (the only one that runs in this branch)
+        # returns a tid we did NOT allowlist → reject.
+        mock_decode.return_value = {
+            "email": "attacker@evil.test",
+            "name": "Attacker",
+            "sub": "ms-uid-attacker",
+            "tid": "00000000-0000-0000-0000-000000000000",
+            "email_verified": True,
+        }
+
+        response = await client.post(
+            "/api/v1/auth/oauth/microsoft",
+            json={"id_token": "mock-ms-token"},
+        )
+
+        assert response.status_code == 401
+        assert "tenant" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_microsoft_empty_allowlist_returns_501(
+        self, client: AsyncClient,
+    ) -> None:
+        """S-H1: operator hasn't opted in (empty allowlist) → 501."""
+        from app.core.config import settings
+
+        original = settings.microsoft_oauth_allowed_tenants
+        object.__setattr__(settings, "microsoft_oauth_allowed_tenants", [])
+        try:
+            response = await client.post(
+                "/api/v1/auth/oauth/microsoft",
+                json={"id_token": "mock-ms-token"},
+            )
+            assert response.status_code == 501
+            assert "allowlist" in response.json()["detail"].lower()
+        finally:
+            object.__setattr__(
+                settings, "microsoft_oauth_allowed_tenants", original,
+            )
+
+    @pytest.mark.asyncio
+    @patch(MS_DECODE_MOCK)
+    @patch(MS_JWKS_MOCK)
+    async def test_microsoft_email_unverified_blocks_new_user(
+        self,
+        mock_jwks: MagicMock,
+        mock_decode: MagicMock,
+        client: AsyncClient,
+    ) -> None:
+        """S-H2 + S-H1: tenant OK, but ``email_verified=False`` → 403."""
+        mock_jwks.return_value.get_signing_key_from_jwt.return_value = MagicMock(
+            key="fake-rsa-key",
+        )
+        mock_decode.return_value = {
+            "email": "selfclaim@microsoft.test",
+            "name": "Self-asserted",
+            "sub": "ms-uid-unverified",
+            "tid": _TEST_MS_TENANT,
+            "email_verified": False,
+        }
+
+        response = await client.post(
+            "/api/v1/auth/oauth/microsoft",
+            json={"id_token": "mock-ms-token"},
+        )
+
+        assert response.status_code == 403

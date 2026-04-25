@@ -712,6 +712,38 @@ class TransparencyLog:
         """Number of background DB persistence tasks still running."""
         return len(self._background_tasks)
 
+    async def drain(self, *, timeout_seconds: float = 5.0) -> None:
+        """Wait for pending DB persistence tasks to finish.
+
+        Sprint 39 audit A-M2: ``_persist`` schedules fire-and-forget
+        background tasks via ``loop.create_task``. Without a drain
+        step on shutdown, the engine in ``main.lifespan`` is disposed
+        while those tasks are mid-write — they then fail with
+        "engine disposed" and the persistence-failure counter spikes
+        on every restart.
+
+        Call this from ``lifespan`` *before* ``engine.dispose()``.
+        Bounded by ``timeout_seconds`` so a slow DB cannot hold the
+        process indefinitely; tasks still pending when the timeout
+        fires are cancelled and logged.
+        """
+        if not self._background_tasks:
+            return
+        pending = list(self._background_tasks)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*pending, return_exceptions=True),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError:
+            still_running = [t for t in pending if not t.done()]
+            for task in still_running:
+                task.cancel()
+            logger.warning(
+                "TransparencyLog.drain: %d task(s) cancelled after %.1fs timeout",
+                len(still_running), timeout_seconds,
+            )
+
     def reset(self) -> None:
         """Clear all records. For testing only."""
         with self._lock:
@@ -812,6 +844,8 @@ def _register_pii_redaction_hook() -> None:
     This ensures no PII reaches Langfuse traces. The redaction
     happens in-flight — the original LLM call uses unredacted text.
     """
+    import copy
+
     import litellm
 
     from app.core.pii_redactor import redact_pii
@@ -821,18 +855,30 @@ def _register_pii_redaction_hook() -> None:
     def _redact_input(model: str, messages: list[dict[str, str]], kwargs: dict[str, Any]) -> None:
         """Redact PII from messages before they are sent to Langfuse.
 
-        Note: This modifies the Langfuse trace data, NOT the actual LLM input.
-        LiteLLM calls input_callback with a copy of kwargs for callbacks.
+        Sprint 39 audit A-H3: the previous implementation mutated
+        ``kwargs["messages"]`` in place, assuming LiteLLM passes a
+        copy to ``input_callback``. That assumption is version-
+        specific — if LiteLLM ever stops copying, the redacted strings
+        would leak into the actual upstream LLM call and silently
+        degrade completion quality (e.g. resume parsing depends on
+        seeing real emails/phones to extract structure).
+        Defensively deep-copy ``messages`` before redacting; the
+        Langfuse trace receives the redacted view, the upstream
+        provider receives the originals.
         """
-        # Redact message content
-        metadata = kwargs.get("litellm_params", {}).get("metadata", {})
-
-        if "messages" in kwargs:
-            for msg in kwargs["messages"]:
+        # Redact message content on a defensive deep copy
+        if "messages" in kwargs and isinstance(kwargs["messages"], list):
+            redacted_messages = copy.deepcopy(kwargs["messages"])
+            for msg in redacted_messages:
                 if "content" in msg and isinstance(msg["content"], str):
                     msg["content"] = redact_pii(msg["content"])
+            kwargs["messages"] = redacted_messages
 
-        # Tag with redaction metadata
+        # Tag with redaction metadata (kwargs is callback-local; the
+        # ``litellm_params.metadata`` dict however IS shared with the
+        # provider call, so we set the flag on a derived copy too —
+        # but the boolean flag carries no payload, only a tag).
+        metadata = kwargs.get("litellm_params", {}).get("metadata", {})
         metadata["pii_redacted"] = True
 
         # Call original hook if exists

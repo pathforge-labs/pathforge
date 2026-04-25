@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import app.core.llm as llm_module
-from app.core.llm import LLMError, LLMTier, complete_vision
+from app.core.llm import (
+    LLMError,
+    LLMTier,
+    RateLimitExceededError,
+    complete_vision,
+)
 
 
 def _make_response(content: str = "parsed text", cost: float = 0.0) -> MagicMock:
@@ -197,3 +202,68 @@ async def test_complete_vision_falls_back_to_next_tier(monkeypatch: pytest.Monke
     result = await complete_vision(image_bytes=b"img", image_mime="image/png", prompt="p")
     assert result == "fallback result"
     assert LLMTier.PRIMARY.value in called_models
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_rate_limit_falls_back_to_next_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR #23 review: a rate-limited primary tier must NOT short-circuit
+    the call — the loop should ``continue`` to the next tier in the
+    fallback chain. Earlier shape let ``RateLimitExceededError``
+    propagate out, breaking the tiered-fallback contract.
+    """
+    response = _make_response("fallback after rate limit")
+
+    def resolve(tier: LLMTier) -> str:
+        return tier.value
+
+    rpm_calls: list[str] = []
+
+    def rpm_check(tier: LLMTier) -> None:
+        rpm_calls.append(tier.value)
+        # First tier is "rate-limited" — second tier passes.
+        if tier == LLMTier.FAST:
+            raise RateLimitExceededError(tier.value, 60)
+
+    monkeypatch.setattr(llm_module, "_check_budget", AsyncMock(return_value=0.0))
+    monkeypatch.setattr(llm_module, "_check_rpm", rpm_check)
+    monkeypatch.setattr(llm_module, "_resolve_model", resolve)
+    monkeypatch.setattr(llm_module, "_record_cost", AsyncMock())
+    monkeypatch.setattr(llm_module, "_FALLBACK_CHAIN", {LLMTier.FAST: [LLMTier.PRIMARY]})
+    monkeypatch.setattr(llm_module.litellm, "acompletion", AsyncMock(return_value=response))
+    monkeypatch.setattr(llm_module.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(llm_module.settings, "llm_max_retries", 0, raising=False)
+
+    result = await complete_vision(image_bytes=b"img", image_mime="image/png", prompt="p")
+    assert result == "fallback after rate limit"
+    # Both tiers' RPM checks fire; the first raised, the second passed.
+    assert rpm_calls == [LLMTier.FAST.value, LLMTier.PRIMARY.value]
+
+
+@pytest.mark.asyncio
+async def test_complete_vision_rate_limit_all_tiers_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If every tier is rate-limited, fall through to the same
+    ``LLMError("all tiers exhausted")`` path as other terminal
+    failures — never propagate the bare ``RateLimitExceededError``
+    to the caller."""
+
+    def resolve(tier: LLMTier) -> str:
+        return tier.value
+
+    def rpm_always_blocks(tier: LLMTier) -> None:
+        raise RateLimitExceededError(tier.value, 60)
+
+    monkeypatch.setattr(llm_module, "_check_budget", AsyncMock(return_value=0.0))
+    monkeypatch.setattr(llm_module, "_check_rpm", rpm_always_blocks)
+    monkeypatch.setattr(llm_module, "_resolve_model", resolve)
+    monkeypatch.setattr(llm_module, "_record_cost", AsyncMock())
+    monkeypatch.setattr(llm_module, "_FALLBACK_CHAIN", {LLMTier.FAST: [LLMTier.PRIMARY]})
+    monkeypatch.setattr(llm_module.litellm, "acompletion", AsyncMock())
+    monkeypatch.setattr(llm_module.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(llm_module.settings, "llm_max_retries", 0, raising=False)
+
+    with pytest.raises(LLMError, match="all tiers exhausted"):
+        await complete_vision(image_bytes=b"img", image_mime="image/png", prompt="p")

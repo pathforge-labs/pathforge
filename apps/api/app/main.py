@@ -147,7 +147,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.warning("Failed to close Redis pool during shutdown")
 
-    # 3. Dispose SQLAlchemy engine
+    # 3a. Drain in-flight transparency-log persistence tasks BEFORE the
+    #     engine is disposed (Sprint 39 audit A-M2). Otherwise the
+    #     fire-and-forget DB writes scheduled by ``TransparencyLog._persist``
+    #     race against ``engine.dispose()`` and surface as recurring
+    #     "engine disposed" errors at every restart.
+    try:
+        from app.core.llm_observability import get_transparency_log
+        await get_transparency_log().drain(timeout_seconds=5.0)
+    except Exception:
+        logger.warning(
+            "Failed to drain transparency-log persistence tasks", exc_info=True,
+        )
+
+    # 3b. Dispose SQLAlchemy engine
     try:
         from app.core.database import engine
         await engine.dispose()

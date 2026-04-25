@@ -9,6 +9,7 @@ import pytest
 
 from app.services.user_service import UserService
 from app.services.user_service_errors import (
+    DuplicateEmailError,
     InactiveAccountError,
     InvalidCredentialsError,
     OAuthOnlyAccountError,
@@ -55,7 +56,7 @@ async def test_create_user_duplicate_email_raises(db_session: Any) -> None:
         password="pass",
         full_name="First",
     )
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(DuplicateEmailError, match="already exists"):
         await UserService.create_user(
             db_session,
             email="dup@example.com",

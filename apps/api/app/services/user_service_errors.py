@@ -136,3 +136,27 @@ class ResetTokenAlreadyUsedError(PasswordResetError):
     default_message = (
         "Reset token has already been used. Please request a new one."
     )
+
+
+# ── Registration failures ────────────────────────────────────────
+
+
+class RegistrationError(Exception):
+    """Base class for user-registration failures (Sprint 39 audit A-M1).
+
+    Replaces the previous ``ValueError`` thrown out of
+    ``UserService.create_user`` so the route layer can branch on
+    ``isinstance`` instead of stringly-matching on the message.
+    """
+
+    default_message: str = "Registration failed"
+
+    def __init__(self, message: str | None = None) -> None:
+        self.message: str = message or self.default_message
+        super().__init__(self.message)
+
+
+class DuplicateEmailError(RegistrationError):
+    """A user with this email is already registered."""
+
+    default_message = "A user with this email already exists"

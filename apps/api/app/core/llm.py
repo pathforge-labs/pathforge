@@ -582,7 +582,9 @@ async def _call_with_retry(
                 try:
                     await _record_cost(response_cost)
                 except Exception:
-                    logger.warning("Failed to record LLM cost in Redis")
+                    # Sprint 39 audit A-H2: keep traceback in the log so
+                    # silent budget drift is debuggable.
+                    logger.exception("Failed to record LLM cost in Redis")
 
             return content
 
@@ -678,11 +680,28 @@ async def complete_vision(
     for attempt_tier in tiers_to_try:
         model = _resolve_model(attempt_tier)
 
+        # Per-tier RPM check (Sprint 39 audit A-H1 + PR #23 review):
+        # the check belongs OUTSIDE the retry loop so a logical
+        # request consumes exactly one slot from the sliding window
+        # — not one per retry. We also need it INSIDE a try/except
+        # that triggers the next-tier fallback so a rate-limited
+        # primary tier doesn't short-circuit the whole call. Without
+        # this wrapper a ``RateLimitExceededError`` would propagate
+        # out of ``complete_vision`` instead of letting the loop
+        # break and try the next tier (Style Guide §"tiered fallback").
+        try:
+            _check_rpm(attempt_tier)
+        except RateLimitExceededError as exc:
+            last_error = exc
+            logger.warning(
+                "LLM Vision tier %s rate-limited; trying next tier",
+                attempt_tier.value,
+            )
+            continue
+
         for attempt in range(max_retries + 1):
             start = time.monotonic()
             try:
-                _check_rpm(attempt_tier)
-
                 response = await litellm.acompletion(
                     model=model,
                     messages=messages,
@@ -722,7 +741,11 @@ async def complete_vision(
                     try:
                         await _record_cost(vision_cost)
                     except Exception:
-                        logger.warning("Failed to record vision LLM cost in Redis")
+                        # Sprint 39 audit A-H2: keep the exception details
+                        # in the log — silent budget drift is hard to
+                        # debug otherwise. ``logger.exception`` logs the
+                        # full traceback at WARNING level via exc_info.
+                        logger.exception("Failed to record vision LLM cost in Redis")
 
                 return content_text
 

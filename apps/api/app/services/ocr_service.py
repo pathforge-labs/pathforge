@@ -117,9 +117,15 @@ async def extract_text_from_image(
             f"OCR failed for {image_mime} image: {exc}"
         ) from exc
 
-    # Treat explicit empty sentinel as no text
+    # Sprint 39 audit A-M4: tolerate non-strict matches of the
+    # ``[EMPTY]`` sentinel. The system prompt asks for an exact
+    # ``[EMPTY]`` reply when the image has no readable text, but
+    # models sometimes wrap it (e.g. ``"The image contains: [EMPTY]"``)
+    # or add trailing punctuation. Treat any short response that
+    # contains the sentinel as the empty case; otherwise fall through
+    # to the length check on the caller's side.
     text = raw.strip()
-    if text == "[EMPTY]":
+    if "[EMPTY]" in text and len(text) < 32:
         logger.info("OCR: image contains no readable text")
         return ""
 

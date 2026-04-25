@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
@@ -48,9 +48,17 @@ export default function VerifyEmailPage(): ReactElement {
     mutationFn: (email: string) => authApi.resendVerification({ email }),
   });
 
-  // Trigger the verification call exactly once when the token shows up.
+  // Sprint 39 audit A-M6: guard against React Strict Mode
+  // double-invoke and against query-param-driven re-runs. A
+  // verification call must fire exactly once per page mount per
+  // token value — otherwise the second call hits a 400 because the
+  // first already consumed the token, and the user sees a confusing
+  // "verification failed" screen for a token that just succeeded.
+  const lastFiredTokenRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (token) {
+    if (token && lastFiredTokenRef.current !== token) {
+      lastFiredTokenRef.current = token;
       verifyMutation.mutate(token);
     }
     // verifyMutation is stable across renders (TanStack returns the
@@ -109,7 +117,7 @@ export default function VerifyEmailPage(): ReactElement {
     return (
       <Card className="border-0 shadow-none">
         <CardHeader className="space-y-1 px-0">
-          <CardTitle className="text-2xl font-bold">Email verified! 🎉</CardTitle>
+          <CardTitle className="text-2xl font-bold">Email verified</CardTitle>
           <CardDescription>{verifyMutation.data.message}</CardDescription>
         </CardHeader>
         <CardContent className="px-0">

@@ -133,10 +133,20 @@ async def get_current_user(
                 ) from None
             logger.warning("Token blacklist check failed — allowing request (fail-open mode)")
 
+    # Sprint 39 audit S-M5: a malformed ``sub`` claim (non-UUID) used
+    # to surface as a 500 via the global handler. Treat it as a
+    # credential failure — the token is shaped wrong, exactly the
+    # scenario ``credentials_exception`` is for.
+    try:
+        user_uuid = _uuid.UUID(user_id)
+    except (ValueError, AttributeError, TypeError) as exc:
+        logger.warning("JWT 'sub' claim is not a valid UUID")
+        raise credentials_exception from exc
+
     result = await db.execute(
         select(User)
         .options(selectinload(User.subscription))
-        .where(User.id == _uuid.UUID(user_id))
+        .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
 
