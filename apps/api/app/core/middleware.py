@@ -107,11 +107,50 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
 
     Applies protective HTTP headers to all responses:
     - Prevents MIME-type sniffing (X-Content-Type-Options)
-    - Prevents clickjacking (X-Frame-Options)
+    - Prevents clickjacking (X-Frame-Options + CSP frame-ancestors)
     - Enforces HTTPS in production (Strict-Transport-Security)
     - Controls referrer information leakage
     - Restricts browser feature access (Permissions-Policy)
+    - Locks down browser execution context (Content-Security-Policy)
     """
+
+    # ── Content-Security-Policy (Sprint 39 audit F33) ─────────────
+    #
+    # PathForge's API returns JSON for every endpoint *except* the
+    # interactive OpenAPI documentation. We therefore ship two
+    # different CSP profiles:
+    #
+    # PROD: ultra-strict — there is no documented browser context that
+    # legitimately renders an API response, so we forbid everything.
+    # If an attacker manages to convince a browser to render a JSON
+    # response inline (e.g. via a content-sniffing exploit) the CSP
+    # forbids loading any scripts, styles, frames, or form posts.
+    #
+    # DEV: relaxed enough to let Swagger UI / ReDoc load from
+    # ``cdn.jsdelivr.net``, since those endpoints exist *only* in
+    # non-production environments (see ``main.create_app``).
+    #
+    # ``frame-ancestors 'none'`` mirrors ``X-Frame-Options: DENY`` for
+    # browsers that prefer the modern directive; together they block
+    # iframe embedding regardless of which check the browser honours.
+    _CSP_PRODUCTION = (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'none'; "
+        "base-uri 'none'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'"
+    )
+    _CSP_DEVELOPMENT = (
+        "default-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "img-src 'self' data: https://fastapi.tiangolo.com; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "connect-src 'self'"
+    )
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -125,6 +164,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+
+        # CSP: stricter profile in production, looser in dev to keep
+        # interactive OpenAPI docs functional. The header name is the
+        # same in either branch — browsers don't see the env split.
+        response.headers["Content-Security-Policy"] = (
+            self._CSP_PRODUCTION
+            if settings.is_production
+            else self._CSP_DEVELOPMENT
+        )
 
         # HSTS: only in production to avoid HTTPS enforcement in local dev
         if settings.is_production:

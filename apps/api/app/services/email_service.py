@@ -105,8 +105,20 @@ class EmailService:
         token: str,
         name: str,
     ) -> bool:
-        """Send email verification link."""
-        verify_url = f"{settings.frontend_url}/verify-email?token={token}"
+        """Send email verification link.
+
+        The link carries both ``token`` and ``email`` as query
+        parameters. ``email`` is appended so the verify-email page can
+        offer one-click resend if the link has expired or fails — the
+        recipient already owns this address, so we are not disclosing
+        new information by including it. Both values are URL-encoded
+        defensively in case the token contains URL-unsafe characters
+        in a future format change.
+        """
+        from urllib.parse import urlencode
+
+        query = urlencode({"token": token, "email": to})
+        verify_url = f"{settings.frontend_url}/verify-email?{query}"
         html = _load_template(
             "verification.html",
             name=name,
