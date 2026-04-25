@@ -54,9 +54,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: apps/api/uv.lock
 
+      # Install into the system Python (NOT a uv-managed venv) so the
+      # subsequent ``python -m ruff`` / ``python -m pytest`` steps
+      # find their modules. This mirrors ``ci.yml``'s install line —
+      # the previous ``uv sync --frozen --all-extras`` shape installed
+      # into ``.venv/`` and the lint step then crashed with
+      # "No module named ruff" because it ran against the global
+      # Python. Pinning both workflows to the same install pattern
+      # prevents the workflows from drifting apart again.
       - name: Install dependencies
         working-directory: apps/api
-        run: uv sync --frozen --all-extras
+        run: uv pip install ".[dev,ai]" --system
 
       - name: Lint check
         working-directory: apps/api
