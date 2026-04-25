@@ -27,12 +27,15 @@ from httpx import AsyncClient
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    get_current_user,
     hash_password,
 )
+from app.main import app
 from app.models.user import User
 from app.services.user_service_errors import (
     InactiveAccountError,
     InvalidCredentialsError,
+    InvalidResetTokenError,
     OAuthOnlyAccountError,
     UnverifiedAccountError,
 )
@@ -167,8 +170,6 @@ class TestResetPassword:
     async def test_reset_password_invalid_token_returns_400(
         self, client: AsyncClient
     ) -> None:
-        from app.services.user_service_errors import InvalidResetTokenError
-
         with patch(
             "app.api.v1.auth.UserService.reset_password_with_token",
             new_callable=AsyncMock,
@@ -388,14 +389,16 @@ class TestLogoutInvalidAccessToken:
     ) -> None:
         """Path: oauth2_scheme returns the bearer; the second jwt.decode
         in the logout handler receives a non-JWT string, raises PyJWTError,
-        and we hit the `except PyJWTError: pass` branch on line 235-236.
-        We override get_current_user to bypass auth so the bad token reaches
-        the logout body itself.
-        """
-        from app.core.auth import get_current_user
-        from app.core.security import get_current_user as security_get_current_user
-        from app.main import app
+        and we hit the ``except PyJWTError: pass`` branch on line 235-236.
+        We override ``get_current_user`` to bypass auth so the bad token
+        reaches the logout body itself.
 
+        Override note: ``app.core.auth.get_current_user`` is a direct
+        re-export of ``app.core.security.get_current_user`` (both
+        resolve to the same callable object), so a single override
+        covers both import paths — overriding twice was redundant
+        (Gemini PR #21 review).
+        """
         user = await _make_user(db_session, "lo-jwt@example.com")
         await db_session.commit()
 
@@ -403,7 +406,6 @@ class TestLogoutInvalidAccessToken:
             return user
 
         app.dependency_overrides[get_current_user] = _override_user
-        app.dependency_overrides[security_get_current_user] = _override_user
         try:
             with patch(
                 "app.api.v1.auth.token_blacklist.revoke",
@@ -416,17 +418,12 @@ class TestLogoutInvalidAccessToken:
             assert resp.status_code == 204
         finally:
             app.dependency_overrides.pop(get_current_user, None)
-            app.dependency_overrides.pop(security_get_current_user, None)
 
     async def test_logout_with_invalid_refresh_token_still_204(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         """Path: refresh_token branch — non-JWT in body is swallowed by the
-        `except (PyJWTError, ConnectionError, OSError): pass` block."""
-        from app.core.auth import get_current_user
-        from app.core.security import get_current_user as security_get_current_user
-        from app.main import app
-
+        ``except (PyJWTError, ConnectionError, OSError): pass`` block."""
         user = await _make_user(db_session, "lo-rjwt@example.com")
         await db_session.commit()
 
@@ -434,7 +431,6 @@ class TestLogoutInvalidAccessToken:
             return user
 
         app.dependency_overrides[get_current_user] = _override_user
-        app.dependency_overrides[security_get_current_user] = _override_user
         try:
             access = create_access_token(str(user.id))
             with patch(
@@ -449,4 +445,3 @@ class TestLogoutInvalidAccessToken:
             assert resp.status_code == 204
         finally:
             app.dependency_overrides.pop(get_current_user, None)
-            app.dependency_overrides.pop(security_get_current_user, None)
