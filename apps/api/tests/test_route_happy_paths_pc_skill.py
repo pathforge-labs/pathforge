@@ -49,6 +49,78 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+# ── ORM-shaped Mock Factories ─────────────────────────────────────────────────
+# Build MagicMock instances with every attribute Pydantic's `model_validate`
+# (with `from_attributes=True`) needs. This lets the real route-handler code
+# call `Schema.model_validate(orm_obj)` end-to-end without us patching the
+# class method or any private response builders.
+
+
+def _orm_career_forecast() -> MagicMock:
+    obj = MagicMock()
+    obj.id = uuid.uuid4()
+    obj.career_dna_id = uuid.uuid4()
+    obj.user_id = uuid.uuid4()
+    obj.outlook_score = 78.5
+    obj.outlook_category = "strong"
+    obj.forecast_horizon_months = 12
+    obj.role_component = 20.0
+    obj.disruption_component = 18.0
+    obj.opportunity_component = 22.0
+    obj.trend_component = 18.5
+    obj.top_actions = None
+    obj.key_risks = None
+    obj.key_opportunities = None
+    obj.summary = None
+    obj.confidence_score = 0.82
+    obj.data_source = "AI"
+    obj.disclaimer = "Disclaimer"
+    obj.created_at = _now()
+    return obj
+
+
+def _orm_pc_preference() -> MagicMock:
+    obj = MagicMock()
+    obj.id = uuid.uuid4()
+    obj.career_dna_id = uuid.uuid4()
+    obj.forecast_horizon_months = 12
+    obj.include_emerging_roles = True
+    obj.include_disruption_alerts = True
+    obj.include_opportunities = True
+    obj.risk_tolerance = "medium"
+    obj.focus_industries = None
+    obj.focus_regions = None
+    obj.created_at = _now()
+    return obj
+
+
+def _orm_skill_freshness() -> MagicMock:
+    obj = MagicMock()
+    obj.id = uuid.uuid4()
+    obj.skill_name = "Python"
+    obj.category = "Programming"
+    obj.last_active_date = "2026-04-01"
+    obj.freshness_score = 100.0
+    obj.half_life_days = 180
+    obj.decay_rate = "slow"
+    obj.days_since_active = 0
+    obj.refresh_urgency = 0.0
+    obj.analysis_reasoning = None
+    obj.computed_at = _now()
+    return obj
+
+
+def _orm_skill_decay_preference() -> MagicMock:
+    obj = MagicMock()
+    obj.id = uuid.uuid4()
+    obj.tracking_enabled = True
+    obj.notification_frequency = "weekly"
+    obj.decay_alert_threshold = 40.0
+    obj.focus_categories = None
+    obj.excluded_skills = None
+    return obj
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Predictive Career Engine
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -82,7 +154,7 @@ class TestPredictiveCareerRoutes:
                 headers=_auth(user),
                 json={},
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_emerging_roles_400_on_value_error(
@@ -120,7 +192,7 @@ class TestPredictiveCareerRoutes:
                 headers=_auth(user),
                 json={"forecast_horizon_months": 12},
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_disruption_forecasts_400_on_value_error(
@@ -154,7 +226,7 @@ class TestPredictiveCareerRoutes:
                 headers=_auth(user),
                 json={"include_cross_border": True},
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_opportunity_surfaces_400_on_value_error(
@@ -178,37 +250,17 @@ class TestPredictiveCareerRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "pc-cf@example.com")
-        from app.schemas.predictive_career import CareerForecastResponse
-        forecast = CareerForecastResponse(
-            id=uuid.uuid4(),
-            career_dna_id=uuid.uuid4(),
-            user_id=uuid.uuid4(),
-            outlook_score=78.5,
-            outlook_category="strong",
-            forecast_horizon_months=12,
-            role_component=20.0,
-            disruption_component=18.0,
-            opportunity_component=22.0,
-            trend_component=18.5,
-            confidence_score=0.82,
-            data_source="AI",
-            disclaimer="Disclaimer",
-            created_at=_now(),
-        )
         with patch(
             "app.api.v1.predictive_career.pc_service.get_career_forecast",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.predictive_career.CareerForecastResponse.model_validate",
-            return_value=forecast,
+            return_value=_orm_career_forecast(),
         ):
             resp = await client.post(
                 "/api/v1/predictive-career/career-forecast",
                 headers=_auth(user),
                 json={"forecast_horizon_months": 12},
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_career_forecast_400_on_value_error(
@@ -283,7 +335,7 @@ class TestPredictiveCareerRoutes:
                 headers=_auth(user),
                 json={"forecast_horizon_months": 12},
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_run_scan_400_on_value_error(
@@ -307,24 +359,10 @@ class TestPredictiveCareerRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "pc-pref@example.com")
-        from app.schemas.predictive_career import PredictiveCareerPreferenceResponse
-        pref = PredictiveCareerPreferenceResponse(
-            id=uuid.uuid4(),
-            career_dna_id=uuid.uuid4(),
-            forecast_horizon_months=12,
-            include_emerging_roles=True,
-            include_disruption_alerts=True,
-            include_opportunities=True,
-            risk_tolerance="medium",
-            created_at=_now(),
-        )
         with patch(
             "app.api.v1.predictive_career.pc_service.get_or_update_preferences",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.predictive_career.PredictiveCareerPreferenceResponse.model_validate",
-            return_value=pref,
+            return_value=_orm_pc_preference(),
         ):
             resp = await client.get(
                 "/api/v1/predictive-career/preferences", headers=_auth(user)
@@ -351,24 +389,10 @@ class TestPredictiveCareerRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "pc-upref@example.com")
-        from app.schemas.predictive_career import PredictiveCareerPreferenceResponse
-        pref = PredictiveCareerPreferenceResponse(
-            id=uuid.uuid4(),
-            career_dna_id=uuid.uuid4(),
-            forecast_horizon_months=18,
-            include_emerging_roles=True,
-            include_disruption_alerts=False,
-            include_opportunities=True,
-            risk_tolerance="high",
-            created_at=_now(),
-        )
         with patch(
             "app.api.v1.predictive_career.pc_service.get_or_update_preferences",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.predictive_career.PredictiveCareerPreferenceResponse.model_validate",
-            return_value=pref,
+            return_value=_orm_pc_preference(),
         ):
             resp = await client.put(
                 "/api/v1/predictive-career/preferences",
@@ -529,7 +553,7 @@ class TestSkillDecayRoutes:
             resp = await client.post(
                 "/api/v1/skill-decay/scan", headers=_auth(user)
             )
-        assert resp.status_code in (200, 201)
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_trigger_scan_404_when_dna_missing(
@@ -618,26 +642,10 @@ class TestSkillDecayRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "sd-ref@example.com")
-        from app.schemas.skill_decay import SkillFreshnessResponse
-        fresh = SkillFreshnessResponse(
-            id=uuid.uuid4(),
-            skill_name="Python",
-            category="Programming",
-            last_active_date="2026-04-01",
-            freshness_score=100.0,
-            half_life_days=180,
-            decay_rate="slow",
-            days_since_active=0,
-            refresh_urgency=0.0,
-            computed_at=_now(),
-        )
         with patch(
             "app.api.v1.skill_decay.SkillDecayService.refresh_skill",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.skill_decay._freshness_response",
-            return_value=fresh,
+            return_value=_orm_skill_freshness(),
         ), patch(
             "app.api.v1.skill_decay.ic_cache.invalidate_user",
             new_callable=AsyncMock,
@@ -671,20 +679,10 @@ class TestSkillDecayRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "sd-pref@example.com")
-        from app.schemas.skill_decay import SkillDecayPreferenceResponse
-        pref = SkillDecayPreferenceResponse(
-            id=uuid.uuid4(),
-            tracking_enabled=True,
-            notification_frequency="weekly",
-            decay_alert_threshold=40.0,
-        )
         with patch(
             "app.api.v1.skill_decay.SkillDecayService.get_preferences",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.skill_decay._pref_response",
-            return_value=pref,
+            return_value=_orm_skill_decay_preference(),
         ):
             resp = await client.get(
                 "/api/v1/skill-decay/preferences", headers=_auth(user)
@@ -711,20 +709,10 @@ class TestSkillDecayRoutes:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         user = await _make_user(db_session, "sd-upref@example.com")
-        from app.schemas.skill_decay import SkillDecayPreferenceResponse
-        pref = SkillDecayPreferenceResponse(
-            id=uuid.uuid4(),
-            tracking_enabled=True,
-            notification_frequency="daily",
-            decay_alert_threshold=30.0,
-        )
         with patch(
             "app.api.v1.skill_decay.SkillDecayService.update_preferences",
             new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch(
-            "app.api.v1.skill_decay._pref_response",
-            return_value=pref,
+            return_value=_orm_skill_decay_preference(),
         ):
             resp = await client.put(
                 "/api/v1/skill-decay/preferences",
