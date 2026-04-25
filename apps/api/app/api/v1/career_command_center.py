@@ -23,6 +23,7 @@ from starlette.requests import Request
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.career_command_center import (
@@ -69,20 +70,20 @@ async def get_dashboard(
     """Get the full Career Command Center dashboard."""
     try:
         data = await CareerCommandCenterService.get_dashboard(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         snapshot = data["snapshot"]
         preferences = data.get("preferences")
 
         # Build health summary
         health_summary = await CareerCommandCenterService.get_health_summary(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
 
         # Build engine status list
-        engine_statuses_map = (
-            snapshot.engine_statuses if snapshot else {}
-        ) or {}
+        engine_statuses_map = (snapshot.engine_statuses if snapshot else {}) or {}
         engine_statuses = [
             EngineStatusResponse(
                 engine_name=engine_name,
@@ -98,15 +99,11 @@ async def get_dashboard(
         ]
 
         return DashboardResponse(
-            snapshot=(
-                CareerSnapshotResponse.model_validate(snapshot)
-                if snapshot else None
-            ),
+            snapshot=(CareerSnapshotResponse.model_validate(snapshot) if snapshot else None),
             health_summary=CareerHealthSummaryResponse(**health_summary),
             engine_statuses=engine_statuses,
             preferences=(
-                CommandCenterPreferenceResponse.model_validate(preferences)
-                if preferences else None
+                CommandCenterPreferenceResponse.model_validate(preferences) if preferences else None
             ),
         )
     except ValueError as exc:
@@ -137,7 +134,8 @@ async def get_health_summary(
     """Get lightweight career health summary."""
     try:
         data = await CareerCommandCenterService.get_health_summary(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return CareerHealthSummaryResponse(**data)
     except ValueError as exc:
@@ -169,7 +167,8 @@ async def refresh_snapshot(
     """Force-refresh Career Vitals™ snapshot."""
     try:
         snapshot = await CareerCommandCenterService.refresh_snapshot(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return CareerSnapshotResponse.model_validate(snapshot)
     except ValueError as exc:
@@ -204,10 +203,7 @@ async def get_engine_detail(
     if engine_name not in valid_names:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Engine '{engine_name}' not found. "
-                f"Valid engines: {', '.join(valid_names)}"
-            ),
+            detail=(f"Engine '{engine_name}' not found. Valid engines: {', '.join(valid_names)}"),
         )
 
     data = await CareerCommandCenterService.get_engine_detail(
@@ -235,6 +231,7 @@ async def get_engine_detail(
     description="Get Career Command Center display preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -242,7 +239,8 @@ async def get_preferences(
 ) -> CommandCenterPreferenceResponse:
     """Get user display preferences."""
     pref = await CareerCommandCenterService.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if pref is None:
         raise HTTPException(
@@ -257,8 +255,7 @@ async def get_preferences(
     response_model=CommandCenterPreferenceResponse,
     summary="Update display preferences",
     description=(
-        "Update Career Command Center display preferences "
-        "including pinned and hidden engines."
+        "Update Career Command Center display preferences including pinned and hidden engines."
     ),
 )
 @limiter.limit(settings.rate_limit_embed)

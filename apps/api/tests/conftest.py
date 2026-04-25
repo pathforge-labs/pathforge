@@ -44,7 +44,9 @@ if TYPE_CHECKING:
 # ARRAY → TEXT (SQLite stores serialized representation)
 @compiles(ARRAY, "sqlite")  # type: ignore[misc]
 def _compile_array_sqlite(
-    type_: TypeEngine, compiler: Any, **kw: Any,
+    type_: TypeEngine,
+    compiler: Any,
+    **kw: Any,
 ) -> str:
     return "TEXT"
 
@@ -52,7 +54,9 @@ def _compile_array_sqlite(
 # Vector → TEXT
 @compiles(Vector, "sqlite")  # type: ignore[misc]
 def _compile_vector_sqlite(
-    type_: TypeEngine, compiler: Any, **kw: Any,
+    type_: TypeEngine,
+    compiler: Any,
+    **kw: Any,
 ) -> str:
     return "TEXT"
 
@@ -60,7 +64,9 @@ def _compile_vector_sqlite(
 # JSON → TEXT
 @compiles(JSON, "sqlite")  # type: ignore[misc]
 def _compile_json_sqlite(
-    type_: TypeEngine, compiler: Any, **kw: Any,
+    type_: TypeEngine,
+    compiler: Any,
+    **kw: Any,
 ) -> str:
     return "TEXT"
 
@@ -68,7 +74,9 @@ def _compile_json_sqlite(
 # PostgreSQL UUID → TEXT (SQLite stores as string representation)
 @compiles(PG_UUID, "sqlite")  # type: ignore[misc]
 def _compile_uuid_sqlite(
-    type_: TypeEngine, compiler: Any, **kw: Any,
+    type_: TypeEngine,
+    compiler: Any,
+    **kw: Any,
 ) -> str:
     return "TEXT"
 
@@ -79,16 +87,19 @@ _original_uuid_bind = PG_UUID.bind_processor
 
 
 def _patched_uuid_bind(
-    self: PG_UUID, dialect: Dialect,
+    self: PG_UUID,
+    dialect: Dialect,
 ) -> Any:
     """Return a processor that handles both UUID objects and strings."""
     if dialect.name == "sqlite":
+
         def process(value: Any) -> str | None:
             if value is None:
                 return None
             if isinstance(value, _uuid.UUID):
                 return str(value)
             return str(value)
+
         return process
     return _original_uuid_bind(self, dialect)
 
@@ -100,15 +111,19 @@ _original_uuid_result = PG_UUID.result_processor
 
 
 def _patched_uuid_result(
-    self: PG_UUID, dialect: Dialect, coltype: Any,
+    self: PG_UUID,
+    dialect: Dialect,
+    coltype: Any,
 ) -> Any:
     """Convert TEXT strings back to uuid.UUID objects for SQLite."""
     if dialect.name == "sqlite":
         if getattr(self, "as_uuid", False):
+
             def process(value: Any) -> _uuid.UUID | None:
                 if value is not None:
                     return _uuid.UUID(str(value))
                 return None
+
             return process
         return None  # Return raw string if as_uuid=False
     return _original_uuid_result(self, dialect, coltype)
@@ -197,7 +212,8 @@ def _enable_oauth_providers() -> None:
 
 @pytest.fixture(autouse=True)
 def _auto_verify_on_login(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Auto-verify email accounts before password authentication.
 
@@ -216,21 +232,24 @@ def _auto_verify_on_login(
     original_authenticate = UserService.authenticate
 
     async def _patched_authenticate(
-        db: AsyncSession, *, email: str, password: str,
+        db: AsyncSession,
+        *,
+        email: str,
+        password: str,
     ) -> TokenResponse:
         # Flip is_verified for any matching account before delegating to
         # the real authenticate() so that the verification gate becomes
         # a no-op for the register→login test pattern.
         await db.execute(
-            sql_update(UserModel)
-            .where(UserModel.email == email)
-            .values(is_verified=True)
+            sql_update(UserModel).where(UserModel.email == email).values(is_verified=True)
         )
         await db.flush()
         return await original_authenticate(db, email=email, password=password)
 
     monkeypatch.setattr(
-        UserService, "authenticate", staticmethod(_patched_authenticate),
+        UserService,
+        "authenticate",
+        staticmethod(_patched_authenticate),
     )
 
 
@@ -316,7 +335,8 @@ async def db_session(test_engine: Any) -> AsyncGenerator[AsyncSession, None]:
         # Restart nested savepoint after each session commit
         @event.listens_for(session.sync_session, "after_transaction_end")
         def _restart_nested(
-            session_sync: Any, transaction_sync: Any,
+            session_sync: Any,
+            transaction_sync: Any,
         ) -> None:
             nonlocal nested
             if not nested.is_active:
@@ -353,9 +373,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-async def registered_user(
-    client: AsyncClient, db_session: AsyncSession
-) -> dict[str, str]:
+async def registered_user(client: AsyncClient, db_session: AsyncSession) -> dict[str, str]:
     """Register a test user and mark them verified.
 
     F28 audit fix: login now requires ``is_verified=True`` for email
@@ -378,9 +396,7 @@ async def registered_user(
 
     # Verify the account so downstream login-based fixtures work.
     await db_session.execute(
-        sql_update(UserModel)
-        .where(UserModel.email == payload["email"])
-        .values(is_verified=True)
+        sql_update(UserModel).where(UserModel.email == payload["email"]).values(is_verified=True)
     )
     await db_session.commit()
 
@@ -498,9 +514,12 @@ def mock_stripe(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(
         stripe.Webhook,
         "construct_event",
-        MagicMock(side_effect=stripe.error.SignatureVerificationError(  # type: ignore[attr-defined]
-            "Invalid signature", "sig_header",
-        )),
+        MagicMock(
+            side_effect=stripe.error.SignatureVerificationError(  # type: ignore[attr-defined]
+                "Invalid signature",
+                "sig_header",
+            )
+        ),
     )
 
     return {
@@ -598,6 +617,7 @@ def warn_on_lazy_load() -> Generator[None, None, None]:
     that intentionally uses lazy loading, use:
         @pytest.mark.filterwarnings("ignore:N+1 risk")
     """
+
     def _listener(orm_execute_state: ORMExecuteState) -> None:
         if (
             orm_execute_state.is_relationship_load
@@ -619,31 +639,43 @@ def warn_on_lazy_load() -> Generator[None, None, None]:
 # ── T2 / Sprint 55 / ADR-0007: Query Budget enforcement ─────────
 #
 # When the QueryBudgetMiddleware is in place, every HTTP-driven test
-# implicitly walks through it. This fixture supplements that with two
+# implicitly walks through it. This fixture supplements that with three
 # guarantees the production middleware can't make:
 #
-#   * **Hard-fail mode** in tests: production logs a Sentry breadcrumb
+#   * **Hard-fail mode** in tests: production logs a Sentry breadcrumo
 #     on overage; tests fail outright so the regression never reaches
 #     review.
-#   * **Registry**: every observed (endpoint, actual, declared) tuple
-#     is captured for the test_query_budgets.py report (CI artefact).
+#   * **Registry of declared routes**: every observed (endpoint, actual,
+#     declared) tuple is captured for the test_query_budgets.py report
+#     (CI artefact).
+#   * **Inventory of unannotated routes**: every observed
+#     (endpoint, actual) tuple for handlers WITHOUT
+#     ``@route_query_budget`` is captured separately, so the rollout
+#     PR (T2-rollout) can derive measured-p95 budgets from a single
+#     suite run instead of guess-and-iterate.
 #
 # Tests that intentionally bypass should mark themselves with
 # ``@pytest.mark.no_query_budget`` (see pyproject.toml).
 
+#: Routes carrying ``@route_query_budget`` — entries are
+#: ``{endpoint_qualname: (declared, max_observed)}``.
 _query_budget_registry: dict[str, tuple[int, int]] = {}
+
+#: Routes without an annotation — entries are
+#: ``{endpoint_qualname: max_observed}``.  Populated by the autouse
+#: fixture below; rendered separately by ``test_query_budgets.py`` so
+#: the T2-rollout PR has a single source of truth for "what budget
+#: should I declare for this route?"
+_unannotated_query_observations: dict[str, int] = {}
 
 
 def _record_query_budget_observation(
     *, endpoint_qualname: str, declared: int, observed: int
 ) -> None:
-    prev_decl, prev_max = _query_budget_registry.get(
-        endpoint_qualname, (declared, 0)
-    )
+    prev_decl, prev_max = _query_budget_registry.get(endpoint_qualname, (declared, 0))
     if declared != prev_decl:  # pragma: no cover — invariant
         raise AssertionError(
-            f"Inconsistent declared budget for {endpoint_qualname}: "
-            f"{prev_decl} vs {declared}"
+            f"Inconsistent declared budget for {endpoint_qualname}: {prev_decl} vs {declared}"
         )
     _query_budget_registry[endpoint_qualname] = (
         declared,
@@ -651,12 +683,33 @@ def _record_query_budget_observation(
     )
 
 
+def _record_unannotated_observation(*, endpoint_qualname: str, observed: int) -> None:
+    prev = _unannotated_query_observations.get(endpoint_qualname, 0)
+    _unannotated_query_observations[endpoint_qualname] = max(prev, observed)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_query_counter_listener_registered() -> None:
+    """Httpx's ``ASGITransport`` does not run FastAPI's ``lifespan``, so
+    the SQL listener installed in ``app.main.lifespan`` never fires
+    during tests.  Register it once per session so every test client
+    walks through a fully-instrumented stack.
+
+    Idempotent — subsequent calls (e.g. inside individual modules that
+    also register at module scope) are no-ops.
+    """
+    from app.core.query_recorder import register_query_counter_listener
+
+    register_query_counter_listener()
+
+
 @pytest.fixture(autouse=True)
 def _enforce_route_query_budgets(
     request: pytest.FixtureRequest,
 ) -> Generator[None, None, None]:
     """Autouse: assert observed query count ≤ declared budget for every
-    request issued during the test, and record the observation."""
+    request issued during the test, record observations for both
+    annotated and unannotated routes."""
     if request.node.get_closest_marker("no_query_budget") is not None:
         yield
         return
@@ -676,14 +729,8 @@ def _enforce_route_query_budgets(
         call_next: Any,
     ) -> Any:
         response = await original_dispatch(self, starlette_request, call_next)
-        endpoint = getattr(
-            starlette_request.scope.get("route"), "endpoint", None
-        )
+        endpoint = getattr(starlette_request.scope.get("route"), "endpoint", None)
         if endpoint is None:
-            return response
-        try:
-            declared = get_route_query_budget(endpoint)
-        except NoQueryBudgetDeclaredError:
             return response
         # The middleware sets ``x-query-count`` only in non-prod, which
         # is the test environment.  Pull the count off the response.
@@ -691,6 +738,16 @@ def _enforce_route_query_budgets(
         if header is None:
             return response
         observed = int(header)
+        try:
+            declared = get_route_query_budget(endpoint)
+        except NoQueryBudgetDeclaredError:
+            # Inventory mode: record-but-don't-enforce so the
+            # T2-rollout PR has measured data to derive budgets from.
+            _record_unannotated_observation(
+                endpoint_qualname=endpoint.__qualname__,
+                observed=observed,
+            )
+            return response
         _record_query_budget_observation(
             endpoint_qualname=endpoint.__qualname__,
             declared=declared,
@@ -718,3 +775,9 @@ def query_budget_registry() -> dict[str, tuple[int, int]]:
     """Read-only snapshot of the per-endpoint budget registry."""
     return dict(_query_budget_registry)
 
+
+@pytest.fixture
+def unannotated_query_observations() -> dict[str, int]:
+    """Read-only snapshot of the inventory-mode observations for
+    handlers without a declared budget."""
+    return dict(_unannotated_query_observations)

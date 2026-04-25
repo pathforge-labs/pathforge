@@ -33,6 +33,7 @@ from starlette.status import (
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -70,13 +71,15 @@ router = APIRouter(
     status_code=HTTP_200_OK,
     summary="Get career passport dashboard",
 )
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> CareerPassportDashboardResponse:
     """Retrieve aggregated passport data: mappings, comparisons, scores."""
     dashboard = await career_passport_service.get_dashboard(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
 
     mapping_responses = [
@@ -84,16 +87,13 @@ async def get_dashboard(
         for mapping in dashboard["credential_mappings"]
     ]
     comparison_responses = [
-        CountryComparisonResponse.model_validate(comp)
-        for comp in dashboard["country_comparisons"]
+        CountryComparisonResponse.model_validate(comp) for comp in dashboard["country_comparisons"]
     ]
     visa_responses = [
-        VisaAssessmentResponse.model_validate(visa)
-        for visa in dashboard["visa_assessments"]
+        VisaAssessmentResponse.model_validate(visa) for visa in dashboard["visa_assessments"]
     ]
     demand_responses = [
-        MarketDemandResponse.model_validate(demand)
-        for demand in dashboard["market_demand"]
+        MarketDemandResponse.model_validate(demand) for demand in dashboard["market_demand"]
     ]
 
     pref_response = None
@@ -102,10 +102,7 @@ async def get_dashboard(
             dashboard["preferences"],
         )
 
-    score_responses = [
-        PassportScoreResponse(**score)
-        for score in dashboard["passport_scores"]
-    ]
+    score_responses = [PassportScoreResponse(**score) for score in dashboard["passport_scores"]]
 
     return CareerPassportDashboardResponse(
         credential_mappings=mapping_responses,
@@ -128,6 +125,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("career_passport"))],
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def full_scan(
     request: Request,
     body: CredentialMappingRequest,
@@ -186,6 +184,7 @@ async def full_scan(
     summary="Map a qualification",
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def create_credential_mapping(
     request: Request,
     body: CredentialMappingRequest,
@@ -213,6 +212,7 @@ async def create_credential_mapping(
     status_code=HTTP_200_OK,
     summary="Get credential mapping",
 )
+@route_query_budget(max_queries=4)
 async def get_credential_mapping(
     mapping_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -220,7 +220,9 @@ async def get_credential_mapping(
 ) -> CredentialMappingResponse:
     """Retrieve a specific credential mapping by ID."""
     mapping = await career_passport_service.get_credential_mapping(
-        database, mapping_id=mapping_id, user_id=current_user.id,
+        database,
+        mapping_id=mapping_id,
+        user_id=current_user.id,
     )
     if not mapping:
         raise HTTPException(
@@ -235,6 +237,7 @@ async def get_credential_mapping(
     status_code=HTTP_204_NO_CONTENT,
     summary="Delete credential mapping",
 )
+@route_query_budget(max_queries=4)
 async def delete_credential_mapping(
     mapping_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -242,7 +245,9 @@ async def delete_credential_mapping(
 ) -> None:
     """Delete a credential mapping by ID."""
     deleted = await career_passport_service.delete_credential_mapping(
-        database, mapping_id=mapping_id, user_id=current_user.id,
+        database,
+        mapping_id=mapping_id,
+        user_id=current_user.id,
     )
     if not deleted:
         raise HTTPException(
@@ -261,6 +266,7 @@ async def delete_credential_mapping(
     summary="Compare two countries",
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def create_country_comparison(
     request: Request,
     body: CountryComparisonRequest,
@@ -288,6 +294,7 @@ async def create_country_comparison(
     summary="Compare up to 5 countries",
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=4)
 async def multi_country_comparison(
     request: Request,
     body: MultiCountryComparisonRequest,
@@ -307,13 +314,9 @@ async def multi_country_comparison(
 
     return MultiCountryComparisonResponse(
         comparisons=[
-            CountryComparisonResponse.model_validate(comp)
-            for comp in result["comparisons"]
+            CountryComparisonResponse.model_validate(comp) for comp in result["comparisons"]
         ],
-        passport_scores=[
-            PassportScoreResponse(**score)
-            for score in result["passport_scores"]
-        ],
+        passport_scores=[PassportScoreResponse(**score) for score in result["passport_scores"]],
         recommended_country=result.get("recommended_country"),
         recommendation_reasoning=result.get("recommendation_reasoning"),
     )
@@ -329,6 +332,7 @@ async def multi_country_comparison(
     summary="Assess visa feasibility",
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def create_visa_assessment(
     request: Request,
     body: VisaAssessmentRequest,
@@ -358,6 +362,7 @@ async def create_visa_assessment(
     status_code=HTTP_200_OK,
     summary="Get market demand for country",
 )
+@route_query_budget(max_queries=4)
 async def get_market_demand(
     country: str,
     current_user: User = Depends(get_current_user),
@@ -365,12 +370,11 @@ async def get_market_demand(
 ) -> list[MarketDemandResponse]:
     """Get all market demand entries for a specific country."""
     entries = await career_passport_service.get_market_demand_by_country(
-        database, country=country, user_id=current_user.id,
+        database,
+        country=country,
+        user_id=current_user.id,
     )
-    return [
-        MarketDemandResponse.model_validate(entry)
-        for entry in entries
-    ]
+    return [MarketDemandResponse.model_validate(entry) for entry in entries]
 
 
 # ── Preferences ────────────────────────────────────────────────
@@ -383,13 +387,15 @@ async def get_market_demand(
     status_code=HTTP_200_OK,
     summary="Get career passport preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> CareerPassportPreferenceResponse | None:
     """Retrieve Career Passport preferences."""
     pref = await career_passport_service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not pref:
         return None
@@ -402,6 +408,7 @@ async def get_preferences(
     status_code=HTTP_200_OK,
     summary="Update career passport preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     body: CareerPassportPreferenceUpdate,
     current_user: User = Depends(get_current_user),
@@ -410,7 +417,9 @@ async def update_preferences(
     """Update or create Career Passport preferences."""
     try:
         pref = await career_passport_service.update_preferences(
-            database, user_id=current_user.id, update_data=body,
+            database,
+            user_id=current_user.id,
+            update_data=body,
         )
     except ValueError as exc:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc)) from exc

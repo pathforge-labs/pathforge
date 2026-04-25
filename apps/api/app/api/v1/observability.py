@@ -14,12 +14,14 @@ from fastapi import APIRouter, Depends
 
 from app.core.auth import get_current_user
 from app.core.llm_observability import get_collector
+from app.core.query_budget import route_query_budget
 from app.models.user import User
 
 router = APIRouter(prefix="/observability", tags=["Observability"])
 
 
 @router.get("/llm-metrics")
+@route_query_budget(max_queries=4)
 async def get_llm_metrics(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:

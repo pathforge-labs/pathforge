@@ -33,6 +33,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.career_action_planner import (
@@ -73,6 +74,7 @@ router = APIRouter(
     summary="Get Career Action Planner dashboard",
 )
 @limiter.limit("20/minute")
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -80,26 +82,19 @@ async def get_dashboard(
 ) -> PlanDashboardResponse:
     """Get dashboard with active plans, stats, and recommendations."""
     result = await service.get_dashboard(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
 
-    active_plans = [
-        PlanSummaryResponse(**plan_data)
-        for plan_data in result.active_plans
-    ]
+    active_plans = [PlanSummaryResponse(**plan_data) for plan_data in result.active_plans]
 
     pref = result.preferences
-    pref_response = (
-        CareerActionPlannerPreferenceResponse.model_validate(pref)
-        if pref else None
-    )
-
+    pref_response = CareerActionPlannerPreferenceResponse.model_validate(pref) if pref else None
 
     return PlanDashboardResponse(
         active_plans=active_plans,
         recent_recommendations=[
-            PlanRecommendationResponse.model_validate(rec)
-            for rec in result.recent_recommendations
+            PlanRecommendationResponse.model_validate(rec) for rec in result.recent_recommendations
         ],
         stats=PlanStatsResponse.model_validate(result.stats),
         preferences=pref_response,
@@ -117,6 +112,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("career_action_planner"))],
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=4)
 async def create_plan_scan(
     request: Request,
     body: GeneratePlanRequest,
@@ -135,7 +131,9 @@ async def create_plan_scan(
 
     try:
         result = await service.generate_plan(
-            database, user_id=current_user.id, request_data=body,
+            database,
+            user_id=current_user.id,
+            request_data=body,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -150,8 +148,7 @@ async def create_plan_scan(
     return PlanScanResponse(
         plan=CareerActionPlanResponse.model_validate(result.plan),
         recommendations=[
-            PlanRecommendationResponse.model_validate(rec)
-            for rec in result.recommendations
+            PlanRecommendationResponse.model_validate(rec) for rec in result.recommendations
         ],
     )
 
@@ -166,6 +163,7 @@ async def create_plan_scan(
     summary="Compare plan scenarios",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def compare_plans(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -173,13 +171,11 @@ async def compare_plans(
 ) -> PlanComparisonResponse:
     """Compare all user plans and recommend the best option."""
     result = await compare_plans_fn(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
 
-    plan_responses = [
-        CareerActionPlanResponse.model_validate(plan)
-        for plan in result.plans
-    ]
+    plan_responses = [CareerActionPlanResponse.model_validate(plan) for plan in result.plans]
 
     return PlanComparisonResponse(
         plans=plan_responses,
@@ -198,6 +194,7 @@ async def compare_plans(
     summary="Get Career Action Planner preferences",
 )
 @limiter.limit("30/minute")
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -205,7 +202,8 @@ async def get_preferences(
 ) -> CareerActionPlannerPreferenceResponse | None:
     """Get user's Career Action Planner preferences."""
     pref = await service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not pref:
         return None
@@ -219,6 +217,7 @@ async def get_preferences(
     summary="Update Career Action Planner preferences",
 )
 @limiter.limit("20/minute")
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: CareerActionPlannerPreferenceUpdate,
@@ -251,6 +250,7 @@ async def update_preferences(
     summary="Get plan detail with milestones",
 )
 @limiter.limit("20/minute")
+@route_query_budget(max_queries=4)
 async def get_plan_detail(
     request: Request,
     plan_id: uuid.UUID,
@@ -259,7 +259,9 @@ async def get_plan_detail(
 ) -> CareerActionPlanResponse:
     """Retrieve a specific career action plan with milestones and progress."""
     plan = await service.get_plan(
-        database, plan_id=plan_id, user_id=current_user.id,
+        database,
+        plan_id=plan_id,
+        user_id=current_user.id,
     )
     if not plan:
         raise HTTPException(
@@ -279,6 +281,7 @@ async def get_plan_detail(
     summary="Update plan status",
 )
 @limiter.limit("10/minute")
+@route_query_budget(max_queries=4)
 async def update_plan_status(
     request: Request,
     plan_id: uuid.UUID,
@@ -313,6 +316,7 @@ async def update_plan_status(
     summary="List milestones for a plan",
 )
 @limiter.limit("20/minute")
+@route_query_budget(max_queries=4)
 async def list_milestones(
     request: Request,
     plan_id: uuid.UUID,
@@ -322,7 +326,9 @@ async def list_milestones(
     """List all milestones for a career action plan."""
     try:
         milestones = await service.get_milestones(
-            database, plan_id=plan_id, user_id=current_user.id,
+            database,
+            plan_id=plan_id,
+            user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -330,10 +336,7 @@ async def list_milestones(
             detail=str(exc),
         ) from exc
 
-    return [
-        PlanMilestoneResponse.model_validate(milestone)
-        for milestone in milestones
-    ]
+    return [PlanMilestoneResponse.model_validate(milestone) for milestone in milestones]
 
 
 @router.put(
@@ -343,6 +346,7 @@ async def list_milestones(
     summary="Update a milestone",
 )
 @limiter.limit("10/minute")
+@route_query_budget(max_queries=4)
 async def update_milestone(
     request: Request,
     plan_id: uuid.UUID,
@@ -379,6 +383,7 @@ async def update_milestone(
     summary="Log progress against a milestone",
 )
 @limiter.limit("10/minute")
+@route_query_budget(max_queries=4)
 async def log_milestone_progress(
     request: Request,
     plan_id: uuid.UUID,

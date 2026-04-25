@@ -33,6 +33,7 @@ from starlette.status import (
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -71,20 +72,19 @@ router = APIRouter(
     summary="Interview intelligence dashboard",
     description="Retrieve all saved interview preps, preferences, and summary statistics.",
 )
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> InterviewDashboardResponse:
     """Retrieve all saved interview preps and preferences for dashboard."""
     data = await interview_intelligence_service.get_dashboard(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
 
     return InterviewDashboardResponse(
-        preps=[
-            InterviewPrepSummaryResponse.model_validate(prep)
-            for prep in data["preps"]
-        ],
+        preps=[InterviewPrepSummaryResponse.model_validate(prep) for prep in data["preps"]],
         preferences=(
             InterviewPreferenceResponse.model_validate(data["preferences"])
             if data["preferences"]
@@ -146,6 +146,7 @@ async def create_prep(
     description="Compare 2-5 saved interview preps side-by-side.",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def compare_preps(
     request: Request,
     body: InterviewPrepCompareRequest,
@@ -160,10 +161,7 @@ async def compare_preps(
     )
 
     return InterviewPrepComparisonResponse(
-        preps=[
-            InterviewPrepResponse.model_validate(prep)
-            for prep in data["preps"]
-        ],
+        preps=[InterviewPrepResponse.model_validate(prep) for prep in data["preps"]],
         ranking=data.get("ranking", []),
         comparison_summary=data.get("comparison_summary"),
     )
@@ -180,13 +178,15 @@ async def compare_preps(
     summary="Get interview preferences",
     description="Retrieve your Interview Intelligence preferences.",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> InterviewPreferenceResponse | None:
     """Retrieve interview preferences for the current user."""
     preference = await interview_intelligence_service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not preference:
         return None
@@ -201,6 +201,7 @@ async def get_preferences(
     summary="Update interview preferences",
     description="Update or create your Interview Intelligence preferences.",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     body: InterviewPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -226,6 +227,7 @@ async def update_preferences(
     description="Retrieve a specific interview prep with all insights, questions, and STAR examples.",
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )
+@route_query_budget(max_queries=4)
 async def get_prep(
     prep_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -233,7 +235,9 @@ async def get_prep(
 ) -> InterviewPrepResponse:
     """Retrieve a specific interview prep by ID."""
     prep = await interview_intelligence_service.get_interview_prep(
-        database, prep_id=prep_id, user_id=current_user.id,
+        database,
+        prep_id=prep_id,
+        user_id=current_user.id,
     )
     if not prep:
         raise HTTPException(
@@ -250,6 +254,7 @@ async def get_prep(
     description="Delete a saved interview prep and all related data.",
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )
+@route_query_budget(max_queries=4)
 async def delete_prep(
     prep_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -257,7 +262,9 @@ async def delete_prep(
 ) -> None:
     """Delete an interview prep."""
     deleted = await interview_intelligence_service.delete_interview_prep(
-        database, prep_id=prep_id, user_id=current_user.id,
+        database,
+        prep_id=prep_id,
+        user_id=current_user.id,
     )
     if not deleted:
         raise HTTPException(
@@ -278,6 +285,7 @@ async def delete_prep(
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def generate_questions(
     request: Request,
     prep_id: uuid.UUID,
@@ -313,6 +321,7 @@ async def generate_questions(
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def generate_star_examples(
     request: Request,
     prep_id: uuid.UUID,
@@ -344,8 +353,7 @@ async def generate_star_examples(
     status_code=HTTP_201_CREATED,
     summary="Generate negotiation script",
     description=(
-        "Generate data-backed salary negotiation scripts using "
-        "Salary Intelligence Engine™ data."
+        "Generate data-backed salary negotiation scripts using Salary Intelligence Engine™ data."
     ),
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )

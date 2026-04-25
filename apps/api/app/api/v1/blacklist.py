@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.security import get_current_user
 from app.models.preference import BlacklistEntry
 from app.models.user import User
@@ -53,6 +54,7 @@ class BlacklistListResponse(BaseModel):
 
 
 @router.post("", response_model=BlacklistResponse, status_code=201)
+@route_query_budget(max_queries=9)
 async def add_to_blacklist(
     payload: AddBlacklistRequest,
     current_user: User = Depends(get_current_user),
@@ -98,6 +100,7 @@ async def add_to_blacklist(
 
 
 @router.get("", response_model=BlacklistListResponse)
+@route_query_budget(max_queries=5)
 async def list_blacklist(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -135,6 +138,7 @@ async def list_blacklist(
 
 
 @router.delete("/{entry_id}", status_code=204)
+@route_query_budget(max_queries=6)
 async def remove_from_blacklist(
     entry_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -149,7 +153,9 @@ async def remove_from_blacklist(
     )
     entry = result.scalar_one_or_none()
     if not entry:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blacklist entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Blacklist entry not found"
+        )
 
     await db.delete(entry)
     await db.commit()

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.resume_parser import ResumeParser
 from app.core.database import get_db
 from app.core.prompt_sanitizer import sanitize_user_text
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -92,7 +93,8 @@ async def _extract_structured(raw_text: str, user_id: Any) -> dict[str, Any] | N
         return parsed if isinstance(parsed, dict) else parsed.model_dump()
     except Exception:
         logger.exception(
-            "LLM resume parsing failed for user %s — saving raw text only", user_id,
+            "LLM resume parsing failed for user %s — saving raw text only",
+            user_id,
         )
         return None
 
@@ -191,9 +193,13 @@ async def upload_resume(
     try:
         raw_text = await _parse_and_sanitize(file_bytes, file.filename)  # type: ignore[arg-type]
     except FileTooLargeError as exc:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+        ) from exc
     except UnsupportedFormatError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     except DocumentParseError as exc:
         logger.error("Document parsing failed for user %s: %s", current_user.id, exc)
         raise HTTPException(
@@ -212,7 +218,10 @@ async def upload_resume(
 
     logger.info(
         "Resume uploaded: user=%s resume_id=%s version=%d ocr=%s",
-        current_user.id, resume.id, resume.version, is_image,
+        current_user.id,
+        resume.id,
+        resume.version,
+        is_image,
     )
 
     return ResumeUploadResponse(
@@ -234,6 +243,7 @@ async def upload_resume(
     response_model=list[ResumeSummaryResponse],
     summary="List all resumes for the current user",
 )
+@route_query_budget(max_queries=4)
 async def list_resumes(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

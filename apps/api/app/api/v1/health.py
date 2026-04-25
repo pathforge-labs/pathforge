@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 
 logger = logging.getLogger(__name__)
 
@@ -90,19 +91,14 @@ async def _attest_db_ssl(db: AsyncSession) -> _AttestEntry | None:
     """
     global _attest_cache
     now = time.monotonic()
-    if (
-        _attest_cache is not None
-        and (now - _attest_cache.attested_at) < _ATTEST_CACHE_TTL_SECONDS
-    ):
+    if _attest_cache is not None and (now - _attest_cache.attested_at) < _ATTEST_CACHE_TTL_SECONDS:
         return _attest_cache
     if not _is_postgres_session(db):
         return None
     try:
         result = await db.execute(
             text(
-                "SELECT ssl, version, cipher "
-                "FROM pg_stat_ssl "
-                "WHERE pid = pg_backend_pid()",
+                "SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
             ),
         )
         row = result.mappings().first()
@@ -118,12 +114,14 @@ async def _attest_db_ssl(db: AsyncSession) -> _AttestEntry | None:
         return entry
     except Exception as attest_exc:
         logger.debug(
-            "pg_stat_ssl attestation unavailable: %s", attest_exc,
+            "pg_stat_ssl attestation unavailable: %s",
+            attest_exc,
         )
         return None
 
 
 @router.get("/health", summary="Basic health check (liveness)")
+@route_query_budget(max_queries=4)
 async def health_check() -> dict[str, str]:
     """Lightweight liveness probe — no dependency checks."""
     return {
@@ -135,6 +133,7 @@ async def health_check() -> dict[str, str]:
 
 
 @router.get("/health/ready", summary="Readiness check (includes DB + Redis)")
+@route_query_budget(max_queries=3)
 async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     """
     Deep readiness probe — verifies all critical dependencies.
@@ -215,7 +214,8 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
                     pool = token_blacklist._redis.connection_pool
                     conn_class = getattr(pool, "connection_class", None)
                     if isinstance(conn_class, type) and issubclass(
-                        conn_class, SSLConnection,
+                        conn_class,
+                        SSLConnection,
                     ):
                         redis_ssl_enabled = True
                         redis_ssl_attested = True
@@ -224,7 +224,8 @@ async def readiness_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
                         redis_ssl_attested = True
                 except Exception as attest_exc:
                     logger.debug(
-                        "Redis TLS introspection unavailable: %s", attest_exc,
+                        "Redis TLS introspection unavailable: %s",
+                        attest_exc,
                     )
             else:
                 redis_status = "not_initialized"

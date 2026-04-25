@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.security import get_current_user
 from app.models.application import Application, ApplicationStatus
 from app.models.user import User
@@ -111,6 +112,7 @@ def _handle_service_error(exc: ApplicationError) -> HTTPException:
 
 
 @router.post("", response_model=ApplicationResponse, status_code=201)
+@route_query_budget(max_queries=10)
 async def create_app_endpoint(
     payload: CreateApplicationRequest,
     current_user: User = Depends(get_current_user),
@@ -134,7 +136,9 @@ async def create_app_endpoint(
         # Re-fetch to load relationships
         refetched = await get_application(db, app.id, current_user.id)
         if refetched is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after creation")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after creation"
+            )
         return _to_response(refetched)
     except (BlacklistViolation, RateLimitViolation, InvalidTransition, ApplicationError) as exc:
         await db.rollback()
@@ -142,6 +146,7 @@ async def create_app_endpoint(
 
 
 @router.get("", response_model=ApplicationListResponse)
+@route_query_budget(max_queries=5)
 async def list_apps_endpoint(
     status: str | None = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1),
@@ -151,7 +156,11 @@ async def list_apps_endpoint(
 ) -> ApplicationListResponse:
     """List current user's applications with optional status filter."""
     apps, total = await list_applications(
-        db, current_user.id, status_filter=status, page=page, per_page=per_page,
+        db,
+        current_user.id,
+        status_filter=status,
+        page=page,
+        per_page=per_page,
     )
     return ApplicationListResponse(
         items=[_to_response(a) for a in apps],
@@ -162,6 +171,7 @@ async def list_apps_endpoint(
 
 
 @router.get("/{application_id}", response_model=ApplicationResponse)
+@route_query_budget(max_queries=4)
 async def get_app_endpoint(
     application_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -175,6 +185,7 @@ async def get_app_endpoint(
 
 
 @router.patch("/{application_id}/status", response_model=ApplicationResponse)
+@route_query_budget(max_queries=11)
 async def update_app_status_endpoint(
     application_id: uuid.UUID,
     payload: UpdateStatusRequest,
@@ -192,12 +203,17 @@ async def update_app_status_endpoint(
     """
     try:
         app = await update_status(
-            db, application_id, current_user.id, payload.status,
+            db,
+            application_id,
+            current_user.id,
+            payload.status,
         )
         await db.commit()
         refetched = await get_application(db, app.id, current_user.id)
         if refetched is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after update")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Application not found after update"
+            )
         return _to_response(refetched)
     except (InvalidTransition, RateLimitViolation, ApplicationError) as exc:
         await db.rollback()
@@ -205,6 +221,7 @@ async def update_app_status_endpoint(
 
 
 @router.delete("/{application_id}", status_code=204)
+@route_query_budget(max_queries=6)
 async def delete_app_endpoint(
     application_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
