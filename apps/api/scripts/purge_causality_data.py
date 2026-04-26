@@ -192,8 +192,93 @@ def _append_audit_log(
 
 
 # ─────────────────────────────────────────────────────────────────
-# Core purge
+# Core purge — broken into small helpers so each fits the 50-line
+# style-guide cap and the public entry-point reads top-to-bottom
+# without buried branching.
 # ─────────────────────────────────────────────────────────────────
+
+
+async def _count_eligible(session: AsyncSession, cutoff: datetime) -> int:
+    """Count rows older than ``cutoff`` (the same set the delete
+    targets). Reported even in dry-run."""
+    stmt = select(func.count(CrossEngineRecommendation.id)).where(
+        CrossEngineRecommendation.created_at < cutoff,
+    )
+    return int((await session.execute(stmt)).scalar_one())
+
+
+async def _delete_eligible_in_db(
+    session: AsyncSession,
+    cutoff: datetime,
+) -> int:
+    """Issue the two-step delete (correlations → recommendations).
+
+    Implementation note — we use a **scalar subquery** rather than
+    fetching IDs into Python because:
+      - The eligible set can be arbitrarily large after a missed cron
+        (back-pressure scenarios) and pulling it into memory risks
+        OOM at scale.
+      - Both Postgres and SQLite optimise ``DELETE … WHERE id IN
+        (SELECT … FROM …)`` to a single execution plan; round-tripping
+        through Python serves no purpose.
+
+    We still issue **two** DELETEs (not a single CASCADE) because:
+      - SQLAlchemy bulk ``delete()`` bypasses ORM-level
+        ``cascade="all, delete-orphan"`` tracking.
+      - DB-level ``ON DELETE CASCADE`` works in Postgres but requires
+        ``PRAGMA foreign_keys=ON`` in SQLite — which the hermetic
+        test engine does not enable. Two-step is portable.
+    """
+    eligible_ids = (
+        select(CrossEngineRecommendation.id)
+        .where(CrossEngineRecommendation.created_at < cutoff)
+        .scalar_subquery()
+    )
+    await session.execute(
+        delete(RecommendationCorrelation).where(
+            RecommendationCorrelation.recommendation_id.in_(eligible_ids),
+        ),
+    )
+    result = await session.execute(
+        delete(CrossEngineRecommendation).where(
+            CrossEngineRecommendation.id.in_(eligible_ids),
+        ),
+    )
+    return int(result.rowcount or 0)
+
+
+async def _purge_with_session(
+    session: AsyncSession,
+    *,
+    retention_days: int,
+    cutoff: datetime,
+    dry_run: bool,
+    audit_log_path: Path,
+) -> PurgeReport:
+    """Run one cycle against an open session.
+
+    Pure of session-lifecycle concerns — the caller owns acquisition
+    and rollback. Audit-write happens **before** the delete so a
+    crash leaves the data in place rather than losing the
+    forever-retained aggregates.
+    """
+    rows_eligible = await _count_eligible(session, cutoff)
+    aggregates = await _aggregate_engine_contributions(session, cutoff)
+
+    rows_deleted = 0
+    if not dry_run and rows_eligible > 0:
+        _append_audit_log(aggregates, log_path=audit_log_path)
+        rows_deleted = await _delete_eligible_in_db(session, cutoff)
+        await session.commit()
+
+    return PurgeReport(
+        cutoff=cutoff,
+        retention_days=retention_days,
+        rows_eligible=rows_eligible,
+        rows_deleted=rows_deleted,
+        dry_run=dry_run,
+        aggregates=aggregates,
+    )
 
 
 async def purge_causality_data(
@@ -203,22 +288,15 @@ async def purge_causality_data(
     session: AsyncSession | None = None,
     audit_log_path: Path | None = None,
 ) -> PurgeReport:
-    """Run one purge cycle.
+    """Validate input, resolve session lifecycle, run one cycle.
 
-    Args:
-        retention_days: rows older than ``now - retention_days`` are
-            eligible for deletion.
-        dry_run: when True, only counts + aggregates; no writes.
-        session: optional pre-opened session (tests pass an in-memory
-            SQLite session). Production code lets the function open
-            its own from ``async_session_factory``.
-        audit_log_path: override the aggregate JSONL path (tests use
-            tmp dirs). Defaults to ``AGGREGATE_LOG_PATH``.
+    Tests pass ``session`` (in-memory SQLite); production code lets
+    this function open its own from :data:`async_session_factory` via
+    ``async with``. ``audit_log_path`` overrides
+    :data:`AGGREGATE_LOG_PATH` (tests use tmp dirs).
 
-    Returns: :class:`PurgeReport`.
-
-    Raises: any DB error propagates — the caller's transaction is
-        rolled back and the script exits 1.
+    Raises ``ValueError`` on non-positive ``retention_days``; any DB
+    error propagates after rolling back the owned session.
     """
     if retention_days <= 0:
         raise ValueError(
@@ -228,77 +306,27 @@ async def purge_causality_data(
     cutoff = datetime.now(UTC) - timedelta(days=retention_days)
     audit_path = audit_log_path or AGGREGATE_LOG_PATH
 
-    own_session = session is None
-    if own_session:
-        session = async_session_factory()
-        await session.__aenter__()
-    assert session is not None  # for the type-checker
-    try:
-        # Count eligible rows for the report — this is the same set
-        # that would get deleted.
-        count_stmt = select(func.count(CrossEngineRecommendation.id)).where(
-            CrossEngineRecommendation.created_at < cutoff,
-        )
-        rows_eligible = int((await session.execute(count_stmt)).scalar_one())
-
-        aggregates = await _aggregate_engine_contributions(session, cutoff)
-
-        rows_deleted = 0
-        if not dry_run and rows_eligible > 0:
-            # Aggregate audit record first; if the FS write fails we
-            # surface the error before touching the DB and the data
-            # stays put.
-            _append_audit_log(aggregates, log_path=audit_path)
-
-            # Delete correlations first, then recommendations. We do
-            # this explicitly (rather than relying on
-            # ``ondelete="CASCADE"``) because:
-            #   - SQLAlchemy bulk ``delete()`` bypasses the ORM-level
-            #     ``cascade="all, delete-orphan"`` tracking, so the
-            #     parent-side ORM cascade never fires.
-            #   - DB-level ``ON DELETE CASCADE`` works in Postgres but
-            #     requires ``PRAGMA foreign_keys=ON`` in SQLite, which
-            #     the hermetic test engine does not enable. Doing the
-            #     two-step ourselves is portable, audit-friendly, and
-            #     does not lose any rows on a partial transaction.
-            eligible_ids_stmt = select(CrossEngineRecommendation.id).where(
-                CrossEngineRecommendation.created_at < cutoff,
-            )
-            eligible_ids = [
-                row[0]
-                for row in (await session.execute(eligible_ids_stmt)).all()
-            ]
-            if eligible_ids:
-                await session.execute(
-                    delete(RecommendationCorrelation).where(
-                        RecommendationCorrelation.recommendation_id.in_(
-                            eligible_ids,
-                        ),
-                    ),
-                )
-                result = await session.execute(
-                    delete(CrossEngineRecommendation).where(
-                        CrossEngineRecommendation.id.in_(eligible_ids),
-                    ),
-                )
-                rows_deleted = int(result.rowcount or 0)
-            await session.commit()
-
-        return PurgeReport(
-            cutoff=cutoff,
+    if session is not None:
+        return await _purge_with_session(
+            session,
             retention_days=retention_days,
-            rows_eligible=rows_eligible,
-            rows_deleted=rows_deleted,
+            cutoff=cutoff,
             dry_run=dry_run,
-            aggregates=aggregates,
+            audit_log_path=audit_path,
         )
-    except Exception:
-        if own_session:
-            await session.rollback()
-        raise
-    finally:
-        if own_session:
-            await session.__aexit__(None, None, None)
+
+    async with async_session_factory() as own_session:
+        try:
+            return await _purge_with_session(
+                own_session,
+                retention_days=retention_days,
+                cutoff=cutoff,
+                dry_run=dry_run,
+                audit_log_path=audit_path,
+            )
+        except Exception:
+            await own_session.rollback()
+            raise
 
 
 # ─────────────────────────────────────────────────────────────────
