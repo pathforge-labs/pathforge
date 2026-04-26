@@ -22,7 +22,7 @@ from httpx import ASGITransport, AsyncClient
 # pgvector's Vector type
 from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 from sqlalchemy import event
-from sqlalchemy.dialects.postgresql import ARRAY, JSON
+from sqlalchemy.dialects.postgresql import ARRAY, JSON, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -67,6 +67,14 @@ def _compile_json_sqlite(
     type_: TypeEngine,
     compiler: Any,
     **kw: Any,
+) -> str:
+    return "TEXT"
+
+
+# JSONB → TEXT (SQLite has no JSONB; tests use serialized JSON in TEXT)
+@compiles(JSONB, "sqlite")  # type: ignore[misc]
+def _compile_jsonb_sqlite(
+    type_: TypeEngine, compiler: Any, **kw: Any,
 ) -> str:
     return "TEXT"
 

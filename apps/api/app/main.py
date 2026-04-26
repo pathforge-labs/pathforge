@@ -21,6 +21,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
     admin,
+    admin_webhooks,
     ai,
     ai_transparency,
     ai_usage,
@@ -325,6 +326,8 @@ def create_app() -> FastAPI:
     application.include_router(billing.router, prefix="/api/v1")
     application.include_router(billing.webhook_router, prefix="/api/v1")
     application.include_router(admin.router, prefix="/api/v1")
+    # T6 / Sprint 58, ADR-0010: webhook DLQ admin surface.
+    application.include_router(admin_webhooks.router, prefix="/api/v1")
     application.include_router(waitlist.router, prefix="/api/v1")
     application.include_router(public_profiles.router, prefix="/api/v1")
 
