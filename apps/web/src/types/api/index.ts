@@ -37,5 +37,8 @@ export type * from "./workflow-automation";
 // ── Sprint 35: Billing & Monetization ──────────────────────
 export type * from "./billing";
 
+// ── Sprint 56 / T4 / ADR-0008: Transparent AI Accounting ──────
+export type * from "./ai-usage";
+
 // ── Resumes ────────────────────────────────────────────────
 export type * from "./resumes";

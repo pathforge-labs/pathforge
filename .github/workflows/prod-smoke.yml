@@ -1,0 +1,111 @@
+name: Production Smoke
+
+# T6 / Sprint 58, ADR-0010 — closes MPR §7 verification checklist.
+#
+# Runs the 8 prod-smoke specs every 15 minutes against
+# https://api.pathforge.eu (and https://pathforge.eu for the web
+# arm). Each spec maps 1:1 to an MPR §7 line item; failure pages
+# the on-call channel via Sentry. Sentry alert routing is
+# configured in the Sentry project settings — this workflow's job
+# is to **make the failure observable**, not to dispatch the page.
+#
+# Why every 15 minutes
+# --------------------
+#
+# Faster cadence (e.g. 1 min) burns GitHub Actions minutes for no
+# operational gain — we already have UptimeRobot at 5-min granularity
+# for the readiness probe alone (MPR §7 item 5). The smoke covers the
+# cross-cutting deeper assertions (refresh rotation, account
+# deletion, dependency advisories) where a 15-minute lag is fine —
+# any regression hitting users is already pages the on-call via
+# Sentry within seconds, separately.
+#
+# Read-only by design
+# -------------------
+#
+# The smoke does **not** mint Stripe charges, create users, or
+# delete accounts in prod. Destructive items (e.g. full account
+# deletion cascade, fresh customer Stripe checkout) run weekly on
+# staging via a separate gameday workflow. The prod cron asserts
+# **observable contracts**: route reachability, idempotent rejects,
+# advisory absence, monitor liveness.
+
+on:
+  schedule:
+    # Every 15 minutes UTC. GitHub cron precision is ± 15 min on
+    # busy days, which the SRE workflow tolerates — see ADR-0010.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-smoke
+  # Cancel an in-flight run when a fresh tick fires; we'd rather
+  # see the latest signal than a stale one.
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Run prod-smoke spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install chromium --with-deps
+
+      - name: Run prod-smoke specs
+        working-directory: apps/web
+        env:
+          # Targets ─ default to public prod hosts; secrets override
+          # for staging gamedays.
+          PROD_SMOKE_API_BASE_URL: ${{ vars.PROD_SMOKE_API_BASE_URL || 'https://api.pathforge.eu' }}
+          PROD_SMOKE_WEB_BASE_URL: ${{ vars.PROD_SMOKE_WEB_BASE_URL || 'https://pathforge.eu' }}
+          # Synthetic baseline-fixture user ─ provisioned by T6
+          # admin tooling. Empty in CI = those specs skip.
+          PROD_SMOKE_USER_EMAIL: ${{ secrets.PROD_SMOKE_USER_EMAIL }}
+          PROD_SMOKE_USER_PASSWORD: ${{ secrets.PROD_SMOKE_USER_PASSWORD }}
+          # Sentry events-API roundtrip
+          PROD_SMOKE_SENTRY_ORG: ${{ secrets.PROD_SMOKE_SENTRY_ORG }}
+          PROD_SMOKE_SENTRY_PROJECT: ${{ secrets.PROD_SMOKE_SENTRY_PROJECT }}
+          PROD_SMOKE_SENTRY_TOKEN: ${{ secrets.PROD_SMOKE_SENTRY_TOKEN }}
+          # GitHub Dependabot advisory query
+          PROD_SMOKE_GH_TOKEN: ${{ secrets.PROD_SMOKE_GH_TOKEN }}
+          PROD_SMOKE_GH_REPO: ${{ github.repository }}
+          # UptimeRobot SLA check
+          PROD_SMOKE_UPTIMEROBOT_API_KEY: ${{ secrets.PROD_SMOKE_UPTIMEROBOT_API_KEY }}
+        run: |
+          npx playwright test e2e/prod-smoke/ \
+            --reporter=github,list \
+            --workers=2
+
+      # On failure we don't dispatch alerts here — the workflow run
+      # itself is the signal Sentry's alert rule subscribes to (via
+      # GitHub Actions integration). Keeping the wiring in Sentry
+      # means alert routing changes without touching this YAML.
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-smoke-traces-${{ github.run_id }}
+          path: apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
