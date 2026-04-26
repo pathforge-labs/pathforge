@@ -209,6 +209,13 @@ export const queryKeys = {
     features: () => ["billing", "features"] as const,
   },
 
+  // ── Sprint 56 / T4 / ADR-0008: Transparent AI Accounting ────
+  aiUsage: {
+    all: ["ai-usage"] as const,
+    summary: (period: "current_month" = "current_month") =>
+      ["ai-usage", "summary", period] as const,
+  },
+
   // ── Resumes ──────────────────────────────────────────────
   resumes: {
     all: ["resumes"] as const,
