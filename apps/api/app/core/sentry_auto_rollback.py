@@ -64,14 +64,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal/sentry", tags=["Internal — Sentry"])
 
-#: Default P0 user-rate threshold. Module-level shadow of
-#: ``settings.auto_rollback_p0_user_rate_threshold`` (ADR-0012 #5)
-#: so tests can monkey-patch without touching the global Settings
-#: instance, and so import-time references stay cheap. The settings
-#: value seeds the constant at module import; runtime re-tuning
-#: happens via the settings field, which on-call can hot-edit
-#: without a deploy.
+#: Snapshot of ``settings.auto_rollback_p0_user_rate_threshold`` at
+#: module import time. Kept as a ``__all__`` export for monitoring
+#: callers and ADR-0012 §Verification, but **the runtime threshold
+#: is read live from ``settings`` inside :func:`sentry_auto_rollback`**
+#: so on-call hot-edits to the settings field take effect without a
+#: deploy. Do not introduce new call-site references to this snapshot
+#: — read ``settings.auto_rollback_p0_user_rate_threshold`` directly.
 P0_USER_RATE_THRESHOLD: float = settings.auto_rollback_p0_user_rate_threshold
+
+#: Operator sanity bound. A threshold above this (50 % of users
+#: experiencing the P0) is almost certainly a misconfiguration —
+#: at that rate the rollout is already broken and the auto-rollback
+#: gate would never fire. We log a single error per webhook hit
+#: when the live setting exceeds this; the gate continues to run
+#: rather than fail-close, so a misconfigured high threshold doesn't
+#: silently disable rollback. Mirrors the mitigation cited in
+#: ADR-0012 §Implications.
+_THRESHOLD_SANITY_BOUND: float = 0.5
 
 
 class SentryRollbackResponse(BaseModel):
@@ -244,6 +254,21 @@ async def sentry_auto_rollback(
             flag_key=flag_key,
         )
 
+    # Read the threshold live from settings so on-call's hot-edit takes
+    # effect without redeploying. The module-level snapshot above is
+    # only kept for ADR §Verification monitoring callers.
+    threshold = settings.auto_rollback_p0_user_rate_threshold
+    if threshold > _THRESHOLD_SANITY_BOUND:
+        logger.error(
+            "sentry-auto-rollback: configured threshold %.4f exceeds "
+            "sanity bound %.4f — almost certainly a misconfiguration "
+            "(50%% of users experiencing the P0). Rollback gate "
+            "continues to run; please correct settings.auto_rollback_"
+            "p0_user_rate_threshold.",
+            threshold,
+            _THRESHOLD_SANITY_BOUND,
+        )
+
     provider = _get_provider()
     current = provider.get(flag_key)
     if current is None:
@@ -257,12 +282,12 @@ async def sentry_auto_rollback(
             flag_key=flag_key,
         )
 
-    if rate <= P0_USER_RATE_THRESHOLD:
+    if rate <= threshold:
         return SentryRollbackResponse(
             rolled_back=False,
             flag_key=flag_key,
             rate=rate,
-            threshold=P0_USER_RATE_THRESHOLD,
+            threshold=threshold,
         )
 
     if current.stage is RolloutStage.internal_only:
@@ -283,13 +308,13 @@ async def sentry_auto_rollback(
         flag_key,
         current.stage.value,
         rate,
-        P0_USER_RATE_THRESHOLD,
+        threshold,
     )
     return SentryRollbackResponse(
         rolled_back=True,
         flag_key=flag_key,
         rate=rate,
-        threshold=P0_USER_RATE_THRESHOLD,
+        threshold=threshold,
         previous_stage=current.stage.value,
     )
 

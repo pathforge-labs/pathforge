@@ -104,7 +104,7 @@ Rejected. A 30-minute incident window matters more than a release-lifetime avera
 
 ### Negative
 - One more file in `app/core/config.py`; minor cognitive cost.
-- Setting #5 (`auto_rollback_p0_user_rate_threshold`) becomes operationally tunable, which means a misconfigured value can disable the auto-rollback entirely. Mitigated by a Sentry assertion in `sentry_auto_rollback._get_provider` that warns when the value is `> 0.5` (50 %) — a clearly broken configuration.
+- Setting #5 (`auto_rollback_p0_user_rate_threshold`) becomes operationally tunable, which means a misconfigured value can disable the auto-rollback entirely. Mitigated inside `sentry_auto_rollback()` itself: every webhook invocation reads the threshold live from `settings`, and when the value exceeds `_THRESHOLD_SANITY_BOUND = 0.5` (50 %) it emits a `logger.error` (visible to the on-call's Sentry breadcrumb chain) with an explicit "configured threshold exceeds sanity bound" message. The gate continues to run — fail-open rather than fail-close, so a misconfigured high threshold doesn't silently disable rollback.
 
 ### Operational notes
 
