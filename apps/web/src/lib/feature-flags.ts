@@ -81,15 +81,36 @@ const STAGE_PERCENT: Record<RolloutStage, number> = {
 
 /**
  * Synchronous bucket computation using node:crypto on the server.
- * Throws if used in a context where `node:crypto` isn't available
- * (i.e. the browser); callers that need browser-side bucketing
- * should use `bucketForAsync`.
+ *
+ * Server-only — calling this from a real browser bundle (where
+ * `node:crypto` doesn't resolve) throws a clear, actionable error so
+ * the bundler / dev console points at the offender instead of a
+ * confusing `Buffer is not defined` runtime crash on hydration.
+ * Browser callers must use {@link isEnabledAsync} or compute the gate
+ * in a Server Component / Route Handler and pass the boolean down as
+ * a prop (Gemini high — browser-safety class).
+ *
+ * The detection is by *availability* of `node:crypto`, not by the
+ * presence of `window` — Vitest's jsdom env has both, and we want the
+ * server-side test path to work there.
  */
 function bucketForSync(flagKey: string, userId: string): number {
-  // Defer the import so a browser bundle that imports this module
-  // for `isEnabledAsync` doesn't try to resolve `node:crypto`.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createHash } = require("node:crypto") as typeof import("node:crypto");
+  let createHash: typeof import("node:crypto").createHash | null = null;
+  try {
+    // Defer the import so a browser bundle that imports this module
+    // for `isEnabledAsync` doesn't try to resolve `node:crypto`.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ({ createHash } = require("node:crypto") as typeof import("node:crypto"));
+  } catch {
+    // node:crypto unavailable — real browser environment.
+  }
+  if (createHash === null) {
+    throw new Error(
+      "feature-flags: isEnabled() is server-only because it relies on "
+        + "node:crypto. In a Client Component, use isEnabledAsync() or "
+        + "compute the flag server-side and pass the boolean as a prop.",
+    );
+  }
   const digest = createHash("sha256")
     .update(`${flagKey}|${userId}`)
     .digest();
@@ -125,7 +146,10 @@ function passesTierCanary(
 /**
  * Server-side flag check.  Synchronous; safe for SSR + RSC code
  * paths.  Pass `now` explicitly so the caller can pin it to the
- * request timestamp for deterministic markup.
+ * request timestamp for deterministic markup — no `Date.now()`
+ * default because two SSR passes near a rollout boundary would
+ * otherwise disagree and cause hydration mismatches (Gemini medium
+ * — SSR purity).
  *
  * Returns `false` for unknown flags (fail-closed) and missing
  * user IDs.
@@ -134,7 +158,7 @@ export function isEnabled(
   flagKey: string,
   flag: FlagDefinition | null | undefined,
   user: FlagUser,
-  now: number = Date.now(),
+  now: number,
 ): boolean {
   if (!flag) return false;
   if (user.is_internal) return true;
@@ -159,7 +183,7 @@ export async function isEnabledAsync(
   flagKey: string,
   flag: FlagDefinition | null | undefined,
   user: FlagUser,
-  now: number = Date.now(),
+  now: number,
 ): Promise<boolean> {
   if (!flag) return false;
   if (user.is_internal) return true;

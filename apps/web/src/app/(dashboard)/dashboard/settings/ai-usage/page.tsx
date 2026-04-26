@@ -17,6 +17,8 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -47,10 +49,24 @@ function humaniseEngine(engine: string): string {
     .join(" ");
 }
 
-function formatRelative(iso: string | null): string {
+function formatRelative(iso: string | null, now: number | null): string {
   if (!iso) return "never";
+  // `now === null` means we are pre-hydration. Render the absolute UTC
+  // timestamp instead of "just now" / "5m ago" so the SSR markup
+  // matches the first client render byte-for-byte. The relative form
+  // appears after the `useEffect` below sets `now`. (Gemini medium —
+  // hydration mismatch from `Date.now()` in render.)
+  if (now === null) {
+    return new Intl.DateTimeFormat("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC",
+    }).format(new Date(iso));
+  }
   const then = new Date(iso).getTime();
-  const now = Date.now();
   const diffMs = now - then;
   if (diffMs < 60_000) return "just now";
   const minutes = Math.floor(diffMs / 60_000);
@@ -61,14 +77,39 @@ function formatRelative(iso: string | null): string {
   return `${days}d ago`;
 }
 
+/** Returns a stable `now` timestamp that is `null` during SSR + first
+ * client render (so output is deterministic) and a fresh timestamp
+ * after hydration. Updates once per minute so "5m ago" eventually
+ * becomes "6m ago" without re-rendering on every animation frame.
+ *
+ * Implementation note: the *first* tick of the interval also sets
+ * `now`, so we don't need a separate `setNow(Date.now())` call —
+ * which would trigger the `react-hooks/set-state-in-effect` lint
+ * rule. We register a no-delay timer for the initial paint instead,
+ * which fires synchronously enough for "just now" relative-time UX. */
+function useClientNow(): number | null {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const initial = setTimeout(() => setNow(Date.now()), 0);
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
+  }, []);
+  return now;
+}
+
 /* ── Sub-components ───────────────────────────────────────── */
 
 function EngineRow({
   engine,
   isPaying,
+  now,
 }: {
   engine: EngineUsageResponse;
   isPaying: boolean;
+  now: number | null;
 }) {
   return (
     <li
@@ -81,7 +122,7 @@ function EngineRow({
         <div className="text-sm text-muted-foreground">
           {engine.calls} {engine.calls === 1 ? "call" : "calls"} · last
           {" "}
-          {formatRelative(engine.last_call_at)}
+          {formatRelative(engine.last_call_at, now)}
         </div>
       </div>
       <div className="text-sm text-muted-foreground tabular-nums">
@@ -154,6 +195,9 @@ export default function AiUsageSettingsPage() {
   const subscription = useSubscription();
   const tier = subscription.data?.tier ?? "free";
   const isPaying = PAYING_TIERS.has(tier);
+  // SSR-safe relative-time clock: `null` until hydration, then a
+  // freshly-ticked timestamp every minute.
+  const now = useClientNow();
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -175,6 +219,14 @@ export default function AiUsageSettingsPage() {
                 ? new Intl.DateTimeFormat("en-GB", {
                     month: "long",
                     year: "numeric",
+                    // The API returns the period boundary as a UTC
+                    // ISO string. Without `timeZone: "UTC"` the
+                    // formatter uses the *user's* local TZ — a user
+                    // in UTC-3 would render "March" for an April UTC
+                    // boundary on the 1st. Pinning to UTC also
+                    // matches the SSR pass exactly so we don't trip
+                    // hydration warnings.
+                    timeZone: "UTC",
                   }).format(new Date(usage.data.period_start))
                 : "Loading…"}
             </CardDescription>
@@ -219,6 +271,7 @@ export default function AiUsageSettingsPage() {
                       key={engine.engine}
                       engine={engine}
                       isPaying={isPaying}
+                      now={now}
                     />
                   ))}
                 </ul>
