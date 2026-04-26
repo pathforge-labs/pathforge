@@ -94,13 +94,23 @@ echo "  Iterations: $ITERATIONS per endpoint"
 echo "  API       : $API_BASE_URL"
 echo "═══════════════════════════════════════════════════"
 
-# ── jq dependency check (required for JSON / compare) ────────
-if [ -n "$OUT_PATH" ] || [ -n "$COMPARE_TO" ]; then
-  if ! command -v jq &> /dev/null; then
-    echo "✗ jq is required for --out / --compare-to (apt install jq)" >&2
-    exit 2
+# ── Dependency check ─────────────────────────────────────────
+# Verify all required tools up-front. Without ``bc`` the ms conversion
+# silently returned 0, which then falsely passed the regression gate
+# at every endpoint (Gemini medium — silent-failure class). ``jq`` is
+# always required because capture mode now generates JSON by default.
+_missing=()
+for _bin in curl bc jq sort awk; do
+  if ! command -v "$_bin" &> /dev/null; then
+    _missing+=("$_bin")
   fi
+done
+if [ ${#_missing[@]} -gt 0 ]; then
+  echo "✗ Missing required tools: ${_missing[*]}" >&2
+  echo "  Install all of: curl bc jq coreutils (sort) gawk" >&2
+  exit 2
 fi
+unset _bin _missing
 
 # ── Compare mode requires the baseline file ──────────────────
 if [ -n "$COMPARE_TO" ]; then
@@ -173,8 +183,16 @@ measure() {
     "$label" "$endpoint" "${p50}ms" "${p95}ms" "$TIMESTAMP" >> "$CSV"
 
   if [ -z "$COMPARE_TO" ]; then
-    JSON_ENTRIES+=("$(printf '{"label":"%s","endpoint":"%s","p50_ms":%s,"p95_ms":%s,"iterations":%s}' \
-      "$label" "$endpoint" "$p50" "$p95" "$ITERATIONS")")
+    # Build the per-endpoint JSON object via jq so labels / endpoints
+    # containing quotes or backslashes don't corrupt the baseline file
+    # (Gemini medium — printf doesn't escape JSON strings).
+    JSON_ENTRIES+=("$(jq -nc \
+      --arg label "$label" \
+      --arg endpoint "$endpoint" \
+      --argjson p50_ms "$p50" \
+      --argjson p95_ms "$p95" \
+      --argjson iterations "$ITERATIONS" \
+      '{label: $label, endpoint: $endpoint, p50_ms: $p50_ms, p95_ms: $p95_ms, iterations: $iterations}')")
   fi
 }
 
@@ -217,24 +235,17 @@ if [ "$WEB_ONLY" = false ]; then
   echo ""
   echo "✓ API baselines saved → $CSV"
 
-  # Write JSON baseline (capture mode only)
+  # Write JSON baseline (capture mode only). Pipe the per-endpoint
+  # entries into ``jq -s`` so the final structure is always valid JSON
+  # — manual loop-and-printf assembly is prone to trailing commas and
+  # mis-quoted strings (Gemini medium — JSON correctness).
   if [ -z "$COMPARE_TO" ] && [ ${#JSON_ENTRIES[@]} -gt 0 ]; then
-    {
-      echo '{'
-      printf '  "captured_at": "%s",\n' "$TIMESTAMP"
-      printf '  "iterations": %s,\n' "$ITERATIONS"
-      printf '  "api_base_url": "%s",\n' "$API_BASE_URL"
-      printf '  "endpoints": [\n'
-      for i in "${!JSON_ENTRIES[@]}"; do
-        sep=","
-        if [ "$i" -eq $(( ${#JSON_ENTRIES[@]} - 1 )) ]; then
-          sep=""
-        fi
-        printf '    %s%s\n' "${JSON_ENTRIES[$i]}" "$sep"
-      done
-      printf '  ]\n'
-      echo '}'
-    } > "$JSON"
+    printf '%s\n' "${JSON_ENTRIES[@]}" | jq -s \
+      --arg captured_at "$TIMESTAMP" \
+      --argjson iterations "$ITERATIONS" \
+      --arg api_base_url "$API_BASE_URL" \
+      '{captured_at: $captured_at, iterations: $iterations, api_base_url: $api_base_url, endpoints: .}' \
+      > "$JSON"
     echo "✓ JSON baseline saved → $JSON"
   fi
 fi
