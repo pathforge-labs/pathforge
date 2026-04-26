@@ -130,10 +130,33 @@ class WebhookReplayService:
     # ── Admin surface ────────────────────────────────────────
 
     async def list_dlq(self, *, limit: int = 100) -> list[WebhookEvent]:
-        """Return DLQ entries newest-first."""
+        """Return DLQ entries newest-first.
+
+        Convenience wrapper around :meth:`list_events` for the most
+        common operator query — kept on the public surface so tests
+        and callers that already pin to it don't break.
+        """
+        return await self.list_events(status=WebhookOutcome.dlq, limit=limit)
+
+    async def list_events(
+        self,
+        *,
+        status: str | WebhookOutcome,
+        limit: int = 100,
+    ) -> list[WebhookEvent]:
+        """Return ledger entries for ``status``, newest-first.
+
+        Centralises status-based listing so the route layer doesn't
+        re-implement the query (Gemini medium — separation of concerns).
+        Accepts either the raw string or the :class:`WebhookOutcome`
+        enum so both call sites stay ergonomic.
+        """
+        outcome_value = (
+            status.value if isinstance(status, WebhookOutcome) else status
+        )
         stmt = (
             select(WebhookEvent)
-            .where(WebhookEvent.outcome == WebhookOutcome.dlq.value)
+            .where(WebhookEvent.outcome == outcome_value)
             .order_by(WebhookEvent.created_at.desc())
             .limit(limit)
         )

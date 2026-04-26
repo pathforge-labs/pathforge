@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import DateTime, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -72,9 +72,13 @@ class WebhookEvent(Base, TimestampMixin):
         doc="Provider's event type (e.g. 'invoice.payment_succeeded').",
     )
     payload: Mapped[dict[str, Any]] = mapped_column(
-        JSON(),
+        JSONB(),
         nullable=False,
-        doc="Full payload as received. Preserved for replay.",
+        doc=(
+            "Full payload as received. Preserved for replay. JSONB so "
+            "operators can index/filter by event-shape attrs (e.g. "
+            "`payload->>'type'`) without scanning rows."
+        ),
     )
     outcome: Mapped[str] = mapped_column(
         String(20),

@@ -25,11 +25,12 @@ group — just a different file.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin import require_admin
@@ -138,19 +139,7 @@ async def list_webhook_events(
     db: AsyncSession = Depends(get_db),
 ) -> WebhookListResponse:
     service = WebhookReplayService(db)
-    if status == "dlq":
-        rows = await service.list_dlq(limit=limit)
-    else:
-        from sqlalchemy import select
-
-        stmt = (
-            select(WebhookEvent)
-            .where(WebhookEvent.outcome == status)
-            .order_by(WebhookEvent.created_at.desc())
-            .limit(limit)
-        )
-        result = await db.execute(stmt)
-        rows = list(result.scalars().all())
+    rows = await service.list_events(status=status, limit=limit)
     items = [WebhookEventResponse.model_validate(row) for row in rows]
     return WebhookListResponse(items=items, total=len(items))
 
@@ -176,6 +165,12 @@ async def replay_webhook_event(
     try:
         await service.replay(ledger_id, handler=_dispatch_replay)
     except WebhookReplayError as exc:
+        # Persist the failure-side ledger updates (last_error +
+        # last_attempt_at refreshed, outcome held at dlq) before
+        # bubbling the 502 — otherwise the row's `last_error` field
+        # silently rolls back when FastAPI tears the request session
+        # down, making the failure invisible to the next operator.
+        await db.commit()
         # Surface the failure to the caller as 502 (gateway-style):
         # the replay reached the handler but the handler couldn't
         # complete.  The row stays at ``dlq``.
@@ -184,15 +179,19 @@ async def replay_webhook_event(
             detail=str(exc),
         ) from exc
 
-    # Re-read so the response reflects the freshly-flushed outcome.
-    from sqlalchemy import select
+    # Persist the success-side transition (outcome → processed,
+    # last_attempt_at refreshed) before re-reading. The default request
+    # session is autocommit-off, so without this the ledger transition
+    # never lands in the database (Gemini high: atomicity defect).
+    await db.commit()
 
+    # Re-read so the response reflects the freshly-flushed outcome.
     stmt = select(WebhookEvent).where(WebhookEvent.id == ledger_id)
     row = (await db.execute(stmt)).scalar_one()
     return WebhookReplayResponse(
         id=row.id,
         outcome=row.outcome,
-        replayed_at=row.last_attempt_at or datetime.now(tz=row.created_at.tzinfo),
+        replayed_at=row.last_attempt_at or datetime.now(UTC),
     )
 
 

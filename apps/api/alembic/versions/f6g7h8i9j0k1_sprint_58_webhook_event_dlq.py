@@ -24,7 +24,7 @@ Closes T6 in `docs/architecture/sprint-55-58-code-side-readiness.md`.
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from alembic import op
 
@@ -46,7 +46,7 @@ def upgrade() -> None:
         sa.Column("provider", sa.String(50), nullable=False),
         sa.Column("event_id", sa.String(255), nullable=False),
         sa.Column("event_type", sa.String(100), nullable=False),
-        sa.Column("payload", JSON(), nullable=False),
+        sa.Column("payload", JSONB(), nullable=False),
         sa.Column(
             "outcome",
             sa.String(20),
