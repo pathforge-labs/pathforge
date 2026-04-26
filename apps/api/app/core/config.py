@@ -185,6 +185,13 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ── Stripe Billing (Sprint 34) ────────────────────────────────
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    # T5 / Sprint 57, ADR-0009: shared secret used by the Sentry
+    # alert webhook handler at /api/v1/internal/sentry/auto-rollback.
+    # Empty by default — production sets this via Railway env;
+    # leaving it empty makes the webhook fail-closed (every request
+    # rejected with 401) so an unconfigured deploy can't be exploited
+    # to flip flags.
+    sentry_webhook_secret: str = ""
     stripe_publishable_key: str = ""
     stripe_pro_price_id: str = ""
     stripe_premium_price_id: str = ""
