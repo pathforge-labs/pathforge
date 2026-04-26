@@ -57,6 +57,7 @@ from app.core.feature_flags import (
     InMemoryFlagProvider,
     RolloutStage,
 )
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,14 @@ def _extract_flag_key(payload: dict[str, Any]) -> str | None:
     ),
 )
 @limiter.limit("60/minute")
+# T2 rollout (post-merge from main): every router-mounted handler must
+# declare a query budget. This webhook does no DB work — the rollback
+# path flips an in-memory flag, no DB session is touched. The minimum
+# enforced by the decorator is 1 (zero would silently disable the
+# gate); we set it to 1 so the policy is explicit. Any future change
+# that adds a DB read (e.g. auditing the rollback to a `webhook_event`
+# row) will trip the gate and the operator must bump intentionally.
+@route_query_budget(max_queries=1)
 async def sentry_auto_rollback(
     request: Request,
     sentry_hook_signature: str | None = Header(default=None, alias="Sentry-Hook-Signature"),
