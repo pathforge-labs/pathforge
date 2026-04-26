@@ -38,9 +38,12 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.config import settings
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -348,9 +351,26 @@ class TransparencyLog:
     full explainability metadata.
 
     Memory-bounded: caps at MAX_TOTAL_USERS × MAX_RECORDS_PER_USER.
+
+    DB session factory injection
+    ----------------------------
+
+    The four DB-fallback methods (``_persist_to_db``,
+    ``_load_recent_from_db``, ``_load_by_id_from_db``,
+    ``_load_user_for_analysis_from_db``) call
+    ``app.core.database.async_session_factory`` by default. Passing an
+    explicit ``session_factory`` to ``__init__`` overrides that — used
+    by the SQLite round-trip tests so they exercise the real ORM path
+    without standing up a Postgres container. Production code never
+    sets this argument; the lazy ``import`` at call site preserves
+    backward compatibility with the singleton at module bottom.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+    ) -> None:
         self._lock = threading.Lock()
         self._records: dict[str, list[TransparencyRecord]] = defaultdict(list)
         self._index: dict[str, TransparencyRecord] = {}
@@ -358,6 +378,19 @@ class TransparencyLog:
         self._started_at: float = time.time()
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._persistence_failures: int = 0
+        self._session_factory: async_sessionmaker[AsyncSession] | None = (
+            session_factory
+        )
+
+    def _get_session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Return the injected factory, falling back to the production
+        singleton. Imported lazily so tests that never touch DB code
+        don't pay the import cost."""
+        if self._session_factory is not None:
+            return self._session_factory
+        from app.core.database import async_session_factory
+
+        return async_session_factory
 
     def record(
         self,
@@ -424,12 +457,11 @@ class TransparencyLog:
         primary source during process lifetime.
         """
         try:
-            from app.core.database import async_session_factory
             from app.models.ai_transparency import (
                 AITransparencyRecord as DBRecord,
             )
 
-            async with async_session_factory() as session:
+            async with self._get_session_factory()() as session:
                 db_record = DBRecord(
                     user_id=uuid.UUID(user_id) if isinstance(user_id, str) else user_id,
                     analysis_id=entry.analysis_id,
@@ -500,12 +532,11 @@ class TransparencyLog:
         try:
             from sqlalchemy import select
 
-            from app.core.database import async_session_factory
             from app.models.ai_transparency import (
                 AITransparencyRecord as DBRecord,
             )
 
-            async with async_session_factory() as session:
+            async with self._get_session_factory()() as session:
                 stmt = (
                     select(DBRecord)
                     .where(DBRecord.user_id == uuid.UUID(user_id))
@@ -569,12 +600,11 @@ class TransparencyLog:
         try:
             from sqlalchemy import select
 
-            from app.core.database import async_session_factory
             from app.models.ai_transparency import (
                 AITransparencyRecord as DBRecord,
             )
 
-            async with async_session_factory() as session:
+            async with self._get_session_factory()() as session:
                 stmt = select(DBRecord).where(
                     DBRecord.analysis_id == analysis_id,
                 )
@@ -636,12 +666,11 @@ class TransparencyLog:
         try:
             from sqlalchemy import select
 
-            from app.core.database import async_session_factory
             from app.models.ai_transparency import (
                 AITransparencyRecord as DBRecord,
             )
 
-            async with async_session_factory() as session:
+            async with self._get_session_factory()() as session:
                 stmt = select(DBRecord.user_id).where(
                     DBRecord.analysis_id == analysis_id,
                 )
