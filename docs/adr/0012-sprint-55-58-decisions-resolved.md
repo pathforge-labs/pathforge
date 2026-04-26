@@ -51,7 +51,7 @@ The Engine-of-Record causality ledger (T2 differentiator) records `(user_id, req
 
 The 90-day window is the GDPR-defensible upper bound for analytics-purpose retention without an explicit consent step (see the GDPR Article 6 §1(f) "legitimate interest" guidance summarised in our privacy policy). 90 days also matches the longest reasonable career-decision feedback loop (cv-uploaded → role-applied → offer-accepted), so the per-user ledger always covers at least one complete causal chain at any given moment.
 
-A nightly job (`scripts/purge_causality_data.py` — to be added in Sprint 60) will enforce the cap. Until then the data simply accumulates; on a Sprint 58 baseline we have ~30 days of data so the cap doesn't bite yet.
+A nightly job (`apps/api/scripts/purge_causality_data.py`, shipped in Sprint 61) enforces the cap. The script is **dry-run by default**; cron invokes `--apply`. It aggregates per-engine contribution stats into `logs/causality_purge_aggregates.jsonl` *before* deletion (single transaction, audit-first ordering — a crash leaves the data in place rather than losing the anonymised aggregates). See [`docs/runbooks/causality-data-retention.md`](../runbooks/causality-data-retention.md) for the operational contract.
 
 **Trigger to revisit:** if the public benchmark page proves valuable and we want to extend per-user causality to 180 days, add an explicit consent step rather than just bumping the constant.
 
@@ -108,9 +108,9 @@ Rejected. A 30-minute incident window matters more than a release-lifetime avera
 
 ### Operational notes
 
-- **Sprint 60 follow-ups** (separate PRs):
-  - `scripts/purge_causality_data.py` — daily cron that drops user-attributable causality entries older than `settings.causality_retention_days`.
-  - Sentry alert wired to `auto_rollback_p0_user_rate_threshold > 0.5` → page on-call.
+- **Follow-ups**:
+  - ✅ `apps/api/scripts/purge_causality_data.py` — daily cron that drops user-attributable causality entries older than `settings.causality_retention_days`. Shipped Sprint 61 (PR for `feat/sprint-61-causality-purge`). Aggregates are persisted to `logs/causality_purge_aggregates.jsonl` with one record per engine per run.
+  - ⏳ Sentry alert wired to `auto_rollback_p0_user_rate_threshold > 0.5` → page on-call. Still Sprint 60 backlog (Sentry-side configuration, no code change).
 
 ---
 
