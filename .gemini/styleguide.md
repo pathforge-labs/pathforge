@@ -22,8 +22,25 @@ PathForge is an AI-powered career intelligence platform built as a
 - No untyped parameters. No `Any` unless unavoidable (document why).
 - Use `Pydantic` models with `ConfigDict(from_attributes=True)` for all
   request/response schemas.
-- Confidence values from AI/LLM outputs must be **capped at 0.85**
-  (`MAX_*_CONFIDENCE` constants) — never present AI certainty as fact.
+- **Confidence caps — two architecturally distinct categories.** Do not
+  conflate them when reviewing.
+  1. **Semantic confidence** (what the LLM claims about the *output
+     content* — e.g. career-DNA skill-level, salary-range estimate,
+     credential-mapping score) is **capped at 0.85** via the
+     `MAX_*_CONFIDENCE` constants (`MAX_PASSPORT_CONFIDENCE`,
+     `MAX_PLAN_CONFIDENCE`, `MAX_PC_CONFIDENCE`, etc.). DB CHECK
+     constraints enforce `confidence <= 0.85` on these columns.
+     Reviews must flag any LLM-output schema with `le > 0.85`.
+  2. **Pipeline-execution confidence** (how reliably the AI pipeline
+     itself ran — derived from observable telemetry: tier, retries,
+     latency, token utilisation) is **capped at 0.95** via
+     `app/core/llm_observability.py::CONFIDENCE_CAP`. This is a
+     telemetry signal, not a claim about the output content; the
+     0.95 cap is intentional ("never claim 100 % confidence" without
+     suppressing the pipeline-health signal at 0.85). The schema
+     `app/schemas/ai_transparency.py::AnalysisTransparency.confidence_score`
+     documents `0.0–0.95, never 100 %`. Do **not** flag this as a
+     styleguide violation.
 
 ### Naming & Style
 

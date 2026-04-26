@@ -35,13 +35,11 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-if TYPE_CHECKING:
-    pass
+from app.core.llm_observability import TransparencyRecord
 
 pytestmark = pytest.mark.asyncio
 
@@ -51,10 +49,8 @@ def _record(
     analysis_id: str,
     success: bool = True,
     latency_ms: int = 100,
-) -> Any:
+) -> TransparencyRecord:
     """Build a fresh TransparencyRecord for a test."""
-    from app.core.llm_observability import TransparencyRecord
-
     return TransparencyRecord(
         analysis_id=analysis_id,
         analysis_type="career_dna",
@@ -409,11 +405,16 @@ class TestInitializeObservabilityLangfuse:
         fake_litellm = MagicMock()
         fake_litellm.success_callback = []
         fake_litellm.failure_callback = []
+        # ``patch.dict("os.environ", {}, clear=False)`` snapshots the
+        # current process env on entry and restores it on exit, so the
+        # four ``LANGFUSE_*`` vars written by ``initialize_observability``
+        # do not leak into other tests in the same xdist worker.
         with (
             patch("app.core.config.settings.llm_observability_enabled", True),
             patch("app.core.config.settings.langfuse_public_key", "pk_test"),
             patch("app.core.config.settings.langfuse_secret_key", "sk_test"),
             patch("app.core.config.settings.langfuse_pii_redaction", True),
+            patch.dict("os.environ", {}, clear=False),
             patch.dict(
                 "sys.modules",
                 {"litellm": fake_litellm},
@@ -439,6 +440,7 @@ class TestInitializeObservabilityLangfuse:
             patch("app.core.config.settings.langfuse_public_key", "pk_test"),
             patch("app.core.config.settings.langfuse_secret_key", "sk_test"),
             patch("app.core.config.settings.langfuse_pii_redaction", False),
+            patch.dict("os.environ", {}, clear=False),
             patch.dict(
                 "sys.modules",
                 {"litellm": fake_litellm},
@@ -484,7 +486,10 @@ class TestComputeConfidenceScoreFastDeepTiers:
         assert fast <= primary
 
     def test_deep_tier_confidence(self) -> None:
-        from app.core.llm_observability import compute_confidence_score
+        from app.core.llm_observability import (
+            CONFIDENCE_CAP,
+            compute_confidence_score,
+        )
 
         deep = compute_confidence_score(
             tier="deep",
@@ -493,5 +498,23 @@ class TestComputeConfidenceScoreFastDeepTiers:
             completion_tokens=100,
             max_tokens=1000,
         )
-        # Deep tier factor 0.95 → result around 0.95 cap (not ≤ 0.85).
+        # Architectural note: PathForge has **two** confidence caps that
+        # are deliberately distinct (codified in
+        # `app/schemas/ai_transparency.py` and `.gemini/styleguide.md`):
+        #
+        #   1. **Semantic confidence** (MAX_*_CONFIDENCE = 0.85) — caps
+        #      what the LLM is allowed to claim it knows about the
+        #      *output content* (career_dna, salary_intelligence, …).
+        #   2. **Pipeline-execution confidence** (CONFIDENCE_CAP = 0.95)
+        #      — caps the algorithmic telemetry signal that says how
+        #      reliably the AI *pipeline* executed (latency, retries,
+        #      token utilisation). It does NOT make a claim about the
+        #      semantic output.
+        #
+        # `compute_confidence_score` returns (2). With deep-tier factor
+        # 0.95 and best-case latency/retry/token factors the score is
+        # exactly at CONFIDENCE_CAP. Asserting `> 0.85` here is the
+        # whole point — it proves the algorithmic cap is the higher
+        # 0.95, not the semantic 0.85.
         assert deep > 0.85
+        assert deep <= CONFIDENCE_CAP
