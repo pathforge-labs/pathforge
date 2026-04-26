@@ -45,9 +45,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict
 
 from app.core.config import settings
 from app.core.feature_flags import (
@@ -55,6 +57,7 @@ from app.core.feature_flags import (
     InMemoryFlagProvider,
     RolloutStage,
 )
+from app.core.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -65,20 +68,72 @@ router = APIRouter(prefix="/internal/sentry", tags=["Internal — Sentry"])
 P0_USER_RATE_THRESHOLD: float = 0.001  # 0.1 %
 
 
+class SentryRollbackResponse(BaseModel):
+    """Structured response for the Sentry auto-rollback webhook.
+
+    All fields except ``rolled_back`` are conditionally present so the
+    payload doubles as a debugging trace: the operator can read any
+    Sentry retry log line and reconstruct exactly which gate fired.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    rolled_back: bool
+    flag_key: str | None = None
+    reason: str | None = None
+    rate: float | None = None
+    threshold: float | None = None
+    previous_stage: str | None = None
+    unknown_flag: bool | None = None
+    already_at_internal_only: bool | None = None
+
+
 # ── Provider singleton ────────────────────────────────────────
 #
-# A single in-memory provider is fine for the pre-GrowthBook launch
-# state (sprint plan §12 default decision #1: SaaS free tier ≤ 5
-# flags).  Multi-worker deployments will swap to a GrowthBook-backed
-# provider via this same accessor — only the implementation changes.
+# An in-memory provider is **only safe in a single-worker deployment**
+# because each worker would otherwise hold its own copy of the rollout
+# state and an auto-rollback firing against worker A would leave worker
+# B happily serving the offending build (Gemini high, sprint plan §12
+# default decision #1 caveat).
+#
+# We therefore (a) log a loud warning when the in-memory provider is
+# used in a context that *looks* multi-worker, and (b) explicitly note
+# in the ADR that GrowthBook (or a Redis-backed shim) is required
+# before we exceed ``WEB_CONCURRENCY=1``. The launch state is single
+# worker on Railway free tier, so this is correct for *now* and the
+# warning prevents silent footguns later.
 
 _provider_singleton: FeatureFlagProvider | None = None
+
+
+def _detect_multi_worker() -> bool:
+    """Return True if the runtime *probably* spans multiple workers.
+
+    Reads the canonical Gunicorn / Uvicorn env var ``WEB_CONCURRENCY``
+    plus the Gunicorn ``GUNICORN_CMD_ARGS`` fallback. Conservative on
+    purpose — a missing var is treated as single-worker so local dev
+    isn't spammed.
+    """
+    try:
+        if int(os.environ.get("WEB_CONCURRENCY", "1")) > 1:
+            return True
+    except ValueError:
+        return False
+    return "--workers" in os.environ.get("GUNICORN_CMD_ARGS", "")
 
 
 def _get_provider() -> FeatureFlagProvider:
     """Lazy singleton accessor.  Tests substitute via monkeypatch."""
     global _provider_singleton
     if _provider_singleton is None:
+        if _detect_multi_worker():
+            logger.error(
+                "sentry-auto-rollback: in-memory FeatureFlagProvider used "
+                "with multi-worker deployment — auto-rollback will only "
+                "affect the worker that received the webhook. Configure a "
+                "shared provider (GrowthBook or Redis-backed) before "
+                "raising WEB_CONCURRENCY above 1.",
+            )
         _provider_singleton = InMemoryFlagProvider({})
     return _provider_singleton
 
@@ -124,6 +179,7 @@ def _extract_flag_key(payload: dict[str, Any]) -> str | None:
 
 @router.post(
     "/auto-rollback",
+    response_model=SentryRollbackResponse,
     summary="Sentry alert webhook — auto-rollback on P0 spike",
     description=(
         "Receives Sentry alert webhooks and flips the associated "
@@ -134,11 +190,12 @@ def _extract_flag_key(payload: dict[str, Any]) -> str | None:
         "payload (Sentry retries cause cascade flapping)."
     ),
 )
+@limiter.limit("60/minute")
 async def sentry_auto_rollback(
     request: Request,
     sentry_hook_signature: str | None = Header(default=None, alias="Sentry-Hook-Signature"),
-) -> dict[str, Any]:
-    secret = getattr(settings, "sentry_webhook_secret", "") or ""
+) -> SentryRollbackResponse:
+    secret = settings.sentry_webhook_secret or ""
     body = await request.body()
 
     if not sentry_hook_signature or not _verify_signature(secret, body, sentry_hook_signature):
@@ -153,24 +210,25 @@ async def sentry_auto_rollback(
         # Malformed payload — fail open (200 with reason) rather than
         # 5xx so Sentry doesn't retry-storm.
         logger.warning("sentry-auto-rollback: malformed JSON payload")
-        return {
-            "rolled_back": False,
-            "reason": "malformed_payload",
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            reason="malformed_payload",
+        )
 
     flag_key = _extract_flag_key(payload)
     if not flag_key:
-        return {
-            "rolled_back": False,
-            "reason": "no_feature_flag_tag",
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            reason="no_feature_flag_tag",
+        )
 
     rate = _extract_metric(payload)
     if rate is None:
-        return {
-            "rolled_back": False,
-            "reason": "no_p0_user_rate_metric",
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            reason="no_p0_user_rate_metric",
+            flag_key=flag_key,
+        )
 
     provider = _get_provider()
     current = provider.get(flag_key)
@@ -179,30 +237,30 @@ async def sentry_auto_rollback(
         # it because that would tie the auto-rollback to definition
         # cadence Sentry doesn't know about.
         logger.warning("sentry-auto-rollback: alert references unknown flag %s", flag_key)
-        return {
-            "rolled_back": False,
-            "unknown_flag": True,
-            "flag_key": flag_key,
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            unknown_flag=True,
+            flag_key=flag_key,
+        )
 
     if rate <= P0_USER_RATE_THRESHOLD:
-        return {
-            "rolled_back": False,
-            "flag_key": flag_key,
-            "rate": rate,
-            "threshold": P0_USER_RATE_THRESHOLD,
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            flag_key=flag_key,
+            rate=rate,
+            threshold=P0_USER_RATE_THRESHOLD,
+        )
 
     if current.stage is RolloutStage.internal_only:
         # Already rolled back — likely a duplicate alert. Don't bump
         # the rollout_started_at clock; that would extend the 24 h
         # paying-user delay on the next re-enable for no operational
         # reason.
-        return {
-            "rolled_back": False,
-            "flag_key": flag_key,
-            "already_at_internal_only": True,
-        }
+        return SentryRollbackResponse(
+            rolled_back=False,
+            flag_key=flag_key,
+            already_at_internal_only=True,
+        )
 
     provider.set_rollout(flag_key, RolloutStage.internal_only)
     logger.warning(
@@ -213,16 +271,17 @@ async def sentry_auto_rollback(
         rate,
         P0_USER_RATE_THRESHOLD,
     )
-    return {
-        "rolled_back": True,
-        "flag_key": flag_key,
-        "rate": rate,
-        "threshold": P0_USER_RATE_THRESHOLD,
-        "previous_stage": current.stage.value,
-    }
+    return SentryRollbackResponse(
+        rolled_back=True,
+        flag_key=flag_key,
+        rate=rate,
+        threshold=P0_USER_RATE_THRESHOLD,
+        previous_stage=current.stage.value,
+    )
 
 
 __all__ = [
     "P0_USER_RATE_THRESHOLD",
+    "SentryRollbackResponse",
     "router",
 ]

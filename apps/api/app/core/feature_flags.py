@@ -51,8 +51,32 @@ import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import TypedDict
+
+
+class FlagUser(TypedDict, total=False):
+    """Duck-typed user payload that drives the bucketing decision.
+
+    Total=False because most callers only carry ``id`` and ``tier`` — the
+    optional fields are reserved for cohort gating that ships later.
+
+    Fields:
+        id: Stable user identifier (string-coercible). Required for
+            bucketing — without it, ``is_enabled`` fails closed.
+        tier: ``"free"`` / ``"pro"`` / ``"premium"`` etc. Drives the
+            paying-user 24 h delay on major releases.
+        is_internal: True for internal employees / integration personae.
+            Internal users see the new build at every stage (canary's
+            canary) — defaults to False when absent.
+        created_at: Reserved for future cohort gating
+            (e.g. "users created after 2026-Q3 see the new flow").
+    """
+
+    id: str
+    tier: str
+    is_internal: bool
+    created_at: datetime
 
 #: Tier values that count as "paying users" for tier-aware canary.
 #: Single source of truth so the same set is shared by ``feature_gate``
@@ -64,7 +88,7 @@ PAYING_TIERS: frozenset[str] = frozenset({"pro", "premium"})
 PAYING_USER_DELAY: timedelta = timedelta(hours=24)
 
 
-class RolloutStage(str, Enum):
+class RolloutStage(StrEnum):
     """Progressive rollout stages, ordered by visibility."""
 
     internal_only = "internal_only"
@@ -195,7 +219,7 @@ def _bucket_for(flag_key: str, user_id: str) -> int:
 def is_enabled(
     flag_key: str,
     *,
-    user: dict[str, Any],
+    user: FlagUser,
     provider: FeatureFlagProvider,
 ) -> bool:
     """Return whether ``user`` should see the flagged feature.
@@ -242,7 +266,7 @@ def is_enabled(
     return _passes_tier_canary(flag, user)
 
 
-def _passes_tier_canary(flag: FlagDefinition, user: dict[str, Any]) -> bool:
+def _passes_tier_canary(flag: FlagDefinition, user: FlagUser) -> bool:
     """Return True if the user is past the tier-aware delay.
 
     Default decision #2: paying users sit on the previous build for
@@ -254,11 +278,9 @@ def _passes_tier_canary(flag: FlagDefinition, user: dict[str, Any]) -> bool:
     tier = user.get("tier", "free")
     if tier not in PAYING_TIERS:
         return True
-    elapsed = datetime.now(UTC) - flag.rollout_started_at
-    if elapsed >= PAYING_USER_DELAY:
-        return True
     # Partial rollout AND major AND paying AND within 24 h → hold back.
-    return False
+    elapsed = datetime.now(UTC) - flag.rollout_started_at
+    return elapsed >= PAYING_USER_DELAY
 
 
 __all__ = [
