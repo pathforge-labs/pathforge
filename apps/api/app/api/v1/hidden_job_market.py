@@ -32,6 +32,7 @@ from starlette.status import (
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -67,19 +68,19 @@ router = APIRouter(
     status_code=HTTP_200_OK,
     summary="Get signal dashboard",
 )
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> HiddenJobMarketDashboardResponse:
     """Retrieve all detected signals, preferences, and summary stats."""
     dashboard = await hidden_job_market_service.get_dashboard(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     signal_summaries: list[CompanySignalSummaryResponse] = []
     for signal in dashboard["signals"]:
-        signal_summaries.append(
-            CompanySignalSummaryResponse.model_validate(signal)
-        )
+        signal_summaries.append(CompanySignalSummaryResponse.model_validate(signal))
 
     pref_response = None
     if dashboard["preferences"]:
@@ -109,6 +110,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("hidden_job_market"))],
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def scan_company(
     request: Request,
     body: ScanCompanyRequest,
@@ -134,11 +136,7 @@ async def scan_company(
     if settings.billing_enabled:
         await BillingService.record_usage(database, current_user, "hidden_job_market")
 
-
-    return [
-        CompanySignalResponse.model_validate(signal)
-        for signal in signals
-    ]
+    return [CompanySignalResponse.model_validate(signal) for signal in signals]
 
 
 # ── Scan Industry ─────────────────────────────────────────────
@@ -151,6 +149,7 @@ async def scan_company(
     summary="Scan industry for signals",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def scan_industry(
     request: Request,
     body: ScanIndustryRequest,
@@ -169,10 +168,7 @@ async def scan_industry(
     except ValueError as exc:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return [
-        CompanySignalResponse.model_validate(signal)
-        for signal in signals
-    ]
+    return [CompanySignalResponse.model_validate(signal) for signal in signals]
 
 
 # ── Preferences ────────────────────────────────────────────────
@@ -185,13 +181,15 @@ async def scan_industry(
     status_code=HTTP_200_OK,
     summary="Get monitoring preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> HiddenJobMarketPreferenceResponse | None:
     """Retrieve hidden job market monitoring preferences."""
     preference = await hidden_job_market_service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not preference:
         return None
@@ -204,6 +202,7 @@ async def get_preferences(
     status_code=HTTP_200_OK,
     summary="Update monitoring preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     body: HiddenJobMarketPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -232,6 +231,7 @@ async def update_preferences(
     summary="Compare signals side-by-side",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def compare_signals(
     request: Request,
     body: SignalCompareRequest,
@@ -249,8 +249,7 @@ async def compare_signals(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     signal_responses = [
-        CompanySignalResponse.model_validate(signal)
-        for signal in comparison["signals"]
+        CompanySignalResponse.model_validate(signal) for signal in comparison["signals"]
     ]
 
     return SignalComparisonResponse(
@@ -269,13 +268,15 @@ async def compare_signals(
     status_code=HTTP_200_OK,
     summary="Aggregated opportunity radar",
 )
+@route_query_budget(max_queries=4)
 async def get_opportunities(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> OpportunityRadarResponse:
     """Get aggregated opportunity landscape from all signals."""
     radar = await hidden_job_market_service.get_opportunity_radar(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return OpportunityRadarResponse(**radar)
 
@@ -287,6 +288,7 @@ async def get_opportunities(
     summary="Surface hidden opportunities",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def surface_opportunities(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -295,15 +297,13 @@ async def surface_opportunities(
     """Surface hidden opportunities from existing detected signals."""
     try:
         signals = await hidden_job_market_service.surface_opportunities(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return [
-        CompanySignalResponse.model_validate(signal)
-        for signal in signals
-    ]
+    return [CompanySignalResponse.model_validate(signal) for signal in signals]
 
 
 # ── Get / Dismiss / Outreach for Signal ────────────────────────
@@ -315,6 +315,7 @@ async def surface_opportunities(
     status_code=HTTP_200_OK,
     summary="Get signal detail",
 )
+@route_query_budget(max_queries=4)
 async def get_signal(
     signal_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -322,7 +323,9 @@ async def get_signal(
 ) -> CompanySignalResponse:
     """Retrieve a specific signal with match results and outreach."""
     signal = await hidden_job_market_service.get_signal(
-        database, signal_id=signal_id, user_id=current_user.id,
+        database,
+        signal_id=signal_id,
+        user_id=current_user.id,
     )
     if not signal:
         raise HTTPException(
@@ -339,6 +342,7 @@ async def get_signal(
     summary="Generate outreach template",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def generate_outreach(
     request: Request,
     signal_id: uuid.UUID,
@@ -367,6 +371,7 @@ async def generate_outreach(
     status_code=HTTP_200_OK,
     summary="Dismiss or action a signal",
 )
+@route_query_budget(max_queries=4)
 async def dismiss_signal(
     signal_id: uuid.UUID,
     body: DismissSignalRequest,

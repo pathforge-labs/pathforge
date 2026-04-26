@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import (
@@ -38,6 +39,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.post("/funnel/events", response_model=FunnelEventResponse, status_code=201)
+@route_query_budget(max_queries=8)
 async def record_funnel_event(
     payload: FunnelEventCreate,
     current_user: User = Depends(get_current_user),
@@ -60,6 +62,7 @@ async def record_funnel_event(
 
 
 @router.get("/funnel/metrics", response_model=FunnelMetricsResponse)
+@route_query_budget(max_queries=4)
 async def get_funnel_metrics(
     period: str = Query("30d", description="Time period (e.g. 7d, 30d, 90d)"),
     current_user: User = Depends(get_current_user),
@@ -72,12 +75,15 @@ async def get_funnel_metrics(
     relative to the top-of-funnel (viewed) count.
     """
     metrics = await analytics_service.get_funnel_metrics(
-        db, user_id=current_user.id, period=period,
+        db,
+        user_id=current_user.id,
+        period=period,
     )
     return FunnelMetricsResponse(**metrics)
 
 
 @router.get("/funnel/timeline", response_model=FunnelTimelineResponse)
+@route_query_budget(max_queries=4)
 async def get_funnel_timeline(
     days: int = Query(30, ge=1, le=365, description="Number of days"),
     current_user: User = Depends(get_current_user),
@@ -90,7 +96,9 @@ async def get_funnel_timeline(
     number of days. Useful for trend visualization.
     """
     timeline = await analytics_service.get_funnel_timeline(
-        db, user_id=current_user.id, days=days,
+        db,
+        user_id=current_user.id,
+        days=days,
     )
     return FunnelTimelineResponse(**timeline)
 
@@ -99,6 +107,7 @@ async def get_funnel_timeline(
 
 
 @router.get("/market/insights", response_model=MarketInsightsListResponse)
+@route_query_budget(max_queries=4)
 async def get_market_insights(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -110,7 +119,8 @@ async def get_market_insights(
     market heat, competition level, and application velocity.
     """
     insights = await analytics_service.get_market_insights(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return MarketInsightsListResponse(
         user_id=current_user.id,
@@ -124,6 +134,7 @@ async def get_market_insights(
     response_model=MarketInsightResponse,
     status_code=201,
 )
+@route_query_budget(max_queries=9)
 async def generate_market_insight(
     payload: InsightGenerateRequest,
     current_user: User = Depends(get_current_user),
@@ -148,6 +159,7 @@ async def generate_market_insight(
 
 
 @router.get("/experiments", response_model=CVExperimentsListResponse)
+@route_query_budget(max_queries=4)
 async def list_experiments(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -159,7 +171,8 @@ async def list_experiments(
     for data-driven CV optimization.
     """
     experiments = await analytics_service.get_experiments(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return CVExperimentsListResponse(
         user_id=current_user.id,
@@ -169,6 +182,7 @@ async def list_experiments(
 
 
 @router.post("/experiments", response_model=CVExperimentResponse, status_code=201)
+@route_query_budget(max_queries=4)
 async def create_experiment(
     payload: CVExperimentCreate,
     current_user: User = Depends(get_current_user),
@@ -195,6 +209,7 @@ async def create_experiment(
     "/experiments/{experiment_id}/result",
     response_model=CVExperimentResponse,
 )
+@route_query_budget(max_queries=4)
 async def record_experiment_result(
     experiment_id: uuid.UUID,
     payload: ExperimentResultUpdate,

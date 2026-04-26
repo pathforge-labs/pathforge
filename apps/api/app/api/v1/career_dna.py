@@ -21,6 +21,7 @@ from starlette.requests import Request
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.intelligence_cache import ic_cache
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -54,6 +55,7 @@ router = APIRouter(prefix="/career-dna", tags=["Career DNA™"])
     response_model=CareerDNAResponse,
     summary="Get full Career DNA profile",
 )
+@route_query_budget(max_queries=4)
 async def get_career_dna(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -64,9 +66,7 @@ async def get_career_dna(
     if cached is not None:
         return CareerDNAResponse.model_validate(cached)
 
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -82,14 +82,13 @@ async def get_career_dna(
     response_model=CareerDNASummaryResponse,
     summary="Get Career DNA summary",
 )
+@route_query_budget(max_queries=4)
 async def get_career_dna_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CareerDNASummaryResponse:
     """Lightweight summary with completeness indicator."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -116,6 +115,7 @@ async def get_career_dna_summary(
     summary="Generate or refresh Career DNA profile",
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def generate_career_dna(
     request: Request,
     payload: CareerDNAGenerateRequest | None = None,
@@ -153,14 +153,13 @@ async def generate_career_dna(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete Career DNA profile (GDPR erasure)",
 )
+@route_query_budget(max_queries=4)
 async def delete_career_dna(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete the entire Career DNA profile. GDPR Art. 17 compliant."""
-    deleted = await CareerDNAService.delete_profile(
-        db, user_id=current_user.id
-    )
+    deleted = await CareerDNAService.delete_profile(db, user_id=current_user.id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -177,26 +176,21 @@ async def delete_career_dna(
     response_model=SkillGenomeResponse,
     summary="Get skill genome with hidden skills",
 )
+@route_query_budget(max_queries=4)
 async def get_skill_genome(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SkillGenomeResponse:
     """Get skill genome including AI-discovered hidden skills."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Career DNA profile not found.",
         )
     return SkillGenomeResponse(
-        explicit_skills=[
-            _skill_entry_response(entry) for entry in career_dna.skill_genome
-        ],
-        hidden_skills=[
-            _hidden_skill_response(skill) for skill in career_dna.hidden_skills
-        ],
+        explicit_skills=[_skill_entry_response(entry) for entry in career_dna.skill_genome],
+        hidden_skills=[_hidden_skill_response(skill) for skill in career_dna.hidden_skills],
         total_skills=len(career_dna.skill_genome) + len(career_dna.hidden_skills),
     )
 
@@ -206,22 +200,19 @@ async def get_skill_genome(
     response_model=ExperienceBlueprintResponse,
     summary="Get experience blueprint",
 )
+@route_query_budget(max_queries=4)
 async def get_experience_blueprint(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ExperienceBlueprintResponse:
     """Get analyzed experience pattern."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None or career_dna.experience_blueprint is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Experience blueprint not found.",
         )
-    return ExperienceBlueprintResponse.model_validate(
-        career_dna.experience_blueprint
-    )
+    return ExperienceBlueprintResponse.model_validate(career_dna.experience_blueprint)
 
 
 @router.get(
@@ -229,14 +220,13 @@ async def get_experience_blueprint(
     response_model=GrowthVectorResponse,
     summary="Get growth vector projection",
 )
+@route_query_budget(max_queries=4)
 async def get_growth_vector(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> GrowthVectorResponse:
     """Get career trajectory projection with reasoning."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None or career_dna.growth_vector is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -254,6 +244,7 @@ async def get_growth_vector(
     summary="Update target career role",
 )
 @limiter.limit("10/minute")
+@route_query_budget(max_queries=15)
 async def update_target_role(
     request: Request,
     payload: dict[str, Any],
@@ -289,7 +280,8 @@ async def update_target_role(
 
     # Load growth vector
     career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     if career_dna is None or career_dna.growth_vector is None:
         raise HTTPException(
@@ -324,14 +316,13 @@ async def update_target_role(
     response_model=ValuesProfileResponse,
     summary="Get values alignment profile",
 )
+@route_query_budget(max_queries=4)
 async def get_values_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ValuesProfileResponse:
     """Get career values alignment assessment."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None or career_dna.values_profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -345,14 +336,13 @@ async def get_values_profile(
     response_model=MarketPositionResponse,
     summary="Get market position snapshot",
 )
+@route_query_budget(max_queries=4)
 async def get_market_position(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MarketPositionResponse:
     """Get real-time market standing snapshot."""
-    career_dna = await CareerDNAService.get_full_profile(
-        db, user_id=current_user.id
-    )
+    career_dna = await CareerDNAService.get_full_profile(db, user_id=current_user.id)
     if career_dna is None or career_dna.market_position is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -369,6 +359,7 @@ async def get_market_position(
     response_model=HiddenSkillResponse,
     summary="Confirm or reject a hidden skill",
 )
+@route_query_budget(max_queries=16)
 async def confirm_hidden_skill(
     skill_id: uuid.UUID,
     payload: HiddenSkillConfirmRequest,
@@ -399,15 +390,15 @@ def _build_full_response(career_dna: CareerDNA) -> CareerDNAResponse:
     """Build full Career DNA response from ORM model."""
     from app.schemas.career_dna import SkillGenomeResponse
 
-    genome = SkillGenomeResponse(
-        explicit_skills=[
-            _skill_entry_response(entry) for entry in career_dna.skill_genome
-        ],
-        hidden_skills=[
-            _hidden_skill_response(skill) for skill in career_dna.hidden_skills
-        ],
-        total_skills=len(career_dna.skill_genome) + len(career_dna.hidden_skills),
-    ) if career_dna.skill_genome else None
+    genome = (
+        SkillGenomeResponse(
+            explicit_skills=[_skill_entry_response(entry) for entry in career_dna.skill_genome],
+            hidden_skills=[_hidden_skill_response(skill) for skill in career_dna.hidden_skills],
+            total_skills=len(career_dna.skill_genome) + len(career_dna.hidden_skills),
+        )
+        if career_dna.skill_genome
+        else None
+    )
 
     return CareerDNAResponse(
         id=career_dna.id,
@@ -417,9 +408,7 @@ def _build_full_response(career_dna: CareerDNA) -> CareerDNAResponse:
         summary=career_dna.summary,
         skill_genome=genome,
         experience_blueprint=(
-            ExperienceBlueprintResponse.model_validate(
-                career_dna.experience_blueprint
-            )
+            ExperienceBlueprintResponse.model_validate(career_dna.experience_blueprint)
             if career_dna.experience_blueprint
             else None
         ),
@@ -438,10 +427,7 @@ def _build_full_response(career_dna: CareerDNA) -> CareerDNAResponse:
             if career_dna.market_position
             else None
         ),
-        hidden_skills=[
-            _hidden_skill_response(skill)
-            for skill in career_dna.hidden_skills
-        ],
+        hidden_skills=[_hidden_skill_response(skill) for skill in career_dna.hidden_skills],
     )
 
 

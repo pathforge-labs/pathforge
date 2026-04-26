@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
 from app.core.intelligence_cache import ic_cache
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -62,6 +63,7 @@ router = APIRouter(
     response_model=SalaryDashboardResponse,
     summary="Get full Salary Intelligence dashboard",
 )
+@route_query_budget(max_queries=4)
 async def get_salary_dashboard(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -73,7 +75,8 @@ async def get_salary_dashboard(
         return SalaryDashboardResponse.model_validate(cached)
 
     data: dict[str, Any] = await SalaryIntelligenceService.get_dashboard(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     result = SalaryDashboardResponse(**data)
     await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_SALARY)
@@ -91,6 +94,7 @@ async def get_salary_dashboard(
     dependencies=[Depends(require_feature("salary_intelligence"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def run_salary_scan(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -105,7 +109,8 @@ async def run_salary_scan(
         await BillingService.check_scan_limit(db, current_user, "salary_intelligence")
 
     data: dict[str, Any] = await SalaryIntelligenceService.run_full_scan(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
 
     if data.get("status") == "error":
@@ -125,7 +130,8 @@ async def run_salary_scan(
         status=data.get("status", "completed"),
         estimate=(
             SalaryEstimateResponse.model_validate(data["estimate"])
-            if data.get("estimate") else None
+            if data.get("estimate")
+            else None
         ),
         skill_impacts=[
             SkillSalaryImpactResponse.model_validate(impact)
@@ -143,13 +149,15 @@ async def run_salary_scan(
     response_model=SalaryEstimateResponse | None,
     summary="Get latest salary estimate",
 )
+@route_query_budget(max_queries=4)
 async def get_salary_estimate(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SalaryEstimateResponse | None:
     """Latest personalized salary range estimate."""
     estimate = await SalaryIntelligenceService.get_salary_estimate(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     if estimate is None:
         return None
@@ -164,32 +172,25 @@ async def get_salary_estimate(
     response_model=SalaryImpactAnalysisResponse,
     summary="Get per-skill salary impact analysis",
 )
+@route_query_budget(max_queries=4)
 async def get_skill_impacts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SalaryImpactAnalysisResponse:
     """Breakdown of each skill's contribution to salary (Skill Premium Mapping™)."""
     impacts = await SalaryIntelligenceService.get_skill_impacts(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
-    impact_responses = [
-        SkillSalaryImpactResponse.model_validate(impact)
-        for impact in impacts
-    ]
+    impact_responses = [SkillSalaryImpactResponse.model_validate(impact) for impact in impacts]
 
-    total_amount = sum(
-        impact.salary_impact_amount for impact in impact_responses
-    )
-    total_percent = sum(
-        impact.salary_impact_percent for impact in impact_responses
-    )
+    total_amount = sum(impact.salary_impact_amount for impact in impact_responses)
+    total_percent = sum(impact.salary_impact_percent for impact in impact_responses)
     top_positive = [
-        impact.skill_name for impact in impact_responses
-        if impact.impact_direction == "positive"
+        impact.skill_name for impact in impact_responses if impact.impact_direction == "positive"
     ][:5]
     top_negative = [
-        impact.skill_name for impact in impact_responses
-        if impact.impact_direction == "negative"
+        impact.skill_name for impact in impact_responses if impact.impact_direction == "negative"
     ][:3]
 
     return SalaryImpactAnalysisResponse(
@@ -209,13 +210,15 @@ async def get_skill_impacts(
     response_model=SalaryTrajectoryResponse,
     summary="Get historical salary trajectory",
 )
+@route_query_budget(max_queries=4)
 async def get_salary_trajectory(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SalaryTrajectoryResponse:
     """Historical salary timeline with projections."""
     data: dict[str, Any] = await SalaryIntelligenceService.get_salary_trajectory(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return SalaryTrajectoryResponse(**data)
 
@@ -228,18 +231,17 @@ async def get_salary_trajectory(
     response_model=list[SalaryScenarioResponse],
     summary="List previous salary scenarios",
 )
+@route_query_budget(max_queries=4)
 async def list_salary_scenarios(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SalaryScenarioResponse]:
     """List all saved what-if salary scenarios."""
     scenarios = await SalaryIntelligenceService.get_scenarios(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
-    return [
-        SalaryScenarioResponse.model_validate(scenario)
-        for scenario in scenarios
-    ]
+    return [SalaryScenarioResponse.model_validate(scenario) for scenario in scenarios]
 
 
 @router.post(
@@ -249,6 +251,7 @@ async def list_salary_scenarios(
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def run_salary_scenario(
     request: Request,
     body: SalaryScenarioRequest,
@@ -279,6 +282,7 @@ async def run_salary_scenario(
     response_model=SalaryScenarioResponse,
     summary="Get a specific scenario",
 )
+@route_query_budget(max_queries=4)
 async def get_salary_scenario(
     scenario_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -286,7 +290,9 @@ async def get_salary_scenario(
 ) -> SalaryScenarioResponse:
     """Retrieve details of a saved what-if scenario."""
     scenario = await SalaryIntelligenceService.get_scenario_by_id(
-        db, user_id=current_user.id, scenario_id=scenario_id,
+        db,
+        user_id=current_user.id,
+        scenario_id=scenario_id,
     )
     if scenario is None:
         raise HTTPException(
@@ -306,6 +312,7 @@ async def get_salary_scenario(
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def what_if_add_skill(
     request: Request,
     body: SkillWhatIfRequest,
@@ -337,6 +344,7 @@ async def what_if_add_skill(
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def what_if_change_location(
     request: Request,
     body: LocationWhatIfRequest,
@@ -369,13 +377,15 @@ async def what_if_change_location(
     response_model=SalaryPreferenceResponse | None,
     summary="Get salary tracking preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_salary_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SalaryPreferenceResponse | None:
     """Get user's salary intelligence configuration."""
     preference = await SalaryIntelligenceService.get_preferences(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     if preference is None:
         return None
@@ -387,6 +397,7 @@ async def get_salary_preferences(
     response_model=SalaryPreferenceResponse,
     summary="Update salary tracking preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_salary_preferences(
     body: SalaryPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -402,7 +413,9 @@ async def update_salary_preferences(
 
     try:
         preference = await SalaryIntelligenceService.update_preferences(
-            db, user_id=current_user.id, updates=updates,
+            db,
+            user_id=current_user.id,
+            updates=updates,
         )
     except ValueError as exc:
         raise HTTPException(

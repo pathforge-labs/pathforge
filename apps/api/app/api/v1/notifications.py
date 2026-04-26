@@ -28,6 +28,7 @@ from starlette.requests import Request
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.notification import (
@@ -69,6 +70,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_notifications(
     request: Request,
     page: int = Query(1, ge=1, description="Page number."),
@@ -110,12 +112,10 @@ async def list_notifications(
     "/count",
     response_model=NotificationCountResponse,
     summary="Get unread notification count",
-    description=(
-        "Get unread notification count with breakdowns by "
-        "severity and source engine."
-    ),
+    description=("Get unread notification count with breakdowns by severity and source engine."),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_unread_count(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -123,7 +123,8 @@ async def get_unread_count(
 ) -> NotificationCountResponse:
     """Get unread notification count with severity breakdown."""
     data = await NotificationService.get_unread_count(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return NotificationCountResponse(**data)
 
@@ -138,6 +139,7 @@ async def get_unread_count(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def mark_read(
     request: Request,
     body: NotificationMarkReadRequest,
@@ -160,6 +162,7 @@ async def mark_read(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def mark_all_read(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -167,7 +170,8 @@ async def mark_all_read(
 ) -> dict[str, int]:
     """Mark all unread notifications as read."""
     count = await NotificationService.mark_all_read(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return {"marked_read": count}
 
@@ -182,6 +186,7 @@ async def mark_all_read(
     description="List notification digest summaries.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def list_digests(
     request: Request,
     page: int = Query(1, ge=1, description="Page number."),
@@ -197,10 +202,7 @@ async def list_digests(
         page_size=page_size,
     )
     return NotificationDigestListResponse(
-        digests=[
-            NotificationDigestResponse.model_validate(digest)
-            for digest in data["digests"]
-        ],
+        digests=[NotificationDigestResponse.model_validate(digest) for digest in data["digests"]],
         total=data["total"],
         page=data["page"],
         page_size=data["page_size"],
@@ -218,10 +220,12 @@ async def list_digests(
     ),
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=6)
 async def generate_digest(
     request: Request,
     digest_type: str = Query(
-        "weekly", description="Digest type: daily | weekly.",
+        "weekly",
+        description="Digest type: daily | weekly.",
     ),
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
@@ -255,6 +259,7 @@ async def generate_digest(
     description="Get current notification preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -262,7 +267,8 @@ async def get_preferences(
 ) -> NotificationPreferenceResponse:
     """Get notification preferences."""
     pref = await NotificationService.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if pref is None:
         raise HTTPException(
@@ -282,6 +288,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: NotificationPreferenceUpdate,
@@ -314,6 +321,7 @@ async def update_preferences(
     description="Register or reactivate a device push token (idempotent).",
 )
 @limiter.limit(settings.rate_limit_push)
+@route_query_budget(max_queries=4)
 async def register_push_token(
     request: Request,
     body: PushTokenRegister,
@@ -341,6 +349,7 @@ async def register_push_token(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_push)
+@route_query_budget(max_queries=4)
 async def deregister_push_token(
     request: Request,
     body: PushTokenDeregister,
@@ -349,7 +358,9 @@ async def deregister_push_token(
 ) -> dict[str, bool]:
     """Deregister a device push token."""
     deactivated = await push_service.deregister_token(
-        database, user_id=current_user.id, device_token=body.token,
+        database,
+        user_id=current_user.id,
+        device_token=body.token,
     )
     if not deactivated:
         raise HTTPException(
@@ -366,6 +377,7 @@ async def deregister_push_token(
     description="Check whether the current user has an active push token.",
 )
 @limiter.limit(settings.rate_limit_push)
+@route_query_budget(max_queries=4)
 async def get_push_status(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -373,6 +385,7 @@ async def get_push_status(
 ) -> PushTokenStatusResponse:
     """Check push registration status."""
     data = await push_service.get_status(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return PushTokenStatusResponse(**data)

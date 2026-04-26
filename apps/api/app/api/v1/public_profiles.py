@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -44,6 +45,7 @@ router = APIRouter(prefix="/public-profiles", tags=["Public Profiles"])
     summary="Get own public profile",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def get_own_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -64,6 +66,7 @@ async def get_own_profile(
     summary="Create public profile",
     status_code=status.HTTP_201_CREATED,
 )
+@route_query_budget(max_queries=4)
 async def create_profile(
     body: CreatePublicProfileRequest,
     current_user: User = Depends(get_current_user),
@@ -96,6 +99,7 @@ async def create_profile(
     summary="Update public profile",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def update_profile(
     body: UpdatePublicProfileRequest,
     current_user: User = Depends(get_current_user),
@@ -106,9 +110,7 @@ async def update_profile(
         updates = body.model_dump(exclude_none=True)
         return await PublicProfileService.update_profile(db, current_user, updates)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # ── POST /public-profiles/me/publish ───────────────────────────
@@ -120,6 +122,7 @@ async def update_profile(
     summary="Publish profile",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def publish_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -128,9 +131,7 @@ async def publish_profile(
     try:
         return await PublicProfileService.publish(db, current_user)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # ── POST /public-profiles/me/unpublish ─────────────────────────
@@ -142,6 +143,7 @@ async def publish_profile(
     summary="Unpublish profile",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def unpublish_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -150,9 +152,7 @@ async def unpublish_profile(
     try:
         return await PublicProfileService.unpublish(db, current_user)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # ── GET /public-profiles/{slug} ────────────────────────────────
@@ -165,6 +165,7 @@ async def unpublish_profile(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_public_profile)
+@route_query_budget(max_queries=4)
 async def view_public_profile(
     request: Request,
     slug: str,
