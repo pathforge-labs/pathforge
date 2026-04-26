@@ -1,0 +1,27 @@
+{
+  "captured_at": "PENDING_STAGING_ACTIVATION",
+  "iterations": 20,
+  "api_base_url": "https://api-staging.pathforge.eu",
+  "_status": "Placeholder — refresh with `scripts/perf-baseline.sh --out=docs/baselines/2026-Q2.json` against staging once N-4 (staging activation) lands. Until then the regression gate runs in advisory mode.",
+  "endpoints": [
+    {"label": "Health (liveness)",      "endpoint": "/api/v1/health",                          "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Health (readiness)",     "endpoint": "/api/v1/health/ready",                    "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Career DNA",             "endpoint": "/api/v1/career-dna",                      "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Career DNA summary",     "endpoint": "/api/v1/career-dna/summary",              "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Skill genome",           "endpoint": "/api/v1/career-dna/skills",               "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Threat Radar overview",  "endpoint": "/api/v1/threat-radar",                    "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Threat Radar signals",   "endpoint": "/api/v1/threat-radar/signals",            "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Salary dashboard",       "endpoint": "/api/v1/salary-intelligence",             "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Salary estimate",        "endpoint": "/api/v1/salary-intelligence/estimate",    "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Salary impacts",         "endpoint": "/api/v1/salary-intelligence/impacts",     "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Salary trajectory",      "endpoint": "/api/v1/salary-intelligence/trajectory",  "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Skill Decay dashboard",  "endpoint": "/api/v1/skill-decay",                     "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Skill freshness",        "endpoint": "/api/v1/skill-decay/freshness",           "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Skill market demand",    "endpoint": "/api/v1/skill-decay/market-demand",       "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Skill velocity",         "endpoint": "/api/v1/skill-decay/velocity",            "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Reskilling pathways",    "endpoint": "/api/v1/skill-decay/reskilling",          "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Recommendations dash",   "endpoint": "/api/v1/recommendations/dashboard",       "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Recommendations list",   "endpoint": "/api/v1/recommendations",                 "p50_ms": 0, "p95_ms": 0, "iterations": 20},
+    {"label": "Recommendation batches", "endpoint": "/api/v1/recommendations/batches",         "p50_ms": 0, "p95_ms": 0, "iterations": 20}
+  ]
+}

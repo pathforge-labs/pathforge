@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse, Response
 
 from app.core.config import settings
+from app.core.query_budget import route_query_budget
 
 router = APIRouter(tags=["Well-Known"])
 
@@ -36,11 +37,10 @@ Disallow: /
     summary="Security vulnerability disclosure (RFC 9116)",
     response_class=PlainTextResponse,
 )
+@route_query_budget(max_queries=4)
 async def security_txt() -> PlainTextResponse:
     """Return security.txt per RFC 9116 for responsible disclosure."""
-    expires_date = datetime.now(tz=UTC) + timedelta(
-        days=settings.security_txt_expires_days
-    )
+    expires_date = datetime.now(tz=UTC) + timedelta(days=settings.security_txt_expires_days)
     content = SECURITY_TXT_TEMPLATE.format(
         contact_email=settings.security_contact_email,
         expires=expires_date.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
@@ -53,6 +53,7 @@ async def security_txt() -> PlainTextResponse:
     summary="Robots exclusion protocol",
     response_class=PlainTextResponse,
 )
+@route_query_budget(max_queries=4)
 async def robots_txt() -> PlainTextResponse:
     """Disallow all crawlers — this is an API, not a website."""
     return PlainTextResponse(content=ROBOTS_TXT.strip())
@@ -63,6 +64,7 @@ async def robots_txt() -> PlainTextResponse:
     summary="Favicon (no content)",
     include_in_schema=False,
 )
+@route_query_budget(max_queries=4)
 async def favicon() -> Response:
     """Return 204 No Content to suppress favicon 404 noise."""
     return Response(status_code=204)

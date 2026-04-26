@@ -29,6 +29,7 @@ from starlette.requests import Request
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.workflow_automation import (
@@ -70,6 +71,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -78,7 +80,8 @@ async def get_dashboard(
     """Get Workflow Automation dashboard."""
     try:
         data = await WorkflowAutomationService.get_dashboard(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
 
         active_workflows = data["active_workflows"]
@@ -99,15 +102,13 @@ async def get_dashboard(
                 for wf in active_workflows
             ],
             available_templates=[
-                WorkflowTemplateInfo(**tmpl)
-                for tmpl in data["available_templates"]
+                WorkflowTemplateInfo(**tmpl) for tmpl in data["available_templates"]
             ],
             total_active=data["total_active"],
             total_completed=data["total_completed"],
             total_draft=data["total_draft"],
             preferences=(
-                WorkflowPreferenceResponse.model_validate(preferences)
-                if preferences else None
+                WorkflowPreferenceResponse.model_validate(preferences) if preferences else None
             ),
         )
     except ValueError as exc:
@@ -131,6 +132,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=6)
 async def create_workflow(
     request: Request,
     body: CreateWorkflowRequest,
@@ -166,10 +168,12 @@ async def create_workflow(
     description="List career workflows with optional status filter.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def list_workflows(
     request: Request,
     status_filter: str | None = Query(
-        None, alias="status",
+        None,
+        alias="status",
         description="Filter: draft | active | paused | completed | archived",
     ),
     limit: int = Query(20, ge=1, le=100),
@@ -208,11 +212,11 @@ async def list_workflows(
     response_model=list[WorkflowTemplateInfo],
     summary="Browse Smart Workflow Templates™",
     description=(
-        "Browse available Smart Workflow Templates™ — pre-built "
-        "career acceleration workflows."
+        "Browse available Smart Workflow Templates™ — pre-built career acceleration workflows."
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_templates(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -232,6 +236,7 @@ async def list_templates(
     description="Get user's Workflow Automation preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -239,7 +244,8 @@ async def get_preferences(
 ) -> WorkflowPreferenceResponse:
     """Get Workflow Automation preferences."""
     pref = await WorkflowAutomationService.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if pref is None:
         raise HTTPException(
@@ -259,6 +265,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: WorkflowPreferenceUpdate,
@@ -290,6 +297,7 @@ async def update_preferences(
     description="Get workflow detail including all steps.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_workflow_detail(
     request: Request,
     workflow_id: uuid.UUID,
@@ -320,6 +328,7 @@ async def get_workflow_detail(
     description="Update workflow lifecycle: draft → active → completed.",
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_workflow_status(
     request: Request,
     workflow_id: uuid.UUID,
@@ -356,6 +365,7 @@ async def update_workflow_status(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=6)
 async def update_step_status(
     request: Request,
     workflow_id: uuid.UUID,
@@ -391,6 +401,7 @@ async def update_step_status(
     description="List execution records for a specific workflow.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_executions(
     request: Request,
     workflow_id: uuid.UUID,
@@ -405,7 +416,4 @@ async def get_executions(
         workflow_id=workflow_id,
         limit=limit,
     )
-    return [
-        WorkflowExecutionResponse.model_validate(ex)
-        for ex in executions
-    ]
+    return [WorkflowExecutionResponse.model_validate(ex) for ex in executions]

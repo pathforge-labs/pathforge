@@ -27,6 +27,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.collective_intelligence import (
@@ -73,6 +74,7 @@ router = APIRouter(
     dependencies=[Depends(require_feature("collective_intelligence"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_industry_snapshot(
     request: Request,
     body: IndustrySnapshotRequest,
@@ -122,6 +124,7 @@ async def create_industry_snapshot(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_salary_benchmark(
     request: Request,
     body: SalaryBenchmarkRequest,
@@ -161,6 +164,7 @@ async def create_salary_benchmark(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_peer_cohort_analysis(
     request: Request,
     body: PeerCohortRequest,
@@ -200,6 +204,7 @@ async def create_peer_cohort_analysis(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_career_pulse(
     request: Request,
     body: CareerPulseRequest,
@@ -235,6 +240,7 @@ async def create_career_pulse(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -243,12 +249,14 @@ async def get_dashboard(
     """Get aggregated Collective Intelligence dashboard."""
     try:
         data = await ci_service.get_ci_dashboard(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return CollectiveIntelligenceDashboardResponse(
             latest_pulse=(
                 CareerPulseResponse.model_validate(data["latest_pulse"])
-                if data["latest_pulse"] else None
+                if data["latest_pulse"]
+                else None
             ),
             industry_snapshots=[
                 IndustrySnapshotResponse.model_validate(snapshot)
@@ -266,7 +274,8 @@ async def get_dashboard(
                 CollectiveIntelligencePreferenceResponse.model_validate(
                     data["preferences"],
                 )
-                if data["preferences"] else None
+                if data["preferences"]
+                else None
             ),
         )
     except ValueError as exc:
@@ -291,6 +300,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def run_scan(
     request: Request,
     body: IntelligenceScanRequest,
@@ -309,25 +319,29 @@ async def run_scan(
         return IntelligenceScanResponse(
             career_pulse=(
                 CareerPulseResponse.model_validate(data["career_pulse"])
-                if data["career_pulse"] else None
+                if data["career_pulse"]
+                else None
             ),
             industry_snapshot=(
                 IndustrySnapshotResponse.model_validate(
                     data["industry_snapshot"],
                 )
-                if data["industry_snapshot"] else None
+                if data["industry_snapshot"]
+                else None
             ),
             salary_benchmark=(
                 SalaryBenchmarkResponse.model_validate(
                     data["salary_benchmark"],
                 )
-                if data["salary_benchmark"] else None
+                if data["salary_benchmark"]
+                else None
             ),
             peer_cohort=(
                 PeerCohortAnalysisResponse.model_validate(
                     data["peer_cohort"],
                 )
-                if data["peer_cohort"] else None
+                if data["peer_cohort"]
+                else None
             ),
         )
     except ValueError as exc:
@@ -351,6 +365,7 @@ async def run_scan(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def compare_industries_endpoint(
     request: Request,
     body: IndustryComparisonRequest,
@@ -367,8 +382,7 @@ async def compare_industries_endpoint(
         )
         return IndustryComparisonResponse(
             snapshots=[
-                IndustrySnapshotResponse.model_validate(snapshot)
-                for snapshot in data["snapshots"]
+                IndustrySnapshotResponse.model_validate(snapshot) for snapshot in data["snapshots"]
             ],
             recommended_industry=data.get("recommended_industry"),
             recommendation_reasoning=data.get("recommendation_reasoning"),
@@ -390,6 +404,7 @@ async def compare_industries_endpoint(
     description="Get current Collective Intelligence preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -398,7 +413,8 @@ async def get_preferences(
     """Get user CI preferences."""
     try:
         preference = await ci_service.get_or_update_preferences(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return CollectiveIntelligencePreferenceResponse.model_validate(
             preference,
@@ -420,6 +436,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: CollectiveIntelligencePreferenceUpdate,

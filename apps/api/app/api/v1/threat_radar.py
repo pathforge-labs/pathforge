@@ -25,6 +25,7 @@ from starlette.requests import Request
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.intelligence_cache import ic_cache
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -66,6 +67,7 @@ router = APIRouter(prefix="/threat-radar", tags=["Career Threat Radar™"])
     response_model=ThreatRadarOverviewResponse,
     summary="Get full Threat Radar dashboard",
 )
+@route_query_budget(max_queries=4)
 async def get_threat_radar_overview(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -77,32 +79,21 @@ async def get_threat_radar_overview(
         return ThreatRadarOverviewResponse.model_validate(cached)
 
     data = await ThreatRadarService.get_overview(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
 
     if not data:
         return ThreatRadarOverviewResponse()
 
     result = ThreatRadarOverviewResponse(
-        resilience=(
-            _resilience_response(data["snapshot"])
-            if data.get("snapshot") else None
-        ),
+        resilience=(_resilience_response(data["snapshot"]) if data.get("snapshot") else None),
         automation_risk=(
-            _risk_response(data["automation_risk"])
-            if data.get("automation_risk") else None
+            _risk_response(data["automation_risk"]) if data.get("automation_risk") else None
         ),
-        skills_shield=(
-            _build_shield_matrix(data.get("shield_entries", []))
-        ),
-        industry_trends=[
-            _trend_response(trend)
-            for trend in data.get("industry_trends", [])
-        ],
-        recent_alerts=[
-            _alert_response(alert)
-            for alert in data.get("recent_alerts", [])
-        ],
+        skills_shield=(_build_shield_matrix(data.get("shield_entries", []))),
+        industry_trends=[_trend_response(trend) for trend in data.get("industry_trends", [])],
+        recent_alerts=[_alert_response(alert) for alert in data.get("recent_alerts", [])],
         total_unread_alerts=data.get("total_unread_alerts", 0),
     )
     await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_THREAT_RADAR)
@@ -119,6 +110,7 @@ async def get_threat_radar_overview(
     summary="Trigger comprehensive threat scan",
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def trigger_threat_scan(
     request: Request,
     soc_code: str = Query(
@@ -163,19 +155,15 @@ async def trigger_threat_scan(
     return ThreatRadarScanResponse(
         status="completed",
         automation_risk=(
-            _risk_response(result["automation_risk"])
-            if result.get("automation_risk") else None
+            _risk_response(result["automation_risk"]) if result.get("automation_risk") else None
         ),
         industry_trends=[
             _trend_response(result["industry_trend"]),
-        ] if result.get("industry_trend") else [],
-        skills_shield=(
-            _build_shield_matrix(result.get("shield_entries", []))
-        ),
-        resilience=(
-            _resilience_response(result["snapshot"])
-            if result.get("snapshot") else None
-        ),
+        ]
+        if result.get("industry_trend")
+        else [],
+        skills_shield=(_build_shield_matrix(result.get("shield_entries", []))),
+        resilience=(_resilience_response(result["snapshot"]) if result.get("snapshot") else None),
         alerts_generated=result.get("alerts_generated", 0),
     )
 
@@ -188,13 +176,15 @@ async def trigger_threat_scan(
     response_model=AutomationRiskResponse | None,
     summary="Get latest automation risk assessment",
 )
+@route_query_budget(max_queries=4)
 async def get_automation_risk(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AutomationRiskResponse | None:
     """Latest ONET + LLM hybrid automation risk score."""
     data = await ThreatRadarService.get_overview(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     risk = data.get("automation_risk") if data else None
     return _risk_response(risk) if risk else None
@@ -208,13 +198,15 @@ async def get_automation_risk(
     response_model=SkillShieldMatrixResponse,
     summary="Get Skills Shield™ matrix",
 )
+@route_query_budget(max_queries=4)
 async def get_skills_shield(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SkillShieldMatrixResponse:
     """Skills classified as shields, exposures, or neutral."""
     data = await ThreatRadarService.get_overview(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     entries = data.get("shield_entries", []) if data else []
     return _build_shield_matrix(entries)
@@ -228,13 +220,15 @@ async def get_skills_shield(
     response_model=CareerResilienceResponse | None,
     summary="Get Career Resilience Score™ and Moat Score",
 )
+@route_query_budget(max_queries=4)
 async def get_resilience_score(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CareerResilienceResponse | None:
     """CRS™ (5-factor) + Career Moat Score (4-dimension)."""
     data = await ThreatRadarService.get_overview(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     snapshot = data.get("snapshot") if data else None
     return _resilience_response(snapshot) if snapshot else None
@@ -248,6 +242,7 @@ async def get_resilience_score(
     summary="Get Career Resilience Score™ historical data",
 )
 @limiter.limit("20/minute")
+@route_query_budget(max_queries=4)
 async def get_resilience_history(
     request: Request,
     days: int = Query(90, ge=7, le=365, description="History period in days"),
@@ -292,11 +287,13 @@ async def get_resilience_history(
     for snapshot in snapshots:
         score = float(snapshot.overall_score)
         delta = round(score - previous_score, 1) if previous_score is not None else 0.0
-        data_points.append({
-            "date": snapshot.computed_at.isoformat(),
-            "score": round(score, 1),
-            "delta": delta,
-        })
+        data_points.append(
+            {
+                "date": snapshot.computed_at.isoformat(),
+                "score": round(score, 1),
+                "delta": delta,
+            }
+        )
         previous_score = score
 
     return {"data": data_points, "period_days": days}
@@ -310,11 +307,13 @@ async def get_resilience_history(
     response_model=ThreatAlertListResponse,
     summary="Get threat alert feed",
 )
+@route_query_budget(max_queries=4)
 async def get_alerts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     alert_status: str | None = Query(
-        None, description="Filter by status: unread, read, dismissed, snoozed",
+        None,
+        description="Filter by status: unread, read, dismissed, snoozed",
     ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -340,6 +339,7 @@ async def get_alerts(
     response_model=ThreatAlertResponse,
     summary="Update alert status",
 )
+@route_query_budget(max_queries=4)
 async def update_alert(
     alert_id: uuid.UUID,
     payload: ThreatAlertUpdateRequest,
@@ -372,13 +372,15 @@ async def update_alert(
     response_model=AlertPreferenceResponse | None,
     summary="Get alert notification preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertPreferenceResponse | None:
     """User's alert notification preferences."""
     pref = await ThreatRadarService.get_preferences(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return _pref_response(pref) if pref else None
 
@@ -388,6 +390,7 @@ async def get_preferences(
     response_model=AlertPreferenceResponse,
     summary="Update alert notification preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     payload: AlertPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),

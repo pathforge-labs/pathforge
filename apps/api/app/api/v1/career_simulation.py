@@ -35,6 +35,7 @@ from starlette.status import (
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -76,6 +77,7 @@ router = APIRouter(
     summary="Career simulation dashboard",
     description="Retrieve all saved simulations, preferences, and summary statistics.",
 )
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
@@ -84,7 +86,10 @@ async def get_dashboard(
 ) -> SimulationDashboardResponse:
     """Retrieve all saved simulations and preferences for dashboard."""
     data = await career_simulation_service.get_dashboard(
-        database, user_id=current_user.id, page=page, per_page=per_page,
+        database,
+        user_id=current_user.id,
+        page=page,
+        per_page=per_page,
     )
 
     return SimulationDashboardResponse(
@@ -130,6 +135,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("career_simulation"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def simulate_role(
     request: Request,
     body: RoleTransitionSimRequest,
@@ -171,6 +177,7 @@ async def simulate_role(
     dependencies=[Depends(require_feature("career_simulation"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def simulate_geo(
     request: Request,
     body: GeoMoveSimRequest,
@@ -200,6 +207,7 @@ async def simulate_geo(
     dependencies=[Depends(require_feature("career_simulation"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def simulate_skill(
     request: Request,
     body: SkillInvestmentSimRequest,
@@ -228,6 +236,7 @@ async def simulate_skill(
     dependencies=[Depends(require_feature("career_simulation"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def simulate_industry(
     request: Request,
     body: IndustryPivotSimRequest,
@@ -256,6 +265,7 @@ async def simulate_industry(
     dependencies=[Depends(require_feature("career_simulation"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=4)
 async def simulate_seniority(
     request: Request,
     body: SeniorityJumpSimRequest,
@@ -283,6 +293,7 @@ async def simulate_seniority(
     description="Compare up to 5 saved simulations side-by-side.",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def compare_simulations(
     request: Request,
     body: SimulationCompareRequest,
@@ -297,9 +308,7 @@ async def compare_simulations(
     )
 
     return SimulationComparisonResponse(
-        simulations=[
-            _build_full_response(sim) for sim in data["simulations"]
-        ],
+        simulations=[_build_full_response(sim) for sim in data["simulations"]],
         ranking=data.get("ranking", []),
         trade_off_analysis=data.get("trade_off_analysis"),
     )
@@ -316,13 +325,15 @@ async def compare_simulations(
     summary="Get simulation preferences",
     description="Retrieve your Career Simulation Engine preferences.",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> SimulationPreferenceResponse | None:
     """Retrieve simulation preferences for the current user."""
     preference = await career_simulation_service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not preference:
         return None
@@ -337,6 +348,7 @@ async def get_preferences(
     summary="Update simulation preferences",
     description="Update or create your Career Simulation Engine preferences.",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     body: SimulationPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -363,6 +375,7 @@ async def update_preferences(
     description="Retrieve a specific simulation with all projections and recommendations.",
     responses={HTTP_404_NOT_FOUND: {"description": "Simulation not found"}},
 )
+@route_query_budget(max_queries=4)
 async def get_simulation(
     simulation_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -376,6 +389,7 @@ async def get_simulation(
     )
     if not simulation:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=HTTP_404_NOT_FOUND,
             detail="Simulation not found.",
@@ -391,6 +405,7 @@ async def get_simulation(
     description="Delete a saved simulation and all related data.",
     responses={HTTP_404_NOT_FOUND: {"description": "Simulation not found"}},
 )
+@route_query_budget(max_queries=4)
 async def delete_simulation(
     simulation_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -404,6 +419,7 @@ async def delete_simulation(
     )
     if not deleted:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=HTTP_404_NOT_FOUND,
             detail="Simulation not found.",
@@ -416,4 +432,3 @@ async def delete_simulation(
 def _build_full_response(simulation: CareerSimulation) -> CareerSimulationResponse:
     """Build a full CareerSimulationResponse from a model instance."""
     return CareerSimulationResponse.model_validate(simulation)
-

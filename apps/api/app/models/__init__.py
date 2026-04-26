@@ -128,6 +128,7 @@ from app.models.user import User, UserRole
 from app.models.user_activity import UserActivityLog
 from app.models.user_profile import DataExportRequest, UserProfile
 from app.models.waitlist import WaitlistEntry, WaitlistStatus
+from app.models.webhook_event import WebhookEvent, WebhookOutcome
 from app.models.workflow_automation import (
     CareerWorkflow,
     WorkflowExecution,
@@ -237,6 +238,8 @@ __all__ = [
     "VisaAssessment",
     "WaitlistEntry",
     "WaitlistStatus",
+    "WebhookEvent",
+    "WebhookOutcome",
     "WorkflowExecution",
     "WorkflowPreference",
     "WorkflowStep",

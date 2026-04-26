@@ -21,8 +21,10 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
     admin,
+    admin_webhooks,
     ai,
     ai_transparency,
+    ai_usage,
     analytics,
     applications,
     auth,
@@ -317,6 +319,8 @@ def create_app() -> FastAPI:
     application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
+    # T4 / Sprint 56, ADR-0008: Transparent AI Accounting summary endpoint.
+    application.include_router(ai_usage.router, prefix="/api/v1")
     # T5 / Sprint 57, ADR-0009: Sentry auto-rollback webhook receiver.
     from app.core.sentry_auto_rollback import router as sentry_rollback_router
     application.include_router(sentry_rollback_router, prefix="/api/v1")
@@ -326,6 +330,8 @@ def create_app() -> FastAPI:
     application.include_router(billing.router, prefix="/api/v1")
     application.include_router(billing.webhook_router, prefix="/api/v1")
     application.include_router(admin.router, prefix="/api/v1")
+    # T6 / Sprint 58, ADR-0010: webhook DLQ admin surface.
+    application.include_router(admin_webhooks.router, prefix="/api/v1")
     application.include_router(waitlist.router, prefix="/api/v1")
     application.include_router(public_profiles.router, prefix="/api/v1")
 

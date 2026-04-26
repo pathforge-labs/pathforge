@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -51,6 +52,7 @@ router = APIRouter(prefix="/billing", tags=["Billing"])
     summary="Get current subscription",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=6)
 async def get_subscription(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -69,6 +71,7 @@ async def get_subscription(
     summary="Get current period usage",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=8)
 async def get_usage(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -86,6 +89,7 @@ async def get_usage(
     summary="Get available features",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=8)
 async def get_features(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -123,6 +127,7 @@ async def get_features(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_billing)  # S1: prevent checkout brute-force
+@route_query_budget(max_queries=3)
 async def create_checkout(
     request: Request,  # Required by slowapi rate limiter
     request_body: CreateCheckoutSessionRequest,
@@ -157,6 +162,7 @@ async def create_checkout(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_billing)  # S1: prevent portal abuse
+@route_query_budget(max_queries=6)
 async def create_portal(
     request: Request,  # Required by slowapi rate limiter
     current_user: User = Depends(get_current_user),
@@ -182,6 +188,7 @@ async def create_portal(
     summary="List billing events (admin)",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def list_events(
     request: Request,
     page: int = 1,
@@ -191,6 +198,7 @@ async def list_events(
 ) -> Any:
     """List billing events for admin dashboard. Requires admin role."""
     from app.api.v1.admin import require_admin as _check_admin
+
     await _check_admin(admin)
     return await BillingService.list_billing_events(db, page, per_page)
 
@@ -206,6 +214,7 @@ webhook_router = APIRouter(prefix="/webhooks", tags=["Billing"])
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit("100/minute")
+@route_query_budget(max_queries=20)
 async def stripe_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -234,11 +243,26 @@ async def stripe_webhook(
             detail="Invalid webhook signature",
         ) from exc
 
+    # T6 / Sprint 58, ADR-0010: persist to operational webhook ledger
+    # BEFORE processing so the DLQ has the row even when the business
+    # logic dies mid-flight. Idempotent on (provider, event_id) —
+    # Stripe retries land on the same row.
+    from app.services.webhook_replay_service import WebhookReplayService
+
+    ledger = WebhookReplayService(db)
+    ledger_id = await ledger.persist(
+        provider="stripe",
+        event_id=str(event.get("id", "")),
+        event_type=str(event.get("type", "unknown")),
+        payload=dict(event) if not isinstance(event, dict) else event,
+    )
+
     # F16: Process event (fast — just DB writes)
     try:
         await BillingService.process_webhook_event(db, event)
+        await ledger.mark_processed(ledger_id)
         await db.commit()
-    except Exception:
+    except Exception as exc:
         logger.exception("Webhook processing error for event %s", event.get("id"))
         # F28: Sentry context
         try:
@@ -248,6 +272,21 @@ async def stripe_webhook(
             sentry_sdk.set_tag("stripe_event_type", event.get("type", "unknown"))
         except ImportError:
             pass
+        # T6: ledger transition must commit independently of the
+        # business transaction (which is about to roll back). Open a
+        # fresh session for the bookkeeping write so the row reflects
+        # the failure for the operator at /admin/webhooks?status=dlq.
+        from app.core.database import async_session_factory
+
+        try:
+            async with async_session_factory() as bookkeeping, bookkeeping.begin():
+                bookkeeping_ledger = WebhookReplayService(bookkeeping)
+                await bookkeeping_ledger.mark_failed(ledger_id, error=str(exc))
+        except Exception:
+            logger.warning(
+                "Failed to record webhook ledger transition after processing error",
+                exc_info=True,
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Webhook processing failed",
