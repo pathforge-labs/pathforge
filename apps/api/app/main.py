@@ -317,6 +317,9 @@ def create_app() -> FastAPI:
     application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
+    # T5 / Sprint 57, ADR-0009: Sentry auto-rollback webhook receiver.
+    from app.core.sentry_auto_rollback import router as sentry_rollback_router
+    application.include_router(sentry_rollback_router, prefix="/api/v1")
     application.include_router(resumes.router, prefix="/api/v1")  # Sprint 50: resume upload
 
     # Sprint 34: Monetization & Growth routers
