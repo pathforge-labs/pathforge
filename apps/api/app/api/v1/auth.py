@@ -29,6 +29,7 @@ from app.core.security import (
     oauth2_scheme,
     set_auth_cookies,
 )
+from app.core.sessions import SessionRegistry
 from app.core.token_blacklist import token_blacklist
 from app.models.user import User
 
@@ -57,6 +58,60 @@ from app.services.user_service_errors import (
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+# ── Session registry helpers (T1-extension / ADR-0011) ─────────────
+
+
+def _client_ip(request: Request) -> str | None:
+    """Best-effort IP extraction.
+
+    Honours ``X-Forwarded-For`` (Vercel + Railway both forward it) but
+    only its first hop — anything beyond the first hop is attacker-
+    controlled. Returns ``None`` when no IP can be derived.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or None
+    if request.client and request.client.host:
+        return request.client.host
+    return None
+
+
+async def _register_session_from_tokens(
+    *,
+    request: Request,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Decode the refresh JWT and persist its JTI as an active session.
+
+    Uses the refresh token (not access) because the refresh JTI is the
+    longer-lived identity for the device — every access JTI rotates
+    every hour, but the refresh JTI represents the *device session*
+    until the user revokes or it expires.
+    """
+    try:
+        token_data = jwt.decode(
+            refresh_token,
+            settings.jwt_refresh_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except PyJWTError:
+        return
+    jti = token_data.get("jti")
+    sub = token_data.get("sub")
+    exp = token_data.get("exp")
+    if not jti or not sub or not exp:
+        return
+    remaining = max(int(int(exp) - datetime.now(UTC).timestamp()), 1)
+    await SessionRegistry.register(
+        user_id=str(sub),
+        jti=str(jti),
+        ttl_seconds=remaining,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
 
 
 @router.post(
@@ -154,6 +209,14 @@ async def login(
 
     set_auth_cookies(
         response,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    # T1-extension / ADR-0011: register the new refresh JTI in the
+    # session registry so the user can see and revoke this device.
+    # Fail-soft — auth succeeds even if Redis is unreachable.
+    await _register_session_from_tokens(
+        request=request,
         access_token=tokens.access_token,
         refresh_token=tokens.refresh_token,
     )
@@ -255,6 +318,24 @@ async def refresh_token(
         access_token=new_tokens.access_token,
         refresh_token=new_tokens.refresh_token,
     )
+    # T1-extension / ADR-0011: rotation = revoke old session JTI from
+    # the registry, register the new one. Touching first then registering
+    # would race with `revoke_others`; the explicit ordering matches
+    # `consume_once` above so the user's session list always shows the
+    # currently-valid JTI.
+    if old_jti:
+        try:
+            ttl = max(int(old_exp - datetime.now(UTC).timestamp()), 1) if old_exp else 60
+            await SessionRegistry.revoke(
+                user_id=str(user.id), jti=old_jti, ttl_seconds=ttl,
+            )
+        except Exception:
+            logger.debug("session.refresh.revoke-old failed", exc_info=True)
+    await _register_session_from_tokens(
+        request=request,
+        access_token=new_tokens.access_token,
+        refresh_token=new_tokens.refresh_token,
+    )
     return new_tokens
 
 
@@ -335,6 +416,17 @@ async def logout(
                     await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
                 except (ConnectionError, OSError) as exc:
                     revoke_errors.append(exc)
+                # T1-extension / ADR-0011: also drop the session record
+                # so the user's "Active sessions" list updates instantly
+                # (rather than waiting for the meta TTL).
+                try:
+                    await SessionRegistry.revoke(
+                        user_id=str(_current_user.id),
+                        jti=refresh_jti,
+                        ttl_seconds=remaining_r,
+                    )
+                except Exception:
+                    logger.debug("session.logout.revoke failed", exc_info=True)
         except PyJWTError:
             pass  # JWT decode failure — token already useless
 
