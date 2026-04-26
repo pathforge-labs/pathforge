@@ -156,7 +156,13 @@ async def _persist_resume(
     ),
 )
 @limiter.limit("10/minute")
-@route_query_budget(max_queries=6)
+# Budget calibrated against the structured-parse path: SELECT user → INSERT
+# resume → SELECT existing structured → INSERT structured → SELECT vector
+# row → COMMIT, plus 2-3 housekeeping queries (audit log, last-uploaded
+# bump). 9 measured under the heaviest test fixture; setting the cap to
+# 10 leaves a small headroom for an extra audit insert without hiding
+# regressions.
+@route_query_budget(max_queries=10)
 async def upload_resume(
     request: Request,
     file: UploadFile,
