@@ -147,9 +147,10 @@ async def list_sessions(
         for row in raw
     ]
     # Sort: current session first, then by last_seen_at descending.
-    items.sort(key=lambda s: (not s.is_current, s.last_seen_at), reverse=False)
-    items.sort(key=lambda s: s.last_seen_at, reverse=True)
-    items.sort(key=lambda s: not s.is_current)
+    # Both ranks ascend toward "preferred", so a single descending sort on
+    # the (is_current, last_seen_at) tuple groups True (1) above False (0)
+    # and most-recent above older within each group.
+    items.sort(key=lambda s: (s.is_current, s.last_seen_at), reverse=True)
     return SessionListResponse(sessions=items)
 
 

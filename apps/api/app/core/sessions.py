@@ -72,8 +72,9 @@ which already calls ``SessionRegistry.purge_user`` (added below).
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from app.core.config import settings
 
@@ -231,8 +232,16 @@ class SessionRegistry:
         cycles."""
         try:
             redis = await cls.get_redis()
-            await redis.hset(
-                _meta_key(jti), "last_seen_at", datetime.now(UTC).isoformat(),
+            # redis-py types these single-key ops as `Awaitable[int] | int`
+            # (cluster client overload bleeds into the async signature) —
+            # narrow the union for mypy on the always-async path.
+            await cast(
+                Awaitable[int],
+                redis.hset(
+                    _meta_key(jti),
+                    "last_seen_at",
+                    datetime.now(UTC).isoformat(),
+                ),
             )
         except Exception:
             logger.debug("session.touch failed; ignoring", exc_info=True)
@@ -248,7 +257,10 @@ class SessionRegistry:
         """
         try:
             redis = await cls.get_redis()
-            jtis = await redis.smembers(_user_set_key(user_id))
+            jtis = await cast(
+                Awaitable[set[str]],
+                redis.smembers(_user_set_key(user_id)),
+            )
         except Exception:
             logger.warning(
                 "session.list: registry unreachable — returning []",
@@ -276,7 +288,10 @@ class SessionRegistry:
             sessions.append(meta)
         if dead:
             try:
-                await redis.srem(_user_set_key(user_id), *dead)
+                await cast(
+                    Awaitable[int],
+                    redis.srem(_user_set_key(user_id), *dead),
+                )
             except Exception:
                 logger.debug("session.list: failed to GC dead jtis", exc_info=True)
         return sessions
@@ -330,18 +345,52 @@ class SessionRegistry:
         Returns the list of revoked JTIs (for audit logging). The
         current session is preserved so the user is not logged out of
         the device making the request.
+
+        Registry-side cleanup (set membership + meta hash deletion) is
+        batched into a single Redis pipeline so a user with N other
+        sessions costs one round-trip instead of N. Blacklist
+        propagation still happens per-JTI because each call carries the
+        token's TTL — the blacklist is the source of truth for "is this
+        JTI dead?", and a partial registry cleanup must not silently
+        leave a JTI presentable.
         """
         sessions = await cls.list_for_user(user_id=user_id)
+        to_revoke = [
+            jti
+            for sess in sessions
+            if (jti := sess.get("jti", "")) and jti != current_jti
+        ]
         revoked: list[str] = []
-        for sess in sessions:
-            jti = sess.get("jti", "")
-            if not jti or jti == current_jti:
-                continue
-            ok = await cls.revoke(
-                user_id=user_id, jti=jti, ttl_seconds=ttl_seconds,
+        if not to_revoke:
+            return revoked
+
+        try:
+            redis = await cls.get_redis()
+            pipe = redis.pipeline()
+            pipe.srem(_user_set_key(user_id), *to_revoke)
+            for jti in to_revoke:
+                pipe.delete(_meta_key(jti))
+            await pipe.execute()
+        except Exception:
+            logger.error(
+                "session.revoke_others: registry cleanup failed",
+                exc_info=True,
             )
-            if ok:
+            return revoked
+
+        from app.core.token_blacklist import token_blacklist
+
+        for jti in to_revoke:
+            try:
+                await token_blacklist.revoke(jti, ttl_seconds=ttl_seconds)
                 revoked.append(jti)
+            except Exception:
+                logger.error(
+                    "session.revoke_others: blacklist propagation failed "
+                    "for jti=%s…",
+                    jti[:8],
+                    exc_info=True,
+                )
         return revoked
 
     @classmethod
@@ -351,7 +400,10 @@ class SessionRegistry:
         Redis entries."""
         try:
             redis = await cls.get_redis()
-            jtis = await redis.smembers(_user_set_key(user_id))
+            jtis = await cast(
+                Awaitable[set[str]],
+                redis.smembers(_user_set_key(user_id)),
+            )
             pipe = redis.pipeline()
             pipe.delete(_user_set_key(user_id))
             for jti in jtis:
