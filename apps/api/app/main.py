@@ -47,6 +47,7 @@ from app.api.v1 import (
     recommendation_intelligence,
     resumes,
     salary_intelligence,
+    sessions,
     skill_decay,
     threat_radar,
     transition_pathways,
@@ -296,6 +297,8 @@ def create_app() -> FastAPI:
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(oauth.router, prefix="/api/v1")
     application.include_router(users.router, prefix="/api/v1")
+    # T1-extension / ADR-0011: user-facing session management.
+    application.include_router(sessions.router, prefix="/api/v1")
     application.include_router(ai.router, prefix="/api/v1")
     application.include_router(applications.router, prefix="/api/v1")
     application.include_router(blacklist.router, prefix="/api/v1")

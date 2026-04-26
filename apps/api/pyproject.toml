@@ -46,6 +46,10 @@ dev = [
     "mypy>=1.14.0",
     "ruff>=0.8.0",
     "aiosqlite>=0.21.0",
+    # Sprint 59 / ADR-0011: in-memory Redis stand-in for the
+    # SessionRegistry tests so the suite stays hermetic without
+    # spinning a real Redis container.
+    "fakeredis>=2.30.0",
 ]
 ai = [
     # GHSA-xqmj-j6mv-4862 (sandbox escape in LiteLLM Proxy's
