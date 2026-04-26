@@ -40,5 +40,8 @@ export { workflowApi } from "./workflow-automation";
 // ── Sprint 35: Billing & Monetization ──────────────────────
 export { billingApi } from "./billing";
 
+// ── Sprint 56 / T4 / ADR-0008: Transparent AI Accounting ──────
+export { aiUsageApi } from "./ai-usage";
+
 // ── Resumes ────────────────────────────────────────────────
 export { resumesApi } from "./resumes";
