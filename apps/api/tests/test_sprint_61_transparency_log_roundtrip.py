@@ -39,14 +39,13 @@ not entangled with the outer ``db_session`` savepoint envelope.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.llm_observability import TransparencyLog, TransparencyRecord
 
@@ -60,7 +59,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest_asyncio.fixture
 async def sqlite_session_factory(
-    test_engine: Any,
+    test_engine: AsyncEngine,
 ) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     """A fresh ``async_sessionmaker`` bound to the session-scoped
     test engine. Each test gets a clean ``ai_transparency_records``
@@ -173,22 +172,23 @@ class TestLoadRecentRoundTrip:
         user_a = str(uuid.uuid4())
         user_b = str(uuid.uuid4())
 
-        # Persist 3 for user_a and 2 for user_b. Sleep micro-pauses
-        # are required to give the SQLite ``created_at`` server
-        # default (CURRENT_TIMESTAMP, second-resolution) distinct
-        # values so the ORDER BY is deterministic.
+        # Persist 3 for user_a and 2 for user_b with explicit
+        # timestamp offsets. Production now propagates
+        # ``entry.timestamp`` to ``DBRecord.created_at`` (instead of
+        # the second-resolution server default), so we can stamp each
+        # record deterministically and skip the per-row
+        # ``asyncio.sleep`` the previous version needed.
+        base_time = datetime.now(UTC)
         for i in range(3):
-            await log._persist_to_db(
-                user_id=user_a,
-                entry=_make_record(analysis_type=f"type_a_{i}"),
-            )
-            await asyncio.sleep(1.05)
+            rec = _make_record(analysis_type=f"type_a_{i}")
+            rec.timestamp = (base_time + timedelta(seconds=i)).isoformat()
+            await log._persist_to_db(user_id=user_a, entry=rec)
         for i in range(2):
-            await log._persist_to_db(
-                user_id=user_b,
-                entry=_make_record(analysis_type=f"type_b_{i}"),
-            )
-            await asyncio.sleep(1.05)
+            rec = _make_record(analysis_type=f"type_b_{i}")
+            rec.timestamp = (
+                base_time + timedelta(seconds=i + 10)
+            ).isoformat()
+            await log._persist_to_db(user_id=user_b, entry=rec)
 
         # User A — newest first, filtered to A only.
         a_recs = await log._load_recent_from_db(user_id=user_a, limit=10)
@@ -208,12 +208,11 @@ class TestLoadRecentRoundTrip:
     ) -> None:
         log = TransparencyLog(session_factory=sqlite_session_factory)
         user_id = str(uuid.uuid4())
+        base_time = datetime.now(UTC)
         for i in range(5):
-            await log._persist_to_db(
-                user_id=user_id,
-                entry=_make_record(analysis_type=f"a{i}"),
-            )
-            await asyncio.sleep(1.05)
+            rec = _make_record(analysis_type=f"a{i}")
+            rec.timestamp = (base_time + timedelta(seconds=i)).isoformat()
+            await log._persist_to_db(user_id=user_id, entry=rec)
         recs = await log._load_recent_from_db(user_id=user_id, limit=3)
         assert len(recs) == 3
 
@@ -333,6 +332,6 @@ class TestDefaultFactoryContract:
         assert log._get_session_factory() is async_session_factory
 
     async def test_injected_factory_overrides_default(self) -> None:
-        sentinel: Any = object()
-        log = TransparencyLog(session_factory=sentinel)
+        sentinel: object = object()
+        log = TransparencyLog(session_factory=sentinel)  # type: ignore[arg-type]
         assert log._get_session_factory() is sentinel

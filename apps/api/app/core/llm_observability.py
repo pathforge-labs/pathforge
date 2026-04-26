@@ -461,9 +461,20 @@ class TransparencyLog:
                 AITransparencyRecord as DBRecord,
             )
 
+            # Synchronise ``created_at`` with the analysis-time
+            # ``entry.timestamp`` rather than letting the server
+            # default fire at INSERT time. The two were drifting:
+            # ``entry.timestamp`` is set when the analysis was
+            # captured in memory; ``created_at`` would otherwise be
+            # set at the (later, fire-and-forget) DB write. The AI
+            # Trust Layer™ surfaces this timestamp to users — a
+            # record reconstructed via ``_load_recent_from_db`` would
+            # show a *later* timestamp than the same record served
+            # from the in-memory buffer. Now the two paths agree.
             async with self._get_session_factory()() as session:
                 db_record = DBRecord(
                     user_id=uuid.UUID(user_id) if isinstance(user_id, str) else user_id,
+                    created_at=datetime.fromisoformat(entry.timestamp),
                     analysis_id=entry.analysis_id,
                     analysis_type=entry.analysis_type,
                     model=entry.model,
