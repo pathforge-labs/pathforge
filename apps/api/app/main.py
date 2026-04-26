@@ -23,6 +23,7 @@ from app.api.v1 import (
     admin,
     ai,
     ai_transparency,
+    ai_usage,
     analytics,
     applications,
     auth,
@@ -317,6 +318,7 @@ def create_app() -> FastAPI:
     application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
+    application.include_router(ai_usage.router, prefix="/api/v1")
     application.include_router(resumes.router, prefix="/api/v1")  # Sprint 50: resume upload
 
     # Sprint 34: Monetization & Growth routers
