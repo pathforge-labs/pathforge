@@ -140,10 +140,9 @@ class TestTierAwareCanary:
             }
         )
         # A paying user that would otherwise be in the 25% bucket
-        # is held back during the 24h window.
+        # is held back during the 24h window. Same user_id → same
+        # bucket; tier alone changes the answer.
         paying_user = _user(user_id="user-0001", tier="premium")
-        free_user = _user(user_id="user-0001", tier="free")
-        # Same user_id → same bucket; tier alone changes the answer.
         assert not is_enabled("engine_v2", user=paying_user, provider=provider)
         # Free users see the build per their bucket (might be True or
         # False depending on hash; we assert the gate logic doesn't
@@ -191,7 +190,6 @@ class TestProviderSetRollout:
                 "new_x": FlagDefinition(stage=RolloutStage.percent_25),
             }
         )
-        u = _user()
         # Pre-rollback: at least some users see the new build.
         # (Don't assert single-user equality — bucketing is hash-based.)
         before = sum(
