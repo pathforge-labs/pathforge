@@ -30,6 +30,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
 from app.core.intelligence_cache import ic_cache
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.recommendation_intelligence import (
@@ -69,6 +70,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -82,7 +84,8 @@ async def get_dashboard(
             return RecommendationDashboardResponse.model_validate(cached)
 
         data = await RecommendationIntelligenceService.get_dashboard(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
 
         latest_batch = data["latest_batch"]
@@ -91,8 +94,7 @@ async def get_dashboard(
 
         result = RecommendationDashboardResponse(
             latest_batch=(
-                RecommendationBatchResponse.model_validate(latest_batch)
-                if latest_batch else None
+                RecommendationBatchResponse.model_validate(latest_batch) if latest_batch else None
             ),
             recent_recommendations=[
                 RecommendationSummary(
@@ -112,10 +114,13 @@ async def get_dashboard(
             total_completed=data["total_completed"],
             preferences=(
                 RecommendationPreferenceResponse.model_validate(preferences)
-                if preferences else None
+                if preferences
+                else None
             ),
         )
-        await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_RECOMMENDATIONS)
+        await ic_cache.set(
+            cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_RECOMMENDATIONS
+        )
         return result
     except ValueError as exc:
         raise HTTPException(
@@ -139,6 +144,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("recommendation_intelligence"))],
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=6)
 async def generate_recommendations(
     request: Request,
     body: GenerateRecommendationsRequest,
@@ -182,19 +188,21 @@ async def generate_recommendations(
     response_model=list[RecommendationSummary],
     summary="List recommendations",
     description=(
-        "List cross-engine recommendations with optional filters "
-        "by status and recommendation type."
+        "List cross-engine recommendations with optional filters by status and recommendation type."
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_recommendations(
     request: Request,
     status_filter: str | None = Query(
-        None, alias="status",
+        None,
+        alias="status",
         description="Filter by status: pending | in_progress | completed | dismissed",
     ),
     type_filter: str | None = Query(
-        None, alias="type",
+        None,
+        alias="type",
         description="Filter by type: skill_gap | threat_mitigation | opportunity | ...",
     ),
     limit: int = Query(20, ge=1, le=100),
@@ -234,11 +242,11 @@ async def list_recommendations(
     response_model=list[RecommendationBatchResponse],
     summary="List recommendation batches",
     description=(
-        "List Intelligence Fusion Engine™ analysis batches "
-        "in reverse chronological order."
+        "List Intelligence Fusion Engine™ analysis batches in reverse chronological order."
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_batches(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
@@ -251,10 +259,7 @@ async def list_batches(
         user_id=current_user.id,
         limit=limit,
     )
-    return [
-        RecommendationBatchResponse.model_validate(batch)
-        for batch in batches
-    ]
+    return [RecommendationBatchResponse.model_validate(batch) for batch in batches]
 
 
 # ── Preferences ──────────────────────────────────────────────
@@ -267,6 +272,7 @@ async def list_batches(
     description="Get user's Recommendation Intelligence filtering preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -274,7 +280,8 @@ async def get_preferences(
 ) -> RecommendationPreferenceResponse:
     """Get Recommendation Intelligence preferences."""
     pref = await RecommendationIntelligenceService.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if pref is None:
         raise HTTPException(
@@ -294,6 +301,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: RecommendationPreferenceUpdate,
@@ -328,6 +336,7 @@ async def update_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_recommendation_detail(
     request: Request,
     recommendation_id: uuid.UUID,
@@ -361,6 +370,7 @@ async def get_recommendation_detail(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=6)
 async def update_recommendation_status(
     request: Request,
     recommendation_id: uuid.UUID,
@@ -398,6 +408,7 @@ async def update_recommendation_status(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_correlations(
     request: Request,
     recommendation_id: uuid.UUID,
@@ -411,10 +422,7 @@ async def get_correlations(
             user_id=current_user.id,
             recommendation_id=recommendation_id,
         )
-        return [
-            RecommendationCorrelationResponse.model_validate(corr)
-            for corr in correlations
-        ]
+        return [RecommendationCorrelationResponse.model_validate(corr) for corr in correlations]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

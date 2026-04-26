@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
 from app.core.intelligence_cache import ic_cache
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -63,6 +64,7 @@ router = APIRouter(prefix="/skill-decay", tags=["Skill Decay & Growth Tracker"])
     response_model=SkillDecayDashboardResponse,
     summary="Get full Skill Decay dashboard",
 )
+@route_query_budget(max_queries=3)
 async def get_skill_decay_dashboard(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -74,7 +76,8 @@ async def get_skill_decay_dashboard(
         return SkillDecayDashboardResponse.model_validate(cached)
 
     data = await SkillDecayService.get_dashboard(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
 
     if not data:
@@ -93,27 +96,14 @@ async def get_skill_decay_dashboard(
         )
 
     result = SkillDecayDashboardResponse(
-        freshness=[
-            _freshness_response(entry)
-            for entry in data.get("freshness", [])
-        ],
+        freshness=[_freshness_response(entry) for entry in data.get("freshness", [])],
         freshness_summary=data.get("freshness_summary", {}),
-        market_demand=[
-            _demand_response(entry)
-            for entry in data.get("market_demand", [])
-        ],
-        velocity=[
-            _velocity_response(entry)
-            for entry in data.get("velocity", [])
-        ],
+        market_demand=[_demand_response(entry) for entry in data.get("market_demand", [])],
+        velocity=[_velocity_response(entry) for entry in data.get("velocity", [])],
         reskilling_pathways=[
-            _pathway_response(entry)
-            for entry in data.get("reskilling_pathways", [])
+            _pathway_response(entry) for entry in data.get("reskilling_pathways", [])
         ],
-        preference=(
-            _pref_response(data["preference"])
-            if data.get("preference") else None
-        ),
+        preference=(_pref_response(data["preference"]) if data.get("preference") else None),
         last_scan_at=data.get("last_scan_at"),
     )
     await ic_cache.set(cache_key, result.model_dump(mode="json"), ttl=ic_cache.TTL_SKILL_DECAY)
@@ -131,6 +121,7 @@ async def get_skill_decay_dashboard(
     dependencies=[Depends(require_feature("skill_decay"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=4)
 async def trigger_skill_decay_scan(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -165,21 +156,11 @@ async def trigger_skill_decay_scan(
     return SkillDecayScanResponse(
         status="completed",
         skills_analyzed=result.get("skills_analyzed", 0),
-        freshness=[
-            _freshness_response(entry)
-            for entry in result.get("freshness", [])
-        ],
-        market_demand=[
-            _demand_response(entry)
-            for entry in result.get("market_demand", [])
-        ],
-        velocity=[
-            _velocity_response(entry)
-            for entry in result.get("velocity", [])
-        ],
+        freshness=[_freshness_response(entry) for entry in result.get("freshness", [])],
+        market_demand=[_demand_response(entry) for entry in result.get("market_demand", [])],
+        velocity=[_velocity_response(entry) for entry in result.get("velocity", [])],
         reskilling_pathways=[
-            _pathway_response(entry)
-            for entry in result.get("reskilling_pathways", [])
+            _pathway_response(entry) for entry in result.get("reskilling_pathways", [])
         ],
     )
 
@@ -192,13 +173,15 @@ async def trigger_skill_decay_scan(
     response_model=list[SkillFreshnessResponse],
     summary="Get skill freshness scores",
 )
+@route_query_budget(max_queries=4)
 async def get_freshness_scores(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SkillFreshnessResponse]:
     """Per-skill freshness scores with exponential decay + contextual analysis."""
     entries = await SkillDecayService.get_freshness_scores(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return [_freshness_response(entry) for entry in entries]
 
@@ -211,13 +194,15 @@ async def get_freshness_scores(
     response_model=list[MarketDemandSnapshotResponse],
     summary="Get market demand snapshots",
 )
+@route_query_budget(max_queries=4)
 async def get_market_demand(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MarketDemandSnapshotResponse]:
     """Per-skill market demand scores with trend projections."""
     entries = await SkillDecayService.get_market_demand(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return [_demand_response(entry) for entry in entries]
 
@@ -230,13 +215,15 @@ async def get_market_demand(
     response_model=list[SkillVelocityEntryResponse],
     summary="Get skill velocity map",
 )
+@route_query_budget(max_queries=4)
 async def get_velocity_map(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SkillVelocityEntryResponse]:
     """Composite velocity map combining freshness and demand signals."""
     entries = await SkillDecayService.get_velocity_map(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return [_velocity_response(entry) for entry in entries]
 
@@ -249,13 +236,15 @@ async def get_velocity_map(
     response_model=list[ReskillingPathwayResponse],
     summary="Get personalized reskilling pathways",
 )
+@route_query_budget(max_queries=4)
 async def get_reskilling_pathways(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ReskillingPathwayResponse]:
     """Prioritized reskilling pathways: critical → recommended → optional."""
     entries = await SkillDecayService.get_reskilling_paths(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return [_pathway_response(entry) for entry in entries]
 
@@ -268,6 +257,7 @@ async def get_reskilling_pathways(
     response_model=SkillFreshnessResponse,
     summary="Manually refresh a skill",
 )
+@route_query_budget(max_queries=4)
 async def refresh_skill(
     payload: SkillRefreshRequest,
     current_user: User = Depends(get_current_user),
@@ -297,13 +287,15 @@ async def refresh_skill(
     response_model=SkillDecayPreferenceResponse | None,
     summary="Get skill decay tracking preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_decay_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SkillDecayPreferenceResponse | None:
     """User's skill decay tracking and notification preferences."""
     pref = await SkillDecayService.get_preferences(
-        db, user_id=current_user.id,
+        db,
+        user_id=current_user.id,
     )
     return _pref_response(pref) if pref else None
 
@@ -313,6 +305,7 @@ async def get_decay_preferences(
     response_model=SkillDecayPreferenceResponse,
     summary="Update skill decay tracking preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_decay_preferences(
     payload: SkillDecayPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),

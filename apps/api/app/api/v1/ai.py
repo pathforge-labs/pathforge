@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.matching import JobListing
@@ -33,7 +34,9 @@ class ParseResumeRequest(BaseModel):
     """Request body for resume parsing."""
 
     raw_text: str = Field(
-        ..., min_length=50, max_length=100_000,
+        ...,
+        min_length=50,
+        max_length=100_000,
         description="Raw resume/CV text to parse (max 100KB)",
     )
 
@@ -112,6 +115,7 @@ class TailorCVResponse(BaseModel):
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=3)
 async def parse_resume(
     request: Request,
     payload: ParseResumeRequest,
@@ -146,6 +150,7 @@ async def parse_resume(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def embed_resume(
     request: Request,
     resume_id: uuid.UUID,
@@ -201,6 +206,7 @@ async def embed_resume(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_match)
+@route_query_budget(max_queries=4)
 async def match_resume(
     request: Request,
     resume_id: uuid.UUID,
@@ -260,6 +266,7 @@ async def match_resume(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_tailor)
+@route_query_budget(max_queries=4)
 async def tailor_cv(
     request: Request,
     payload: TailorCVRequest,
@@ -353,6 +360,7 @@ class IngestJobsResponse(BaseModel):
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=3)
 async def ingest_jobs(
     request: Request,
     payload: IngestJobsRequest,

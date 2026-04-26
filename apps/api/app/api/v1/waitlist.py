@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -44,6 +45,7 @@ router = APIRouter(prefix="/waitlist", tags=["Waitlist"])
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(settings.rate_limit_waitlist)
+@route_query_budget(max_queries=8)
 async def join_waitlist(
     request: Request,
     body: WaitlistJoinRequest,
@@ -69,6 +71,7 @@ async def join_waitlist(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_waitlist)
+@route_query_budget(max_queries=4)
 async def check_position(
     request: Request,
     email: str,
@@ -93,12 +96,14 @@ async def check_position(
     summary="Waitlist statistics",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def get_stats(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_user),
 ) -> Any:
     """Aggregate waitlist statistics. Admin only."""
     from app.api.v1.admin import require_admin as _check_admin
+
     await _check_admin(admin)
     return await WaitlistService.get_stats(db)
 
@@ -112,6 +117,7 @@ async def get_stats(
     summary="List waitlist entries",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def list_entries(
     page: int = 1,
     per_page: int = 20,
@@ -121,6 +127,7 @@ async def list_entries(
 ) -> Any:
     """Paginated waitlist listing. Admin only."""
     from app.api.v1.admin import require_admin as _check_admin
+
     await _check_admin(admin)
     return await WaitlistService.list_entries(db, page, per_page, status_filter)
 
@@ -134,6 +141,7 @@ async def list_entries(
     summary="Invite waitlist batch",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def invite_batch(
     body: WaitlistInviteRequest,
     db: AsyncSession = Depends(get_db),
@@ -141,5 +149,6 @@ async def invite_batch(
 ) -> Any:
     """Invite the next N pending entries. Admin only."""
     from app.api.v1.admin import require_admin as _check_admin
+
     await _check_admin(admin)
     return await WaitlistService.invite_batch(db, body.count)

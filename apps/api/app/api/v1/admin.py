@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User, UserRole
@@ -60,6 +61,7 @@ async def require_admin(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -79,6 +81,7 @@ async def get_dashboard(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def list_users(
     request: Request,
     page: int = 1,
@@ -102,6 +105,7 @@ async def list_users(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def get_user_detail(
     request: Request,
     user_id: str,
@@ -112,9 +116,7 @@ async def get_user_detail(
     try:
         return await AdminService.get_user_detail(db, user_id)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # ── PATCH /admin/users/{user_id} ───────────────────────────────
@@ -127,6 +129,7 @@ async def get_user_detail(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def update_user(
     request: Request,
     user_id: str,
@@ -138,14 +141,10 @@ async def update_user(
     ip_address = request.client.host if request.client else None
     try:
         updates = body.model_dump(exclude_none=True)
-        target_user = await AdminService.update_user(
-            db, admin, user_id, updates, ip_address
-        )
+        target_user = await AdminService.update_user(db, admin, user_id, updates, ip_address)
         return await AdminService.get_user_detail(db, str(target_user.id))
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 # ── POST /admin/users/{user_id}/subscription ───────────────────
@@ -157,6 +156,7 @@ async def update_user(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def override_subscription(
     request: Request,
     user_id: str,
@@ -166,9 +166,7 @@ async def override_subscription(
 ) -> dict[str, str]:
     """Admin override of user subscription tier."""
     ip_address = request.client.host if request.client else None
-    await AdminService.override_subscription(
-        db, admin, user_id, body.tier, body.reason, ip_address
-    )
+    await AdminService.override_subscription(db, admin, user_id, body.tier, body.reason, ip_address)
     return {"status": "ok", "tier": body.tier}
 
 
@@ -182,6 +180,7 @@ async def override_subscription(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def get_system_health(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -201,6 +200,7 @@ async def get_system_health(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_admin)
+@route_query_budget(max_queries=3)
 async def list_audit_logs(
     request: Request,
     page: int = 1,

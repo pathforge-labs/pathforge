@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.csrf import csrf_protect
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import (
     ACCESS_COOKIE_NAME,
@@ -65,6 +66,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     summary="Register a new user account",
 )
 @limiter.limit(settings.rate_limit_register)
+@route_query_budget(max_queries=6)
 async def register(
     request: Request,
     payload: UserRegisterRequest,
@@ -72,6 +74,7 @@ async def register(
 ) -> User:
     # D6: Verify Turnstile CAPTCHA before creating user
     from app.core.turnstile import verify_turnstile_token
+
     await verify_turnstile_token(payload.turnstile_token)
 
     try:
@@ -110,6 +113,7 @@ async def register(
     summary="Authenticate and receive access + refresh tokens",
 )
 @limiter.limit(settings.rate_limit_login)
+@route_query_budget(max_queries=4)
 async def login(
     request: Request,
     response: Response,
@@ -124,9 +128,7 @@ async def login(
     its path with no server-side feature flag.
     """
     try:
-        tokens = await UserService.authenticate(
-            db, email=payload.email, password=payload.password
-        )
+        tokens = await UserService.authenticate(db, email=payload.email, password=payload.password)
     except InvalidCredentialsError as exc:
         # Credential failure — wrong email or wrong password. Kept at
         # 401 and surfaced with a deliberately generic message so the
@@ -164,6 +166,7 @@ async def login(
     summary="Refresh an expired access token",
 )
 @limiter.limit(settings.rate_limit_refresh)
+@route_query_budget(max_queries=3)
 async def refresh_token(
     request: Request,
     response: Response,
@@ -262,6 +265,7 @@ async def refresh_token(
     dependencies=[Depends(csrf_protect)],
 )
 @limiter.limit(settings.rate_limit_logout)
+@route_query_budget(max_queries=3)
 async def logout(
     request: Request,
     response: Response,
@@ -372,6 +376,7 @@ async def logout(
     summary="Request a password reset email",
 )
 @limiter.limit(settings.rate_limit_forgot_password)
+@route_query_budget(max_queries=4)
 async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
@@ -380,6 +385,7 @@ async def forgot_password(
     """Send password reset email. Always returns 200 to prevent email enumeration."""
     # Sprint 39 audit S-M4: Turnstile gate (no-op when secret not set).
     from app.core.turnstile import verify_turnstile_token
+
     await verify_turnstile_token(payload.turnstile_token)
 
     user = await UserService.get_by_email(db, payload.email)
@@ -409,6 +415,7 @@ async def forgot_password(
     summary="Reset password using a valid reset token",
 )
 @limiter.limit(settings.rate_limit_reset_password)
+@route_query_budget(max_queries=3)
 async def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
@@ -424,7 +431,9 @@ async def reset_password(
     """
     try:
         await UserService.reset_password_with_token(
-            db, token=payload.token, new_password=payload.new_password,
+            db,
+            token=payload.token,
+            new_password=payload.new_password,
         )
     except PasswordResetError as exc:
         raise HTTPException(
@@ -444,6 +453,7 @@ async def reset_password(
     summary="Verify email address using a verification token",
 )
 @limiter.limit(settings.rate_limit_verify_email)
+@route_query_budget(max_queries=4)
 async def verify_email(
     request: Request,
     payload: VerifyEmailRequest,
@@ -452,9 +462,7 @@ async def verify_email(
     """Validate verification token and mark user as verified."""
     incoming_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
-    result = await db.execute(
-        select(User).where(User.verification_token == incoming_hash)
-    )
+    result = await db.execute(select(User).where(User.verification_token == incoming_hash))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -498,6 +506,7 @@ async def verify_email(
     summary="Resend email verification link",
 )
 @limiter.limit(settings.rate_limit_resend_verification)
+@route_query_budget(max_queries=3)
 async def resend_verification(
     request: Request,
     payload: ForgotPasswordRequest,  # Reuse: just needs email
@@ -515,7 +524,6 @@ async def resend_verification(
     await UserService.resend_verification_if_eligible(db, email=payload.email)
     return MessageResponse(
         message=(
-            "If an unverified account with that email exists, "
-            "a verification link has been sent."
+            "If an unverified account with that email exists, a verification link has been sent."
         )
     )

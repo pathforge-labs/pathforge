@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
     response_model=UserResponse,
     summary="Get the current authenticated user's profile",
 )
+@route_query_budget(max_queries=4)
 async def get_me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
@@ -39,6 +41,7 @@ async def get_me(current_user: User = Depends(get_current_user)) -> User:
     response_model=UserResponse,
     summary="Update the current user's profile",
 )
+@route_query_budget(max_queries=6)
 async def update_me(
     payload: UserUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -59,6 +62,7 @@ async def update_me(
     ),
 )
 @limiter.limit("2/hour")
+@route_query_budget(max_queries=80)
 async def delete_account(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -75,7 +79,8 @@ async def delete_account(
     user_id = str(current_user.id)
 
     result = await AccountDeletionService.delete_account(
-        db, user=current_user,
+        db,
+        user=current_user,
     )
 
     # Best-effort: blacklist current token to prevent reuse

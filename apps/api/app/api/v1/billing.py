@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -51,6 +52,7 @@ router = APIRouter(prefix="/billing", tags=["Billing"])
     summary="Get current subscription",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=6)
 async def get_subscription(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -69,6 +71,7 @@ async def get_subscription(
     summary="Get current period usage",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=8)
 async def get_usage(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -86,6 +89,7 @@ async def get_usage(
     summary="Get available features",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=8)
 async def get_features(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -123,6 +127,7 @@ async def get_features(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_billing)  # S1: prevent checkout brute-force
+@route_query_budget(max_queries=3)
 async def create_checkout(
     request: Request,  # Required by slowapi rate limiter
     request_body: CreateCheckoutSessionRequest,
@@ -157,6 +162,7 @@ async def create_checkout(
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit(settings.rate_limit_billing)  # S1: prevent portal abuse
+@route_query_budget(max_queries=6)
 async def create_portal(
     request: Request,  # Required by slowapi rate limiter
     current_user: User = Depends(get_current_user),
@@ -182,6 +188,7 @@ async def create_portal(
     summary="List billing events (admin)",
     status_code=status.HTTP_200_OK,
 )
+@route_query_budget(max_queries=4)
 async def list_events(
     request: Request,
     page: int = 1,
@@ -191,6 +198,7 @@ async def list_events(
 ) -> Any:
     """List billing events for admin dashboard. Requires admin role."""
     from app.api.v1.admin import require_admin as _check_admin
+
     await _check_admin(admin)
     return await BillingService.list_billing_events(db, page, per_page)
 
@@ -206,6 +214,7 @@ webhook_router = APIRouter(prefix="/webhooks", tags=["Billing"])
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit("100/minute")
+@route_query_budget(max_queries=20)
 async def stripe_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
