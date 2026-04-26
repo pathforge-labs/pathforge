@@ -24,17 +24,11 @@ import hmac
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
-
-from app.core.security import create_access_token, hash_password
-from app.models.user import User
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,26 +36,7 @@ pytestmark = pytest.mark.asyncio
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _make_admin(db: AsyncSession, email: str = "admin@example.com") -> User:
-    user = User(
-        email=email,
-        hashed_password=hash_password("AdminPass123!"),
-        full_name="Admin",
-        is_active=True,
-        is_verified=True,
-        is_admin=True,
-    )
-    db.add(user)
-    await db.flush()
-    await db.refresh(user)
-    return user
-
-
-def _admin_auth(user: User) -> dict[str, str]:
-    return {"Authorization": f"Bearer {create_access_token(str(user.id))}"}
-
-
-def _signed_payload(secret: str, body_dict: dict) -> tuple[bytes, str]:
+def _signed_payload(secret: str, body_dict: dict[str, Any]) -> tuple[bytes, str]:
     body = json.dumps(body_dict).encode()
     sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return body, sig
