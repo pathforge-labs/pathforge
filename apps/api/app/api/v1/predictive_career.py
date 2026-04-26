@@ -70,6 +70,7 @@ router = APIRouter(
     dependencies=[Depends(require_feature("predictive_career"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def scan_emerging_roles(
     request: Request,
     body: EmergingRoleRequest,
@@ -120,6 +121,7 @@ async def scan_emerging_roles(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_disruption_forecasts(
     request: Request,
     body: DisruptionForecastRequest,
@@ -157,6 +159,7 @@ async def get_disruption_forecasts(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_opportunity_surfaces(
     request: Request,
     body: OpportunitySurfaceRequest,
@@ -195,6 +198,7 @@ async def get_opportunity_surfaces(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_career_forecast(
     request: Request,
     body: PredictiveCareerScanRequest,
@@ -232,6 +236,7 @@ async def get_career_forecast(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -292,6 +297,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def run_scan(
     request: Request,
     body: PredictiveCareerScanRequest,
@@ -377,6 +383,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: PredictiveCareerPreferenceUpdate,

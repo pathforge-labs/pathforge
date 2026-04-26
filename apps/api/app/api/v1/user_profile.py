@@ -204,6 +204,7 @@ async def get_onboarding_status(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_data_summary(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -231,6 +232,7 @@ async def get_data_summary(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def request_export(
     request: Request,
     body: DataExportRequestCreate,

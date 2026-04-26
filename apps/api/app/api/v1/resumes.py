@@ -156,6 +156,7 @@ async def _persist_resume(
     ),
 )
 @limiter.limit("10/minute")
+@route_query_budget(max_queries=6)
 async def upload_resume(
     request: Request,
     file: UploadFile,

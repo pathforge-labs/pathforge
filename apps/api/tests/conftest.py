@@ -741,13 +741,25 @@ def _enforce_route_query_budgets(
         try:
             declared = get_route_query_budget(endpoint)
         except NoQueryBudgetDeclaredError:
-            # Inventory mode: record-but-don't-enforce so the
-            # T2-rollout PR has measured data to derive budgets from.
+            # T2 rollout is complete — every production handler in
+            # ``app/api/v1/`` MUST carry an explicit ``@route_query_budget``
+            # so the per-route causality ledger has a meaningful upper
+            # bound. Continue to capture the unannotated observation
+            # (so the report still surfaces the offender) but enforce
+            # the policy as a hard fail. Use ``@pytest.mark.no_query_budget``
+            # to deliberately opt out of the gate for tests that exercise
+            # legacy routes still pending measurement.
             _record_unannotated_observation(
                 endpoint_qualname=endpoint.__qualname__,
                 observed=observed,
             )
-            return response
+            raise AssertionError(
+                f"Route handler '{endpoint.__qualname__}' is missing the "
+                "@route_query_budget decorator. T2 rollout requires every "
+                "handler in app/api/v1/ to declare a query budget. Add "
+                f"@route_query_budget(max_queries={max(observed, 4)}) above "
+                "the handler. Use @pytest.mark.no_query_budget to opt out."
+            ) from None
         _record_query_budget_observation(
             endpoint_qualname=endpoint.__qualname__,
             declared=declared,

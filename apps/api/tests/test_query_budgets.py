@@ -79,8 +79,17 @@ def test_query_budget_registry_renders_to_markdown(tmp_path: Path) -> None:
     if inventory_rows:
         import math
 
+        # Recommended budget = max(default=4, max_observed + 20% headroom).
+        # The 4-query floor protects un-measured or low-traffic handlers
+        # whose auth-dependency chain alone routinely runs 3-4 queries
+        # (token decode + user lookup + tier check + audit). Routes that
+        # observed zero queries during the suite would otherwise be
+        # recommended a budget of 1, which is brittle the moment a real
+        # auth-bearing test path exercises them.
+        default_floor = 4
         for endpoint, observed in inventory_rows:
-            recommended = observed + max(1, math.ceil(observed * 0.2))
+            with_headroom = observed + max(1, math.ceil(observed * 0.2))
+            recommended = max(default_floor, with_headroom)
             lines.append(f"| `{endpoint}` | {observed} | {recommended} |")
     else:
         lines.append("| _all touched routes are annotated_ | — | — |")

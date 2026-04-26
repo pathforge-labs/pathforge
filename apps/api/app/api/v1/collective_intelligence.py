@@ -74,6 +74,7 @@ router = APIRouter(
     dependencies=[Depends(require_feature("collective_intelligence"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_industry_snapshot(
     request: Request,
     body: IndustrySnapshotRequest,
@@ -123,6 +124,7 @@ async def create_industry_snapshot(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_salary_benchmark(
     request: Request,
     body: SalaryBenchmarkRequest,
@@ -162,6 +164,7 @@ async def create_salary_benchmark(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_peer_cohort_analysis(
     request: Request,
     body: PeerCohortRequest,
@@ -201,6 +204,7 @@ async def create_peer_cohort_analysis(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def create_career_pulse(
     request: Request,
     body: CareerPulseRequest,
@@ -236,6 +240,7 @@ async def create_career_pulse(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -295,6 +300,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def run_scan(
     request: Request,
     body: IntelligenceScanRequest,
@@ -359,6 +365,7 @@ async def run_scan(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def compare_industries_endpoint(
     request: Request,
     body: IndustryComparisonRequest,
@@ -429,6 +436,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: CollectiveIntelligencePreferenceUpdate,

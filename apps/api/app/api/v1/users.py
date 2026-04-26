@@ -41,7 +41,7 @@ async def get_me(current_user: User = Depends(get_current_user)) -> User:
     response_model=UserResponse,
     summary="Update the current user's profile",
 )
-@route_query_budget(max_queries=4)
+@route_query_budget(max_queries=6)
 async def update_me(
     payload: UserUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -62,6 +62,7 @@ async def update_me(
     ),
 )
 @limiter.limit("2/hour")
+@route_query_budget(max_queries=80)
 async def delete_account(
     request: Request,
     current_user: User = Depends(get_current_user),

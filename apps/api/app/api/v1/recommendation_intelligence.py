@@ -70,6 +70,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -143,6 +144,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("recommendation_intelligence"))],
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=6)
 async def generate_recommendations(
     request: Request,
     body: GenerateRecommendationsRequest,
@@ -190,6 +192,7 @@ async def generate_recommendations(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_recommendations(
     request: Request,
     status_filter: str | None = Query(
@@ -243,6 +246,7 @@ async def list_recommendations(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_batches(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
@@ -297,6 +301,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: RecommendationPreferenceUpdate,
@@ -331,6 +336,7 @@ async def update_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_recommendation_detail(
     request: Request,
     recommendation_id: uuid.UUID,
@@ -364,6 +370,7 @@ async def get_recommendation_detail(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=6)
 async def update_recommendation_status(
     request: Request,
     recommendation_id: uuid.UUID,
@@ -401,6 +408,7 @@ async def update_recommendation_status(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_correlations(
     request: Request,
     recommendation_id: uuid.UUID,

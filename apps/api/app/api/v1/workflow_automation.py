@@ -71,6 +71,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -131,6 +132,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=6)
 async def create_workflow(
     request: Request,
     body: CreateWorkflowRequest,
@@ -214,6 +216,7 @@ async def list_workflows(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_templates(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -262,6 +265,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: WorkflowPreferenceUpdate,
@@ -361,6 +365,7 @@ async def update_workflow_status(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=6)
 async def update_step_status(
     request: Request,
     workflow_id: uuid.UUID,

@@ -70,6 +70,7 @@ router = APIRouter(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def list_notifications(
     request: Request,
     page: int = Query(1, ge=1, description="Page number."),
@@ -114,6 +115,7 @@ async def list_notifications(
     description=("Get unread notification count with breakdowns by severity and source engine."),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_unread_count(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -218,6 +220,7 @@ async def list_digests(
     ),
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=6)
 async def generate_digest(
     request: Request,
     digest_type: str = Query(
@@ -285,6 +288,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: NotificationPreferenceUpdate,

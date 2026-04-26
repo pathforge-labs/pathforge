@@ -110,6 +110,7 @@ async def get_dashboard(
     dependencies=[Depends(require_feature("interview_intelligence"))],
 )
 @limiter.limit("5/minute")
+@route_query_budget(max_queries=6)
 async def create_prep(
     request: Request,
     body: InterviewPrepRequest,
@@ -358,6 +359,7 @@ async def generate_star_examples(
     responses={HTTP_404_NOT_FOUND: {"description": "Interview prep not found"}},
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=6)
 async def generate_negotiation_script(
     request: Request,
     prep_id: uuid.UUID,
