@@ -42,21 +42,22 @@ negligible for the per-user, per-month aggregate workload.
 
 from __future__ import annotations
 
-import calendar
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import ClassVar
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_transparency import AITransparencyRecord
 
 #: USD → EUR conversion. Pinned constant rather than live FX so the
 #: same record always reports the same EUR figure (audit invariant).
-#: Refresh quarterly with the rest of the cost table.
-EUR_PER_USD: float = 0.94
+#: Refresh quarterly with the rest of the cost table. Decimal so cost
+#: math stays in fixed-point and never round-trips through float.
+EUR_PER_USD: Decimal = Decimal("0.94")
 
 # ── Model price table ──────────────────────────────────────────
 #
@@ -124,14 +125,14 @@ class UsagePeriod:
 
     @classmethod
     def current_month(cls, now: datetime | None = None) -> UsagePeriod:
+        """Return the half-open ``[start, end)`` window for *this* UTC month.
+
+        ``end`` is the first instant of the *next* month so the SQL
+        filter ``created_at < end`` cleanly excludes the boundary
+        without juggling per-month last-day arithmetic.
+        """
         ref = now or datetime.now(UTC)
         start = ref.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # End = first day of next month, midnight UTC.
-        last_day = calendar.monthrange(ref.year, ref.month)[1]
-        end = start.replace(day=last_day) + (
-            datetime.max.replace(year=ref.year) - datetime.max.replace(year=ref.year)
-        )
-        # Cleaner: start of the month + relativedelta-style 1-month bump
         if ref.month == 12:
             end = start.replace(year=ref.year + 1, month=1)
         else:
@@ -212,65 +213,111 @@ class AIUsageService:
     async def summary(
         self,
         *,
-        user_id: object,
+        user_id: uuid.UUID | str,
         period: UsagePeriod,
     ) -> UsageSummary:
         """Aggregate a user's AI usage over ``period``.
 
-        ``user_id`` is typed ``object`` because callers pass either
-        :class:`uuid.UUID` (from the route handler's ``current_user``)
-        or string (from JSON-flowing call sites). SQLAlchemy's UUID
-        column accepts both.
+        ``user_id`` accepts either a :class:`uuid.UUID` (route handler's
+        ``current_user.id``) or a string (JSON-flowing call sites).
+        SQLAlchemy's UUID column normalises both shapes.
         """
+        rows = await self._fetch_records(user_id=user_id, period=period)
+        per_engine, has_unpriced = self._aggregate(rows)
+        engines = self._engine_rows(per_engine)
+        # Total EUR is the sum of the per-engine EUR figures so the
+        # dashboard cannot show "components don't add up" — the rounding
+        # error from each per-engine ``to_integral_value()`` is absorbed
+        # into the engine row itself, not duplicated at the total line
+        # (Gemini medium — UI consistency).
+        total_eur_cents = sum(e.cost_eur_cents for e in engines)
+        return UsageSummary(
+            user_id=str(user_id),
+            period_label=period.label,
+            period_start=period.start,
+            period_end=period.end,
+            total_calls=sum(e.calls for e in engines),
+            total_prompt_tokens=sum(e.prompt_tokens for e in engines),
+            total_completion_tokens=sum(e.completion_tokens for e in engines),
+            total_cost_eur_cents=total_eur_cents,
+            has_unpriced_models=has_unpriced,
+            engines=engines,
+        )
+
+    async def _fetch_records(
+        self,
+        *,
+        user_id: uuid.UUID | str,
+        period: UsagePeriod,
+    ) -> list[tuple[str, str, int, int, int, datetime]]:
+        """Partial-select the columns the aggregator needs.
+
+        Avoids materialising the heavy ``reasoning`` text column for
+        every row — aggregation only needs counts, tokens, latency, and
+        the model name. Returns a list of tuples ordered by the
+        ``_SELECTED_COLUMNS`` projection so the caller can rely on
+        positional unpacking (Gemini medium — bandwidth and ORM cost).
+        """
+        columns = [
+            getattr(AITransparencyRecord, col) for col in self._SELECTED_COLUMNS
+        ]
         stmt = (
-            select(AITransparencyRecord)
+            select(*columns)
             .where(AITransparencyRecord.user_id == user_id)
             .where(AITransparencyRecord.created_at >= period.start)
             .where(AITransparencyRecord.created_at < period.end)
             .order_by(AITransparencyRecord.created_at)
         )
         result = await self._db.execute(stmt)
-        records = list(result.scalars().all())
+        return [tuple(row) for row in result.all()]  # type: ignore[misc]
 
-        # Group by engine (`analysis_type`) — tabulate counts, tokens,
-        # latencies, last_call_at, and accumulate cost in **USD cents**
-        # (Decimal) to avoid float drift, then convert to EUR cents at
-        # the end.
+    @staticmethod
+    def _aggregate(
+        rows: list[tuple[str, str, int, int, int, datetime]],
+    ) -> tuple[dict[str, _EngineBucket], bool]:
+        """Group rows by engine (``analysis_type``) and tabulate counts,
+        tokens, latencies, last_call_at, and per-bucket cost in **USD
+        cents** (Decimal). Returns the bucket map plus a flag that
+        signals at least one row used a model the price table doesn't
+        recognise — the UI surfaces this as "estimate unavailable".
+        """
         per_engine: dict[str, _EngineBucket] = {}
-        total_usd_cents = Decimal("0")
         has_unpriced = False
-
-        for r in records:
-            bucket = per_engine.setdefault(r.analysis_type, _EngineBucket())
+        for analysis_type, model, prompt_tokens, completion_tokens, latency_ms, created_at in rows:
+            bucket = per_engine.setdefault(analysis_type, _EngineBucket())
             bucket.calls += 1
-            bucket.prompt_tokens += r.prompt_tokens
-            bucket.completion_tokens += r.completion_tokens
-            bucket.latency_total_ms += r.latency_ms
-            bucket.last_call_at = r.created_at
+            bucket.prompt_tokens += prompt_tokens
+            bucket.completion_tokens += completion_tokens
+            bucket.latency_total_ms += latency_ms
+            bucket.last_call_at = created_at
 
-            price = _resolve_price(r.model)
+            price = _resolve_price(model)
             if price is None:
                 has_unpriced = True
                 continue
             input_per_1m, output_per_1m = price
-            # Cost in **USD cents** = price_per_1m_USD * 100 * tokens / 1M
-            #                       = price_per_1m_USD * tokens / 10_000
-            cost_cents = (
-                input_per_1m * Decimal(r.prompt_tokens) / Decimal("10000")
-                + output_per_1m * Decimal(r.completion_tokens) / Decimal("10000")
+            # USD cents = price_per_1m_USD * 100 * tokens / 1M
+            #           = price_per_1m_USD * tokens / 10_000
+            bucket.cost_usd_cents += (
+                input_per_1m * Decimal(prompt_tokens) / Decimal("10000")
+                + output_per_1m * Decimal(completion_tokens) / Decimal("10000")
             )
-            bucket.cost_usd_cents += cost_cents
-            total_usd_cents += cost_cents
+        return per_engine, has_unpriced
 
+    @staticmethod
+    def _engine_rows(
+        per_engine: dict[str, _EngineBucket],
+    ) -> list[EngineUsage]:
+        """Materialise the response-shaped engine rows, sorted by name
+        so the dashboard order is stable across calls.
+        """
         engines: list[EngineUsage] = []
         for engine, bucket in sorted(per_engine.items()):
             avg_latency = (
                 bucket.latency_total_ms // bucket.calls if bucket.calls else 0
             )
             engine_eur_cents = int(
-                (
-                    bucket.cost_usd_cents * Decimal(str(EUR_PER_USD))
-                ).to_integral_value()
+                (bucket.cost_usd_cents * EUR_PER_USD).to_integral_value(),
             )
             engines.append(
                 EngineUsage(
@@ -281,28 +328,11 @@ class AIUsageService:
                     cost_eur_cents=engine_eur_cents,
                     avg_latency_ms=avg_latency,
                     last_call_at=bucket.last_call_at,
-                )
+                ),
             )
-
-        total_eur_cents = int((total_usd_cents * Decimal(str(EUR_PER_USD))).to_integral_value())
-
-        return UsageSummary(
-            user_id=str(user_id),
-            period_label=period.label,
-            period_start=period.start,
-            period_end=period.end,
-            total_calls=len(records),
-            total_prompt_tokens=sum(r.prompt_tokens for r in records),
-            total_completion_tokens=sum(r.completion_tokens for r in records),
-            total_cost_eur_cents=total_eur_cents,
-            has_unpriced_models=has_unpriced,
-            engines=engines,
-        )
+        return engines
 
 
-# Re-export so ``from app.services.ai_usage_service import func, select``
-# isn't a thing (the module purposely doesn't leak SQLAlchemy primitives
-# upward — keep imports tidy).
 __all__ = [
     "EUR_PER_USD",
     "AIUsageService",
@@ -310,6 +340,3 @@ __all__ = [
     "UsagePeriod",
     "UsageSummary",
 ]
-
-# Silence unused-import warning when the SQL helpers are pruned by ruff.
-_ = (func, select)
