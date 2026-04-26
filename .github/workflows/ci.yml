@@ -273,6 +273,59 @@ jobs:
           "
           echo "::endgroup::"
 
+      # T3 / Sprint 56, N-6: Performance regression gate.
+      #
+      # Re-runs `scripts/perf-baseline.sh` in compare mode against the
+      # pinned baseline at PERF_BASELINE_PATH and fails on any
+      # endpoint regressing by > 25 % p95.  Gated on
+      # PERF_BASELINE_STAGING_URL — when the secret is unset (e.g.
+      # before N-4 staging activation lands) the step prints a notice
+      # and skips, so this PR can ship the tooling without blocking
+      # merges that legitimately can't run against staging yet.
+      #
+      # Once staging is live, set the repository secrets
+      # PERF_BASELINE_STAGING_URL=https://api-staging.pathforge.eu
+      # and PERF_BASELINE_AUTH_TOKEN=<jwt-for-synthetic-baseline-user>
+      # to enable the gate.
+      - name: Performance regression gate (N-6)
+        env:
+          PERF_BASELINE_PATH: docs/baselines/2026-Q2.json
+          PERF_BASELINE_STAGING_URL: ${{ secrets.PERF_BASELINE_STAGING_URL }}
+          PERF_BASELINE_AUTH_TOKEN: ${{ secrets.PERF_BASELINE_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${PERF_BASELINE_STAGING_URL:-}" ]; then
+            echo "::notice::Performance regression gate skipped — PERF_BASELINE_STAGING_URL secret not set."
+            echo "::notice::Configure secrets PERF_BASELINE_STAGING_URL + PERF_BASELINE_AUTH_TOKEN once staging is up (see docs/MASTER_PRODUCTION_READINESS.md §3.3 N-4)."
+            exit 0
+          fi
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y jq
+          fi
+          # Advisory mode while the baseline is the placeholder
+          # (every p95_ms == 0). Once staging is captured, the gate
+          # auto-flips to enforcing because non-zero baselines trigger
+          # real ratio checks.
+          if jq -e '.endpoints | all(.p95_ms == 0)' "$PERF_BASELINE_PATH" > /dev/null; then
+            echo "::warning::PERF_BASELINE is still the placeholder (every p95_ms=0). Gate runs in advisory mode."
+            ADVISORY=true
+          else
+            ADVISORY=false
+          fi
+          export API_BASE_URL="$PERF_BASELINE_STAGING_URL"
+          export AUTH_TOKEN="$PERF_BASELINE_AUTH_TOKEN"
+          if [ "$ADVISORY" = "true" ]; then
+            ./scripts/perf-baseline.sh \
+              --compare-to="$PERF_BASELINE_PATH" \
+              --threshold=25 || \
+              echo "::warning::Advisory regression detected (gate not blocking until baseline is real)"
+          else
+            ./scripts/perf-baseline.sh \
+              --compare-to="$PERF_BASELINE_PATH" \
+              --threshold=25
+          fi
+
   # ── Web Quality Gate ─────────────────────────────────────
   web-quality:
     name: Web — Lint & Build
