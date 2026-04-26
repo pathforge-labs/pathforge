@@ -214,6 +214,7 @@ webhook_router = APIRouter(prefix="/webhooks", tags=["Billing"])
     status_code=status.HTTP_200_OK,
 )
 @limiter.limit("100/minute")
+@route_query_budget(max_queries=20)
 async def stripe_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),

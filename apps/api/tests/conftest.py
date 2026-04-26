@@ -738,6 +738,12 @@ def _enforce_route_query_budgets(
         if header is None:
             return response
         observed = int(header)
+        # Use the fully-qualified ``module.qualname`` as the registry
+        # key so handlers that share a function name across modules
+        # (e.g. ``get_dashboard`` exists in 13 router files) don't
+        # collide and trip the consistency check on legitimately
+        # different declared budgets.
+        endpoint_id = f"{endpoint.__module__}.{endpoint.__qualname__}"
         try:
             declared = get_route_query_budget(endpoint)
         except NoQueryBudgetDeclaredError:
@@ -750,25 +756,25 @@ def _enforce_route_query_budgets(
             # to deliberately opt out of the gate for tests that exercise
             # legacy routes still pending measurement.
             _record_unannotated_observation(
-                endpoint_qualname=endpoint.__qualname__,
+                endpoint_qualname=endpoint_id,
                 observed=observed,
             )
             raise AssertionError(
-                f"Route handler '{endpoint.__qualname__}' is missing the "
+                f"Route handler '{endpoint_id}' is missing the "
                 "@route_query_budget decorator. T2 rollout requires every "
                 "handler in app/api/v1/ to declare a query budget. Add "
                 f"@route_query_budget(max_queries={max(observed, 4)}) above "
                 "the handler. Use @pytest.mark.no_query_budget to opt out."
             ) from None
         _record_query_budget_observation(
-            endpoint_qualname=endpoint.__qualname__,
+            endpoint_qualname=endpoint_id,
             declared=declared,
             observed=observed,
         )
         if observed > declared:
             raise AssertionError(
                 f"Query budget exceeded in {test_qualname}: "
-                f"{endpoint.__qualname__} ran {observed} queries, "
+                f"{endpoint_id} ran {observed} queries, "
                 f"declared {declared}. "
                 "Either fix the N+1 or update the @route_query_budget "
                 "annotation. Use @pytest.mark.no_query_budget to opt out."
