@@ -88,6 +88,24 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # `None` disables the deprecation telemetry (default until launch).
     auth_legacy_header_deprecated_after: date | None = None
 
+    # ── Sprint 55-58 Resolved Policy Decisions (ADR-0012) ───────
+    # These knobs each map 1:1 to a §12 default in the Sprint 55-58
+    # plan. Tunable without a deploy so on-call can rebalance during
+    # an incident; defaults are the values accepted in ADR-0012.
+
+    # ADR-0012 #3 — Causality data retention. Per-user attribution
+    # entries in the Engine-of-Record causality ledger (T2) age out
+    # after this many days. Anonymised aggregates are retained
+    # indefinitely (separate column, not deleted by the purge job).
+    causality_retention_days: int = 90
+
+    # ADR-0012 #5 — Auto-rollback threshold. Sentry P0 user rate
+    # at which `app.core.sentry_auto_rollback` flips a feature flag
+    # back to `internal_only`. 0.001 = 0.1 %. Setting this above 0.5
+    # disables the gate in practice — a Sentry alert is paged in
+    # that case (see ADR-0012 §"Operational notes").
+    auto_rollback_p0_user_rate_threshold: float = 0.001
+
     # ── CORS ────────────────────────────────────────────────────
     cors_origins: list[str] = [
         "http://localhost:3000",

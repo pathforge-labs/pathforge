@@ -64,9 +64,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal/sentry", tags=["Internal — Sentry"])
 
-#: Default P0 user-rate threshold. Module-level so tests can patch
-#: without monkeypatching ``settings``.
-P0_USER_RATE_THRESHOLD: float = 0.001  # 0.1 %
+#: Default P0 user-rate threshold. Module-level shadow of
+#: ``settings.auto_rollback_p0_user_rate_threshold`` (ADR-0012 #5)
+#: so tests can monkey-patch without touching the global Settings
+#: instance, and so import-time references stay cheap. The settings
+#: value seeds the constant at module import; runtime re-tuning
+#: happens via the settings field, which on-call can hot-edit
+#: without a deploy.
+P0_USER_RATE_THRESHOLD: float = settings.auto_rollback_p0_user_rate_threshold
 
 
 class SentryRollbackResponse(BaseModel):
