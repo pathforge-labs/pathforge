@@ -90,20 +90,26 @@ export default defineConfig({
   // doesn't build the app. Setting PROD_SMOKE=true bypasses the
   // webServer entirely.
   //
-  // Flattened from a nested ternary (PR #47 → Gemini medium #1):
+  // Flattened from a nested ternary (PR #47 → Gemini medium #1).
+  // PR #48 → Gemini medium #1: read the same ``E2E_BASE_URL``
+  // override the test runner uses (line 48) so an operator who
+  // points the suite at, say, ``http://localhost:4000`` doesn't
+  // see Playwright spawn ``pnpm dev`` and then time out polling
+  // port 3000 while the actual server is on 4000.
+  //
   //   - Single ternary on PROD_SMOKE — undefined vs. configured.
   //   - The configured branch picks `command` and `timeout` by
   //     ``process.env.CI``; everything else is shared.
-  //   - ``url: 'http://localhost:3000'`` for both modes — actively
-  //     polls the URL for a 2xx response before starting tests
-  //     instead of just checking that port 3000 is bound. Catches
-  //     "server started but error-pages-only" failures earlier.
+  //   - ``url`` falls back to ``E2E_BASE_URL`` so the health-check
+  //     target stays in lock-step with the test-runner ``baseURL``.
+  //     Polling the URL (not just the port) catches the
+  //     "server started but error-pages-only" failure class.
   webServer:
     process.env.PROD_SMOKE === 'true'
       ? undefined
       : {
           command: process.env.CI ? 'pnpm start' : 'pnpm dev',
-          url: 'http://localhost:3000',
+          url: process.env.E2E_BASE_URL || 'http://localhost:3000',
           timeout: process.env.CI ? 30_000 : 60_000,
           reuseExistingServer: !process.env.CI,
         },
