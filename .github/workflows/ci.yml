@@ -40,6 +40,12 @@ jobs:
               - 'apps/api/**'
               - 'docker/Dockerfile.api'
               - 'docker/Dockerfile.worker'
+              # CI itself owns the coverage-floor / ratchet policy.
+              # When the workflow changes (e.g. raising
+              # --cov-fail-under) the API job MUST re-run so the new
+              # gate actually validates against this PR — otherwise
+              # a floor lift can land without ever being exercised.
+              - '.github/workflows/ci.yml'
             web:
               - 'apps/web/**'
               - 'packages/shared/**'
