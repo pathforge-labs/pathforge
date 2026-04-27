@@ -107,7 +107,7 @@ def _verify_signature(secret: str, body: bytes, header_value: str) -> bool:
 
 
 class SSOLogoutRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     user_id: str = Field(..., description="PathForge user UUID to force-logout")
     reason: str = Field(
@@ -127,8 +127,48 @@ class SSOLogoutRequest(BaseModel):
 
 
 class SSOLogoutResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     revoked_count: int
     user_id: str
+
+
+# ── Helpers ───────────────────────────────────────────────────────────
+
+
+async def _blacklist_sessions(
+    user_id: str,
+    sessions: list[dict[str, str]],
+    max_ttl: int,
+) -> list[str]:
+    """Blacklist every JTI in *sessions* and return the revoked list.
+
+    Raises ``HTTPException(503)`` if every blacklist write fails so the
+    caller can propagate the failure without assuming a successful logout.
+    """
+    from app.core.token_blacklist import token_blacklist
+
+    revoked: list[str] = []
+    failures = 0
+    for sess in sessions:
+        jti = sess.get("jti", "")
+        if not jti:
+            continue
+        try:
+            await token_blacklist.revoke(jti, ttl_seconds=max_ttl)
+            revoked.append(jti)
+        except Exception:
+            failures += 1
+            logger.error(
+                "sso-logout: blacklist.revoke failed (jti=%s… user=%s)",
+                jti[:8], user_id, exc_info=True,
+            )
+    if failures > 0 and not revoked:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session blacklist temporarily unavailable.",
+        )
+    return revoked
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────
@@ -154,81 +194,31 @@ async def sso_logout(
 ) -> SSOLogoutResponse:
     secret = settings.sso_webhook_secret or ""
     body = await request.body()
-
     if not _verify_signature(secret, body, x_pathforge_signature or ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-PathForge-Signature.",
         )
-
     payload = SSOLogoutRequest.model_validate_json(body)
 
     from app.core.sessions import SessionRegistry
-    from app.core.token_blacklist import token_blacklist
 
-    # Fetch active sessions before purging the registry so we can
-    # blacklist each JTI.  If Redis is unreachable, list_for_user
-    # returns [] (fail-soft per ADR-0011).  We treat an empty list
-    # from an unreachable Redis as a 503 so the caller knows to retry
-    # rather than assuming the user was successfully logged out.
     try:
         sessions = await SessionRegistry.list_for_user(user_id=payload.user_id)
     except Exception:
-        logger.error(
-            "sso-logout: session registry unreachable (user=%s)", payload.user_id,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Session registry temporarily unavailable.",
-        ) from None
+        logger.error("sso-logout: session registry unreachable (user=%s)", payload.user_id,
+                     exc_info=True)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Session registry temporarily unavailable.") from None
 
     if not sessions:
-        logger.info(
-            "sso-logout: no active sessions for user %s (reason=%s) — no-op",
-            payload.user_id,
-            payload.reason,
-        )
+        logger.info("sso-logout: no active sessions for user %s (reason=%s) — no-op",
+                    payload.user_id, payload.reason)
         return SSOLogoutResponse(revoked_count=0, user_id=payload.user_id)
 
-    # Use the max refresh-token lifetime as a conservative TTL for each
-    # blacklist entry. See module docstring for the TTL rationale.
     max_ttl = settings.jwt_refresh_token_expire_days * 86_400
-    revoked: list[str] = []
-    blacklist_failures = 0
-
-    for sess in sessions:
-        jti = sess.get("jti", "")
-        if not jti:
-            continue
-        try:
-            await token_blacklist.revoke(jti, ttl_seconds=max_ttl)
-            revoked.append(jti)
-        except Exception:
-            blacklist_failures += 1
-            logger.error(
-                "sso-logout: blacklist.revoke failed (jti=%s… user=%s)",
-                jti[:8],
-                payload.user_id,
-                exc_info=True,
-            )
-
-    if blacklist_failures > 0 and not revoked:
-        # Every blacklist write failed — we cannot guarantee logout.
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Session blacklist temporarily unavailable.",
-        )
-
-    # Purge registry entries after blacklisting to avoid a window where
-    # a JTI is enumerable-but-not-blacklisted.
+    revoked = await _blacklist_sessions(payload.user_id, sessions, max_ttl)
     await SessionRegistry.purge_user(user_id=payload.user_id)
-
-    logger.info(
-        "sso-logout: revoked %d session(s) for user %s (reason=%s)",
-        len(revoked),
-        payload.user_id,
-        payload.reason,
-    )
-
+    logger.info("sso-logout: revoked %d session(s) for user %s (reason=%s)",
+                len(revoked), payload.user_id, payload.reason)
     return SSOLogoutResponse(revoked_count=len(revoked), user_id=payload.user_id)
