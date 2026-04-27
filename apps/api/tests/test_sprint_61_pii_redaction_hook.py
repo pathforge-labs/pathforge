@@ -39,14 +39,16 @@ Branches covered (the function's whole 24-line decision tree):
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-pytestmark = pytest.mark.asyncio
+# These tests are intentionally **synchronous** — the registrar and
+# its installed closure are sync code. The file-level
+# ``pytest.mark.asyncio`` marker that the Sprint 60/61 sibling test
+# files carry would otherwise force every method into a coroutine
+# and add overhead with no benefit.
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ def _registered_closure(
     fake: MagicMock,
     *,
     redactor: Callable[[str], str] | None = None,
-) -> Any:
+) -> Iterator[Callable[..., None]]:
     """Context manager that installs the fake LiteLLM, optionally
     swaps in a synthetic ``redact_pii``, runs the registrar, and
     yields the installed closure.
@@ -100,7 +102,7 @@ def _registered_closure(
 
 
 class TestRegistration:
-    async def test_registers_single_callable_on_input_callback(self) -> None:
+    def test_registers_single_callable_on_input_callback(self) -> None:
         fake = _install_fake_litellm()
         with _registered_closure(fake) as closure:
             assert callable(closure)
@@ -112,7 +114,7 @@ class TestRegistration:
 
 
 class TestRedactionSemantics:
-    async def test_messages_are_deep_copied_before_redaction(self) -> None:
+    def test_messages_are_deep_copied_before_redaction(self) -> None:
         """The original list passed in by LiteLLM must remain
         untouched (Sprint 39 audit A-H3). Pre-fix, the closure
         mutated ``kwargs["messages"]`` in place — meaning if a
@@ -135,7 +137,7 @@ class TestRedactionSemantics:
         assert kwargs["messages"] is not original
         assert kwargs["messages"][0]["content"] == "REDACTED"
 
-    async def test_skips_when_messages_absent(self) -> None:
+    def test_skips_when_messages_absent(self) -> None:
         fake = _install_fake_litellm()
         kwargs: dict[str, Any] = {}  # no "messages"
 
@@ -148,7 +150,7 @@ class TestRedactionSemantics:
             closure("model-x", [], kwargs)
         # Reached here without raising → the type guard worked.
 
-    async def test_skips_when_messages_is_not_a_list(self) -> None:
+    def test_skips_when_messages_is_not_a_list(self) -> None:
         fake = _install_fake_litellm()
         kwargs: dict[str, Any] = {"messages": "not-a-list"}
 
@@ -160,7 +162,7 @@ class TestRedactionSemantics:
         ) as closure:
             closure("model-x", [], kwargs)
 
-    async def test_skips_messages_with_non_string_content(self) -> None:
+    def test_skips_messages_with_non_string_content(self) -> None:
         """Vision payloads use list-of-parts content. The redactor
         only handles ``str``; the closure must skip non-string
         ``content`` entries rather than raise."""
@@ -185,7 +187,7 @@ class TestRedactionSemantics:
             {"type": "text", "text": "hi"},
         ]
 
-    async def test_redacts_only_string_content(self) -> None:
+    def test_redacts_only_string_content(self) -> None:
         """Mixed: one string-content message + one list-content."""
         fake = _install_fake_litellm()
         kwargs: dict[str, Any] = {
@@ -211,7 +213,7 @@ class TestRedactionSemantics:
 
 
 class TestMetadataFlag:
-    async def test_metadata_flag_set_when_litellm_params_present(self) -> None:
+    def test_metadata_flag_set_when_litellm_params_present(self) -> None:
         fake = _install_fake_litellm()
         existing_meta = {"trace_id": "abc-123"}
         kwargs: dict[str, Any] = {
@@ -224,7 +226,7 @@ class TestMetadataFlag:
         assert existing_meta["trace_id"] == "abc-123"
         assert existing_meta["pii_redacted"] is True
 
-    async def test_metadata_flag_runs_when_litellm_params_absent(self) -> None:
+    def test_metadata_flag_runs_when_litellm_params_absent(self) -> None:
         """The default-empty-dict arm: if ``litellm_params`` is
         missing the line still executes, just on a throwaway dict.
         We assert the closure does not raise."""
@@ -241,7 +243,7 @@ class TestMetadataFlag:
 
 
 class TestOriginalCallbackChaining:
-    async def test_chains_to_existing_input_callback_when_present(self) -> None:
+    def test_chains_to_existing_input_callback_when_present(self) -> None:
         original = MagicMock()
         fake = _install_fake_litellm(original_input_callback=original)
         kwargs: dict[str, Any] = {"messages": []}
@@ -249,7 +251,7 @@ class TestOriginalCallbackChaining:
             closure("model-x", [], kwargs)
         original.assert_called_once_with("model-x", [], kwargs)
 
-    async def test_no_chain_when_no_original_input_callback(self) -> None:
+    def test_no_chain_when_no_original_input_callback(self) -> None:
         fake = _install_fake_litellm(original_input_callback=None)
         kwargs: dict[str, Any] = {"messages": []}
         # The closure should run cleanly with no ``original_input_hook``
@@ -257,7 +259,7 @@ class TestOriginalCallbackChaining:
         with _registered_closure(fake) as closure:
             closure("model-x", [], kwargs)
 
-    async def test_non_callable_original_is_skipped(self) -> None:
+    def test_non_callable_original_is_skipped(self) -> None:
         """Some LiteLLM versions store a *list* on ``input_callback``;
         the registrar's ``callable(original_input_hook)`` guard
         protects against trying to invoke a list. We pass an int —
