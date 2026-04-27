@@ -327,6 +327,9 @@ def create_app() -> FastAPI:
     # T5 / Sprint 57, ADR-0009: Sentry auto-rollback webhook receiver.
     from app.core.sentry_auto_rollback import router as sentry_rollback_router
     application.include_router(sentry_rollback_router, prefix="/api/v1")
+    # T1-extension part 2 / Sprint 62: SSO session-revoke webhook.
+    from app.core.sso_session_revoke import router as sso_revoke_router
+    application.include_router(sso_revoke_router, prefix="/api/v1")
     application.include_router(resumes.router, prefix="/api/v1")  # Sprint 50: resume upload
 
     # Sprint 34: Monetization & Growth routers
