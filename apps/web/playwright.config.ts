@@ -88,22 +88,17 @@ export default defineConfig({
   // workflow and (b) fail anyway because the smoke job intentionally
   // doesn't build the app. Setting PROD_SMOKE=true bypasses the
   // webServer entirely.
+  //
+  // Both local and CI paths use `url` (not `port`) so Playwright
+  // performs an actual 2xx healthcheck before starting the suite —
+  // catches a server that bound the port but failed to render.
   webServer:
     process.env.PROD_SMOKE === 'true'
       ? undefined
-      : process.env.CI
-        ? {
-            // CI: serve the pre-built production bundle
-            command: 'pnpm start',
-            port: 3000,
-            timeout: 30_000,
-            reuseExistingServer: false,
-          }
-        : {
-            // Local: start dev server
-            command: 'pnpm dev',
-            url: 'http://localhost:3000',
-            reuseExistingServer: true,
-            timeout: 60_000,
-          },
+      : {
+          command: process.env.CI ? 'pnpm start' : 'pnpm dev',
+          url: 'http://localhost:3000',
+          timeout: process.env.CI ? 30_000 : 60_000,
+          reuseExistingServer: !process.env.CI,
+        },
 });
