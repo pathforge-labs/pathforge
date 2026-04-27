@@ -210,6 +210,12 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # rejected with 401) so an unconfigured deploy can't be exploited
     # to flip flags.
     sentry_webhook_secret: str = ""
+    # T1-extension part 2 / Sprint 62: shared secret for the SSO
+    # session-revoke webhook at /api/v1/internal/sso/logout.
+    # Empty by default — production sets this via Railway env; an empty
+    # secret makes the endpoint fail-closed (every request rejected 401)
+    # so an unconfigured deploy cannot be used to force-logout users.
+    sso_webhook_secret: str = ""
     stripe_publishable_key: str = ""
     stripe_pro_price_id: str = ""
     stripe_premium_price_id: str = ""
