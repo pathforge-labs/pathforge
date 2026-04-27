@@ -79,7 +79,8 @@ export default defineConfig({
     },
   ],
 
-  // Sprint 36 WS-7: webServer for both local dev and CI.
+  // Sprint 36 WS-7 / Sprint 61 PR #47 / PR #48 (this refactor):
+  // webServer config for both local dev and CI.
   //
   // Prod-smoke (Sprint 58, ADR-0010) targets remote production
   // hosts via PROD_SMOKE_*_BASE_URL env vars and never uses
@@ -88,22 +89,22 @@ export default defineConfig({
   // workflow and (b) fail anyway because the smoke job intentionally
   // doesn't build the app. Setting PROD_SMOKE=true bypasses the
   // webServer entirely.
+  //
+  // Flattened from a nested ternary (PR #47 → Gemini medium #1):
+  //   - Single ternary on PROD_SMOKE — undefined vs. configured.
+  //   - The configured branch picks `command` and `timeout` by
+  //     ``process.env.CI``; everything else is shared.
+  //   - ``url: 'http://localhost:3000'`` for both modes — actively
+  //     polls the URL for a 2xx response before starting tests
+  //     instead of just checking that port 3000 is bound. Catches
+  //     "server started but error-pages-only" failures earlier.
   webServer:
     process.env.PROD_SMOKE === 'true'
       ? undefined
-      : process.env.CI
-        ? {
-            // CI: serve the pre-built production bundle
-            command: 'pnpm start',
-            port: 3000,
-            timeout: 30_000,
-            reuseExistingServer: false,
-          }
-        : {
-            // Local: start dev server
-            command: 'pnpm dev',
-            url: 'http://localhost:3000',
-            reuseExistingServer: true,
-            timeout: 60_000,
-          },
+      : {
+          command: process.env.CI ? 'pnpm start' : 'pnpm dev',
+          url: 'http://localhost:3000',
+          timeout: process.env.CI ? 30_000 : 60_000,
+          reuseExistingServer: !process.env.CI,
+        },
 });
