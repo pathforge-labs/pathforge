@@ -76,6 +76,10 @@ jobs:
       - name: Run prod-smoke specs
         working-directory: apps/web
         env:
+          # Tells playwright.config.ts to skip the local webServer
+          # (smoke specs target remote prod hosts via PROD_SMOKE_*
+          # vars below; no local Next.js build needed).
+          PROD_SMOKE: "true"
           # Targets ─ default to public prod hosts; secrets override
           # for staging gamedays.
           PROD_SMOKE_API_BASE_URL: ${{ vars.PROD_SMOKE_API_BASE_URL || 'https://api.pathforge.eu' }}
