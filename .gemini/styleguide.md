@@ -75,8 +75,31 @@ PathForge is an AI-powered career intelligence platform built as a
 
 ### Testing
 
-- `pytest` with `@pytest.mark.asyncio` for async tests.
-- Test files must mirror source structure: `tests/test_<module>.py`.
+- `pytest` with `@pytest.mark.asyncio` for async tests. Synchronous
+  test files (those whose tests have no `await`) MUST omit the
+  file-level `pytestmark = pytest.mark.asyncio` marker — declaring
+  it forces every test method into a coroutine and adds runtime
+  overhead with no benefit.
+- **Test file naming — two valid patterns**, do not flag either:
+  1. **Module-mirror** (preferred for canonical coverage):
+     `tests/test_<module>.py` mirrors `app/<package>/<module>.py`.
+     Example: `tests/test_llm_observability.py` covers
+     `app/core/llm_observability.py`.
+  2. **Sprint-themed coverage ratchets**:
+     `tests/test_sprint_<N>_<topic>.py`. These are *additive*
+     suites that close coverage gaps in a specific sprint without
+     bloating the canonical module-mirror file. Each sprint-themed
+     file documents (in its module docstring) which canonical
+     module it ratchets and which exact lines it covers — see
+     `tests/test_sprint_60_llm_observability_ratchet.py` and
+     `tests/test_sprint_61_pii_redaction_hook.py` as templates.
+     Reviews must NOT request these be renamed to module-mirror;
+     the ratchet's whole value is locality-of-intent ("Sprint N
+     closed gap X"), which gets lost if every coverage push lands
+     in the same canonical file. Once a module's coverage stops
+     growing, the sprint-themed file's contents may be folded into
+     the module-mirror file as a refactor, but never in the same
+     PR that adds the coverage.
 - All new endpoints need corresponding test coverage.
 
 ### Database
