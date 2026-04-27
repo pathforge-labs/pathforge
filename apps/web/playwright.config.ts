@@ -79,20 +79,31 @@ export default defineConfig({
     },
   ],
 
-  // Sprint 36 WS-7: webServer for both local dev and CI
-  webServer: process.env.CI
-    ? {
-        // CI: serve the pre-built production bundle
-        command: 'pnpm start',
-        port: 3000,
-        timeout: 30_000,
-        reuseExistingServer: false,
-      }
-    : {
-        // Local: start dev server
-        command: 'pnpm dev',
-        url: 'http://localhost:3000',
-        reuseExistingServer: true,
-        timeout: 60_000,
-      },
+  // Sprint 36 WS-7: webServer for both local dev and CI.
+  //
+  // Prod-smoke (Sprint 58, ADR-0010) targets remote production
+  // hosts via PROD_SMOKE_*_BASE_URL env vars and never uses
+  // Playwright's `baseURL`. Spinning up a local Next server in
+  // that mode would (a) require an extra `pnpm build` step in the
+  // workflow and (b) fail anyway because the smoke job intentionally
+  // doesn't build the app. Setting PROD_SMOKE=true bypasses the
+  // webServer entirely.
+  webServer:
+    process.env.PROD_SMOKE === 'true'
+      ? undefined
+      : process.env.CI
+        ? {
+            // CI: serve the pre-built production bundle
+            command: 'pnpm start',
+            port: 3000,
+            timeout: 30_000,
+            reuseExistingServer: false,
+          }
+        : {
+            // Local: start dev server
+            command: 'pnpm dev',
+            url: 'http://localhost:3000',
+            reuseExistingServer: true,
+            timeout: 60_000,
+          },
 });
