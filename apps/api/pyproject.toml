@@ -12,6 +12,13 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
+    # ADR-0001 supplement: explicit declaration. `db_ssl.build_connect_args`
+    # uses `certifi.where()` for the asyncpg TLS context so the trust
+    # anchor is the Mozilla CA bundle (consistent across base images),
+    # not the host distro's. Listed here so pip-audit, dependency
+    # scanners, and lock files treat it as a first-party requirement
+    # rather than relying on httpx/sentry-sdk to pull it transitively.
+    "certifi>=2024.7.4",
     "alembic>=1.14.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
