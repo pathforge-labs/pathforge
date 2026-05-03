@@ -33,6 +33,7 @@ from starlette.status import (
 )
 
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -69,16 +70,14 @@ def _build_scan_response(
             result["transition_path"],
         ),
         skill_bridge=[
-            SkillBridgeEntryResponse.model_validate(entry)
-            for entry in result["skill_bridge"]
+            SkillBridgeEntryResponse.model_validate(entry) for entry in result["skill_bridge"]
         ],
         milestones=[
             TransitionMilestoneResponse.model_validate(milestone)
             for milestone in result["milestones"]
         ],
         comparisons=[
-            TransitionComparisonResponse.model_validate(comp)
-            for comp in result["comparisons"]
+            TransitionComparisonResponse.model_validate(comp) for comp in result["comparisons"]
         ],
     )
 
@@ -92,19 +91,18 @@ def _build_scan_response(
     status_code=HTTP_200_OK,
     summary="Get Transition Pathways dashboard",
 )
+@route_query_budget(max_queries=3)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> TransitionDashboardResponse:
     """Retrieve all saved transitions and preferences for dashboard."""
     result = await transition_pathways_service.get_dashboard(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return TransitionDashboardResponse(
-        transitions=[
-            TransitionSummaryResponse.model_validate(t)
-            for t in result["transitions"]
-        ],
+        transitions=[TransitionSummaryResponse.model_validate(t) for t in result["transitions"]],
         preferences=(
             TransitionPreferenceResponse.model_validate(result["preferences"])
             if result["preferences"]
@@ -124,6 +122,7 @@ async def get_dashboard(
     summary="Explore a career transition",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def explore_transition(
     request: Request,
     body: TransitionExploreRequest,
@@ -141,7 +140,8 @@ async def explore_transition(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND, detail=str(exc),
+            status_code=HTTP_404_NOT_FOUND,
+            detail=str(exc),
         ) from exc
 
     return _build_scan_response(result)
@@ -157,6 +157,7 @@ async def explore_transition(
     summary="Quick: What if I moved to role X?",
 )
 @limiter.limit("3/minute")
+@route_query_budget(max_queries=4)
 async def what_if(
     request: Request,
     body: RoleWhatIfRequest,
@@ -172,7 +173,8 @@ async def what_if(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND, detail=str(exc),
+            status_code=HTTP_404_NOT_FOUND,
+            detail=str(exc),
         ) from exc
 
     return _build_scan_response(result)
@@ -188,13 +190,15 @@ async def what_if(
     status_code=HTTP_200_OK,
     summary="Get transition preferences",
 )
+@route_query_budget(max_queries=4)
 async def get_preferences(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> TransitionPreferenceResponse | None:
     """Retrieve transition preferences for the current user."""
     pref = await transition_pathways_service.get_preferences(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not pref:
         return None
@@ -207,6 +211,7 @@ async def get_preferences(
     status_code=HTTP_200_OK,
     summary="Update transition preferences",
 )
+@route_query_budget(max_queries=4)
 async def update_preferences(
     body: TransitionPreferenceUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -215,11 +220,14 @@ async def update_preferences(
     """Update or create transition preferences."""
     try:
         pref = await transition_pathways_service.update_preferences(
-            database, user_id=current_user.id, update_data=body,
+            database,
+            user_id=current_user.id,
+            update_data=body,
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND, detail=str(exc),
+            status_code=HTTP_404_NOT_FOUND,
+            detail=str(exc),
         ) from exc
 
     return TransitionPreferenceResponse.model_validate(pref)
@@ -234,18 +242,17 @@ async def update_preferences(
     status_code=HTTP_200_OK,
     summary="List all saved transitions",
 )
+@route_query_budget(max_queries=4)
 async def list_transitions(
     current_user: User = Depends(get_current_user),
     database: AsyncSession = Depends(get_db),
 ) -> list[TransitionSummaryResponse]:
     """List all transition paths for the current user."""
     transitions = await transition_pathways_service.get_transitions(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
-    return [
-        TransitionSummaryResponse.model_validate(t)
-        for t in transitions
-    ]
+    return [TransitionSummaryResponse.model_validate(t) for t in transitions]
 
 
 # ── Get Transition ─────────────────────────────────────────────
@@ -257,6 +264,7 @@ async def list_transitions(
     status_code=HTTP_200_OK,
     summary="Get a specific transition",
 )
+@route_query_budget(max_queries=4)
 async def get_transition(
     transition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -264,7 +272,9 @@ async def get_transition(
 ) -> TransitionPathResponse:
     """Retrieve a specific transition path by ID."""
     transition = await transition_pathways_service.get_transition(
-        database, transition_id=transition_id, user_id=current_user.id,
+        database,
+        transition_id=transition_id,
+        user_id=current_user.id,
     )
     if not transition:
         raise HTTPException(
@@ -282,6 +292,7 @@ async def get_transition(
     status_code=HTTP_204_NO_CONTENT,
     summary="Delete a saved transition",
 )
+@route_query_budget(max_queries=4)
 async def delete_transition(
     transition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -289,7 +300,9 @@ async def delete_transition(
 ) -> None:
     """Delete a transition path and all related data."""
     deleted = await transition_pathways_service.delete_transition(
-        database, transition_id=transition_id, user_id=current_user.id,
+        database,
+        transition_id=transition_id,
+        user_id=current_user.id,
     )
     if not deleted:
         raise HTTPException(
@@ -307,6 +320,7 @@ async def delete_transition(
     status_code=HTTP_200_OK,
     summary="Get skill gap analysis for a transition",
 )
+@route_query_budget(max_queries=4)
 async def get_skill_bridge(
     transition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -315,7 +329,9 @@ async def get_skill_bridge(
     """Retrieve skill bridge entries for a transition."""
     # Verify ownership
     transition = await transition_pathways_service.get_transition(
-        database, transition_id=transition_id, user_id=current_user.id,
+        database,
+        transition_id=transition_id,
+        user_id=current_user.id,
     )
     if not transition:
         raise HTTPException(
@@ -324,12 +340,10 @@ async def get_skill_bridge(
         )
 
     entries = await transition_pathways_service.get_skill_bridge(
-        database, transition_id=transition_id,
+        database,
+        transition_id=transition_id,
     )
-    return [
-        SkillBridgeEntryResponse.model_validate(entry)
-        for entry in entries
-    ]
+    return [SkillBridgeEntryResponse.model_validate(entry) for entry in entries]
 
 
 # ── Milestones ─────────────────────────────────────────────────
@@ -341,6 +355,7 @@ async def get_skill_bridge(
     status_code=HTTP_200_OK,
     summary="Get action plan for a transition",
 )
+@route_query_budget(max_queries=4)
 async def get_milestones(
     transition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -348,7 +363,9 @@ async def get_milestones(
 ) -> list[TransitionMilestoneResponse]:
     """Retrieve milestones for a transition."""
     transition = await transition_pathways_service.get_transition(
-        database, transition_id=transition_id, user_id=current_user.id,
+        database,
+        transition_id=transition_id,
+        user_id=current_user.id,
     )
     if not transition:
         raise HTTPException(
@@ -357,12 +374,10 @@ async def get_milestones(
         )
 
     milestones = await transition_pathways_service.get_milestones(
-        database, transition_id=transition_id,
+        database,
+        transition_id=transition_id,
     )
-    return [
-        TransitionMilestoneResponse.model_validate(m)
-        for m in milestones
-    ]
+    return [TransitionMilestoneResponse.model_validate(m) for m in milestones]
 
 
 # ── Comparison ─────────────────────────────────────────────────
@@ -374,6 +389,7 @@ async def get_milestones(
     status_code=HTTP_200_OK,
     summary="Get role comparison for a transition",
 )
+@route_query_budget(max_queries=4)
 async def get_comparison(
     transition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -381,7 +397,9 @@ async def get_comparison(
 ) -> list[TransitionComparisonResponse]:
     """Retrieve dimension comparisons for a transition."""
     transition = await transition_pathways_service.get_transition(
-        database, transition_id=transition_id, user_id=current_user.id,
+        database,
+        transition_id=transition_id,
+        user_id=current_user.id,
     )
     if not transition:
         raise HTTPException(
@@ -390,9 +408,7 @@ async def get_comparison(
         )
 
     comparisons = await transition_pathways_service.get_comparisons(
-        database, transition_id=transition_id,
+        database,
+        transition_id=transition_id,
     )
-    return [
-        TransitionComparisonResponse.model_validate(comp)
-        for comp in comparisons
-    ]
+    return [TransitionComparisonResponse.model_validate(comp) for comp in comparisons]

@@ -1,10 +1,14 @@
 # PathForge — Master Production Readiness (SSOT)
 
 > **Status**: Single-source production launch checklist consolidating the prior Tier-1 audit (2026-03-19) and roadmap (2026-02-24) with a fresh `/preflight` full-scan on the current worktree.
-> **Generated**: 2026-04-22 · **Branch**: `main` · **Head**: `5067554` (PR #3 merged 2026-04-23)
+> **Generated**: 2026-04-22 · **Branch**: `main` · **Head**: `0a72ba0` (PR #33 merged 2026-04-26)
 > **Prior audits superseded**: `TIER1_PRODUCTION_READINESS_AUDIT.md`, `PRODUCTION_READINESS_ROADMAP.md` (deleted).
 > **Stack of record**: Python 3.12 + FastAPI · Next.js 15 · React Native Expo SDK 52 · PostgreSQL 16 + pgvector (Supabase) · Redis · Stripe · Railway + Vercel.
-> **Last revision**: 2026-04-23 (Sprint 44) — **P2-3** closed: [ADR-0003](adr/0003-circuit-breaker-adopted-for-external-apis.md) + circuit breaker wired into Adzuna, Jooble, Voyage AI; `fail_open=True` makes Redis a soft dependency. **P2-4** partially closed: `warn_on_lazy_load` autouse fixture live in test suite (lazy relationship loads now surface as `UserWarning`); endpoint profiling deferred to N-6 infra. **N-7** closed: [dep-triage.md](dep-triage.md) documents all deprecated transitive packages (PARK decisions — all dev-only, no CVE); `package.json` unblocked. Composite 77.4 → 78.2 (+0.8). **Sprint 43 cont.**: Intelligence cache live on Career DNA / Threat Radar / Salary Intelligence (30–60 min TTL, fail-open); R5 Sentry 80% budget alert implemented; R1 closed (circuit breaker fail_open). Composite 78.2 → 79.1 (+0.9). **Sprint 43–44 final**: Intelligence cache on all 5 dashboards + correctness fixes; ADR-0004; `--cov-branch` at 62% (N-2); error response audit (7 numeric codes + 1 semantic fix); perf-baseline.sh → 17 endpoints; **route-level cache integration tests** (15 tests: cache-hit short-circuit, cache-miss set, invalidation on POST scan/generate/PATCH). D3 8.3→8.5, D4 8.2→8.3, D7 7.0→7.4, D8 4.9→5.0. Composite 79.9 → 80.3 (+0.4). **Sprint 44 cont.**: **VR h1 timeout root cause identified and fixed** — `page.clock.install()` in `visual-fixtures.ts` replaced `requestAnimationFrame` + `setTimeout`, freezing React's concurrent scheduler; switched to `page.clock.setFixedTime()` (pins `Date.now()` only). Welcome email confirmed implemented at `auth.py:382`. D2 7.0→7.2. Composite 80.3 → 80.5 (+0.2). **Sprint 44 final**: ADR-0005 (deployment strategy PARK: rolling accepted, canary/blue-green deferred); `deploy-staging.yml` + `docs/runbooks/staging-setup.md` (D9 7.0→7.5); mobile launch plan `docs/mobile-launch-plan.md` (6-phase: EAS build → App Store + Play Store → phased rollout); N+1 audit closed (all 34 services clean with `selectinload`/`joinedload`; `warn_on_lazy_load` fixture live). Composite 80.5 → 81.1 (+0.6). **Sprint 44 coverage push**: 238 new unit tests across 10 zero-coverage modules (pii_redactor 25, embed_pipeline 11, prompt_sanitizer 48, onet_loader 25, error_handlers 18, turnstile 9, middleware 22, logging_config 23, ingestion 6, sentry 43); branch coverage 62% → ~72%; **pii_redactor bug fixed** (phone pattern ordering); `ingestion.py` 100% branch; all 238 green. D3 8.5→9.0, D4 8.3→8.4. Composite 81.1 → 81.7 (+0.6).
+> **Last revision**: 2026-04-27 (Sprint 62) — **Sprint 62**: **T1-extension part 2** (PR #50): `POST /api/v1/internal/sso/logout` — enterprise-partner webhook to force-logout a user on offboarding; HMAC-SHA256 signature gate (`X-PathForge-Signature`), fail-closed on empty `SSO_WEBHOOK_SECRET`; blacklists all active JTIs then purges the session registry; 19 tests; new OPS-11. **Prod-smoke tooling** (PRs #45-#48): pnpm version-conflict fix + Playwright webServer gate — smoke workflow now polls real production and surfaced **OPS-10 active outage** (Issue #49: `DATABASE_URL` placeholder `postgres.[ref]` never substituted in Railway + stale pre-Sprint-55 deploy). Runbook comment added to Issue #49. **Production smoke gate operational**: 15-min cron runs, failures observable. Backend test count: **4,461 → 4,480** (+19 SSO webhook). Composite **86.2 → 86.3 (+0.1)** — D5 13.6→13.7 (HMAC-signed SSO revoke closes ADR-0011 §"Differentiator hook").
+>
+> **Prior revision**: 2026-04-27 (Sprint 61) — Sprint 59-61 follow-ons; full text in git history.
+
+> **Prior revision**: 2026-04-26 (Sprint 58) — Sprint 55-58 six-track work; full text retained in git history (`git show 9747c08:docs/MASTER_PRODUCTION_READINESS.md`).
 
 ---
 
@@ -12,12 +16,12 @@
 
 | Question | Answer |
 | :--- | :--- |
-| **Composite Score** | **81.7 / 100** (↑ 0.5 from P2-2/P2-8 docs bundle; 76.9 post-ADR-0002; 72.4 pre-ADR baseline; 81.1 post-Sprint-44; 81.7 after 238 tests + 10 modules; branch ~72%) |
-| **Verdict** | **CONDITIONAL GO** — code freeze eligible; launch gated on **manual operational setup** (Sprint 40 + Sprint 41 manual tasks). |
-| **Code Readiness** | ✅ GO — remediation sprints 39→41 landed + ADR-0001 DB TLS + ADR-0002 Redis TLS hardening. All prior P0 code gaps closed; one latent plaintext bug (LLM budget guard) closed. |
+| **Composite Score** | **86.3 / 100** (↑ 0.1 from Sprint 61 close; arc: 72.4 pre-ADR → 81.7 post-Sprint-44 → 85.5 post-Sprint-58 → 86.2 post-Sprint-61 → **86.3 post-Sprint-62**; **last-measured line coverage 94.61 %** at PR #40 close; **4,480 backend tests** (+19 SSO webhook); CI floor **85 %**). Literal sum of the 10 weighted-domain rows in §2. |
+| **Verdict** | **CONDITIONAL GO** — code freeze eligible; launch gated on **manual operational setup** only. **Every code-side gap on this document is closed.** |
+| **Code Readiness** | ✅ GO — Sprints 39→58 landed + ADR-0001/02 (DB+Redis TLS) + ADR-0006/07/08/09/10 (cookie auth, query budget, AI accounting, canary, webhook DLQ). Prior R8 (JWT-localStorage XSS) closed via T1. P2-4 (N+1 endpoint profiling) closed via T2. N-5 / N-6 closed code-side via T4 / T3. |
 | **Ops Readiness** | ❌ NOT READY — Sentry DSN empty, no Stripe account, no LLM keys, Redis not provisioned, no uptime monitor. (DB SSL now auto-enables in prod, no action needed.) |
-| **Blocker Rules** | Zero-Domain: PASS · Security Floor ≥50%: PASS (D5=86) · Quality Floor ≥50%: PASS (D4=82). |
-| **Est. remaining effort to GO** | ~1–2 sessions of manual browser/dashboard work across Stripe/Railway/Vercel/UptimeRobot/Sentry + 1 smoke-test session. |
+| **Blocker Rules** | Zero-Domain: PASS · Security Floor ≥50%: PASS (D5=91 %) · Quality Floor ≥50%: PASS (D4=85 %). |
+| **Est. remaining effort to GO** | ~1–2 sessions of manual browser/dashboard work across Stripe/Railway/Vercel/UptimeRobot/Sentry + 1 smoke-test session. **No code work remaining for launch.** |
 
 ---
 
@@ -25,25 +29,25 @@
 
 | # | Domain | Weight | Score | Status | Headline finding |
 | :-- | :--- | :--: | :--: | :--- | :--- |
-| D1 | Task Tracking & Completion | 10 | 8 | 🟢 | 44 sprints tracked in `docs/ROADMAP.md`; SSOT discipline is strong. Sprint 40/41 manual tasks are the only open blockers. |
-| D2 | User Journeys (UX + A11y) | 10 | 7.2 | 🟡 | 18 dashboard routes + 10 marketing pages + 14 Playwright E2E specs. Axe-core wired. **VR h1 timeout root cause fixed** (`clock.install` → `clock.setFixedTime` in visual-fixtures.ts); baselines pending `update-baselines.yml` dispatch. |
-| D3 | Implementation (Tests) | 10 | 9.0 | 🟢 | **1,673+** backend tests (238 new this session across 10 modules), 232+ web, 69+ mobile, ~28 E2E. **Branch coverage: ~72%** (Sprint 45 target 70% — exceeded). `ingestion.py` + `sentry.py` 100% branch. All 238 new tests green. |
-| D4 | Code Quality | 10 | 8.4 | 🟢 | Ruff/mypy/ESLint/TSC all 0-error; 0 Dependabot vulns after 26-alert sweep. 3 services >24 KB (monitor, not block). Error response format audit: 7 numeric HTTP status codes → named constants; 404-for-ValueError corrected to 400 in analytics.py. **pii_redactor bug fixed**: phone pattern reordered to run last, was eating SSN/BSN/CC/IP digit sequences. |
-| D5 | Security | 15 | 12.9 | 🟢 | OAuth JWKS, refresh rotation + replay detect, fail-closed blacklist, 8-layer prompt sanitizer, Stripe webhook HMAC. **DB TLS secure-by-default + prod downgrade guard + Alembic TLS parity + probe-error redaction (ADR-0001).** **Redis TLS secure-by-default + upgrade-only scheme reconciliation + ARQ `ssl_check_hostname=True` + latent-bug closure in LLM budget guard (ADR-0002).** `ConfigurationError(RuntimeError)` pattern prevents DSN leak via Pydantic `ValidationError`. JWT still in localStorage (accepted trade-off). |
-| D6 | Configuration / Secrets | 10 | 8.8 | 🟢 | Production-mode guards block insecure defaults at boot; ADR-0001/0002 established layered secure-by-default pattern + 7-step ordered validator + CI config-guards job (8 scenarios). **Secret rotation runbook** (11 secrets, calendar + incident path, P2-2). 100+ settings in one `Settings` class (refactor deferred). No vault. |
-| D7 | Performance | 10 | 7.4 | 🟡 | pgvector HNSW, tier-routed LLM, WebP/AVIF, Next.js server components. **Intelligence cache: all 5 dashboard GET endpoints cached (15–60 min TTL, fail-open).** N+1 autouse fixture live. No load test yet. |
-| D8 | Documentation | 5 | 5.0 | 🟢 | **7 incident runbooks** + production checklist + **ADR directory (ADR-0001–0005: DB SSL, Redis SSL, circuit breaker, intelligence cache, deployment strategy)**. **SECURITY.md §"Ignored CVEs" register** (P2-8). README accurate. API docs auto-generated (disabled in prod). |
-| D9 | Infrastructure / CI-CD | 10 | 7.5 | 🟡 | CI green; `pip-audit` + `pnpm audit` now blocking. `deploy.yml` gated by manual `deploy` confirmation. **`deploy-staging.yml` created** (auto-deploys `main` → Railway staging; health-check probe; `docs/runbooks/staging-setup.md` ready). Staging activation pending 5 manual Railway steps (N-4). |
-| D10 | Observability | 10 | 5.3 | 🔴 | Structured logging + Sentry SDK integrated backend+web+mobile. **`/health/ready` exposes structured `db` + `redis_detail` blocks with TLS attestation; Sentry `db.ssl` + `redis.ssl` global tags on all events.** `SENTRY_DSN` empty → zero prod error visibility until OPS-1. Langfuse off. No external uptime monitor. |
-| | **Total** | **100** | **81.7** | 🟡 | Arc: 72.4 → 75.0 (ADR-0001) → 76.9 (ADR-0002) → 77.4 (docs) → 78.2 (P2-3/N-7) → 79.1 (cache+R5) → 79.9 (Sprint 43–44: cache correctness, ADR-0004, N-2, error consistency) → 80.3 (route-level cache tests) → 80.5 (VR clock fix + welcome email confirmed) → 81.1 (ADR-0005 deploy strategy, staging workflow + runbook, mobile launch plan, N+1 audit closed) → 81.7 (238 tests across 10 modules; pii_redactor bug fixed; ingestion + sentry 100% branch; branch ~72% — Sprint 45 target exceeded). |
+| D1 | Task Tracking & Completion | 10 | 9.0 | 🟢 | 58 sprints tracked in `docs/ROADMAP.md`; SSOT discipline is strong. **Code-side track items 100 % closed.** Manual ops items remain the only open blockers. |
+| D2 | User Journeys (UX + A11y) | 10 | 7.5 | 🟡 | 18 dashboard routes + 10 marketing pages + 14 Playwright E2E specs. Axe-core wired. VR h1 timeout root cause fixed. **New `/dashboard/settings/ai-usage` page (T4) ships Transparent AI Accounting** — tier-aware presentation defuses "I don't trust the AI scores" objection. Baselines pending `update-baselines.yml` dispatch. |
+| D3 | Implementation (Tests) | 10 | 9.8 | 🟢 | **4,480 backend tests** (+2,728 since Sprint 44; +19 Sprint 62 SSO webhook), 267 web, 84 mobile, ~28 E2E. **Last-measured line coverage 94.61 %** at PR #40 close (Sprint 47 target 80 % — far exceeded; CI floor lifted to **85 % in PR #44**, ~10 pp safety headroom). Sessions registry, causality purge, transparency-log round-trip + DI hook (with latent timestamp-drift bug fix), PII redaction-hook coverage to 98 %, SSO session-revoke (19 tests, Sprint 62). Query budget gate still prevents N+1 regressions. |
+| D4 | Code Quality | 10 | 8.5 | 🟢 | Ruff/mypy/ESLint/TSC all 0-error; 0 Dependabot vulns. **`@route_query_budget` decorator on every route** (T2) — un-annotated handlers hard-fail in CI. Pii_redactor bug fixed. Mobile lint v9 flat-config migrated (issue #20 closed). |
+| D5 | Security | 15 | 13.7 | 🟢 | **JWT now in `httpOnly + Secure + SameSite=Strict` cookies (T1, ADR-0006)** + double-submit CSRF — closes R8 / P2-1 (the localStorage-XSS exfil class). OAuth JWKS, refresh rotation + replay detect, fail-closed blacklist, 8-layer prompt sanitizer, Stripe webhook HMAC. ADR-0001/02 (DB+Redis TLS) intact. **Sentry rollback webhook signature-verified + rate-limited (T5).** **SSO session-revoke webhook HMAC-signed + fail-closed (T1-extension part 2, Sprint 62, PR #50)** — closes ADR-0011 §"Differentiator hook". |
+| D6 | Configuration / Secrets | 10 | 8.8 | 🟢 | Production-mode guards block insecure defaults at boot; ADR-0001/0002 established layered secure-by-default pattern + 7-step ordered validator + CI config-guards job. Secret rotation runbook (11 secrets). 100+ settings in one `Settings` class (refactor deferred). No vault. |
+| D7 | Performance | 10 | 8.5 | 🟢 | pgvector HNSW, tier-routed LLM, WebP/AVIF, Next.js server components. Intelligence cache: all 5 dashboard GETs cached. **Pinned p50/p95 baseline for 17 endpoints in `docs/baselines/2026-Q2.json` (T3) + 25 % regression gate in CI** — N-6 closed. **Per-route `@route_query_budget` (T2) prevents N+1 in production**, not just tests. |
+| D8 | Documentation | 5 | 5.0 | 🟢 | **14 ADRs** (ADR-0001–0012 + this MPR + sprint-55-58 plan; ADR-0011 active session registry, ADR-0012 §12 decisions resolved both shipped Sprint 59). 8 incident runbooks (added `causality-data-retention.md` Sprint 61) + production checklist + canary-rollback runbook. SECURITY.md §"Ignored CVEs" register. `.gemini/styleguide.md` expanded twice this session (confidence-cap distinction PR #40, test-naming patterns PR #43) — both close real gaps surfaced by post-merge Gemini reviews. README accurate. API docs auto-generated (disabled in prod). |
+| D9 | Infrastructure / CI-CD | 10 | 8.0 | 🟢 | CI green; `pip-audit` + `pnpm audit` blocking; coverage gate at floor. `deploy.yml` gated by manual confirmation. `deploy-staging.yml` ready. **GrowthBook-style flag system + Sentry-triggered auto-rollback (T5, ADR-0009)** supersedes ADR-0005 PARK; tier-aware canary delays paying-tier exposure on major releases by 24 h. Staging activation pending 5 manual Railway steps (N-4). |
+| D10 | Observability | 10 | 7.5 | 🟢 | Structured logging + Sentry SDK integrated. `/health/ready` exposes structured `db` + `redis_detail` with TLS attestation. **Langfuse activated (T4, ADR-0008)** — per-engine trace + cost telemetry; `/dashboard/settings/ai-usage` exposes the data to users. **Webhook DLQ ledger (T6, ADR-0010)** — `webhook_event` table + admin replay surface; 15-min scheduled production smoke. **AI Trust Layer™ round-trip integrity** (Sprint 61, PR #42) — fixed latent `entry.timestamp` ↔ `db.created_at` drift so memory- and DB-served records report the same instant. **Causality data retention enforced** (Sprint 61, PR #41 + ADR-0012 §#3) — daily cron purge with audit-first ordering protects the GDPR contract while preserving anonymised aggregates forever via `logs/causality_purge_aggregates.jsonl`. **PII redaction hook** at 98 % coverage including the deep-copy-before-redact invariant (Sprint 39 audit A-H3). `SENTRY_DSN` still empty (OPS-1) → no prod error visibility until manual setup. No external uptime monitor (OPS-6). |
+| | **Total** | **100** | **86.3** | 🟢 | Literal sum of weighted-domain scores above. Arc: 72.4 → 75.0 (ADR-0001) → 76.9 (ADR-0002) → 77.4 (docs) → 78.2 (P2-3/N-7) → 79.1 (cache+R5) → 79.9 → 80.3 → 80.5 → 81.1 → 81.7 (Sprint 44 close) → 85.5 (Sprint 58 close: T1-T6 shipped, ADR-0006/07/08/09/10, 4,331 tests, 94.36 %) → 86.2 (Sprint 61 close: ADR-0011/-0012 follow-ons + observability ratchet + coverage floor 80 → 85 %; 4,461 tests, 94.61 %+, PRs #38-#44) → **86.3 (Sprint 62 close: T1-ext part 2 SSO webhook PR #50; 4,480 tests; D5 13.6→13.7)**. |
 
 **Blocker Rule Precedence** (evaluated in order, none tripped):
 
 | Rule | Result | Evidence |
 | :--- | :--: | :--- |
-| Zero-Domain | PASS | lowest domain = D10 @ 5.3/10 (>0) |
-| Security Floor (D5 ≥ 50%) | PASS | D5 = 86% |
-| Quality Floor (D4 ≥ 50%) | PASS | D4 = 82% |
+| Zero-Domain | PASS | lowest domain = D10 @ 7.0/10 (>0; was 5.3 pre-Sprint-58) |
+| Security Floor (D5 ≥ 50%) | PASS | D5 = 91 % |
+| Quality Floor (D4 ≥ 50%) | PASS | D4 = 85 % |
 
 ---
 
@@ -81,6 +85,8 @@ Code is ready, but these require a human in the Stripe/Railway/Vercel/UptimeRobo
 | **OPS-7** | **Full env-var audit not run** | Railway + Vercel | Verify `ENVIRONMENT`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `CORS_ORIGINS`, `INITIAL_ADMIN_EMAIL`, `NEXT_PUBLIC_API_URL`. |
 | **OPS-8** | **`alembic current` on prod unverified** | Railway shell | `alembic current` → `alembic upgrade head` if behind. |
 | **OPS-9** | **VR baselines empty** | `apps/web/e2e/__screenshots__/` | Run `update-baselines.yml` once Sentry/LLM are live; commit. |
+| **OPS-10** | **`DATABASE_URL` has literal `[ref]` placeholder — active prod outage** (Issue #49) | Railway env → Variables | Replace `postgres.[ref]` with real Supabase project ref (Supabase dashboard → Project Settings → Database → Connection string). Use `postgresql+asyncpg://` prefix + port 6543 (transaction pooler). Then redeploy: `gh workflow run deploy.yml --ref main -f confirm=deploy`. |
+| **OPS-11** | **`SSO_WEBHOOK_SECRET` unset** | Railway env | Generate: `python -c "import secrets; print(secrets.token_urlsafe(48))"` → set in Railway. New in Sprint 62, PR #50. Empty = fail-closed (all partner logout requests rejected 401) — safe to leave unset until a partner integration is active. |
 
 ### 3.3 New findings this scan
 
@@ -89,9 +95,9 @@ Code is ready, but these require a human in the Stripe/Railway/Vercel/UptimeRobo
 | ~~N-1~~ | ~~`database_ssl` default is `False`~~ — **closed 2026-04-23 via [ADR-0001](adr/0001-database-ssl-secure-by-default.md)**. Auto-derives from `ENVIRONMENT`; explicit `false` in prod fails boot; Alembic + runtime use the same hardened TLS context; readiness probe attests server-side `ssl_cipher`. | — | — |
 | ~~N-2~~ | ~~Coverage floor at 65% (Sprint 42 baseline lock).~~ — **closed 2026-04-23 (Sprint 44)**. `--cov-branch` enabled; floor 62% (line+branch, conservative: 1% above pre-Sprint-43 combined baseline; Sprint 43 added ~55 new tests). Ratchet: Sprint 45 → 70%; Sprint 46 → 75%; Sprint 47 → 80%. Gate B N-2 item ✅ in progress. | — | — |
 | ~~N-3~~ | ~~`auditConfig.ignoreCves` carries `CVE-2025-69873`, `CVE-2025-09073` without justification comments.~~ — **closed 2026-04-23** via P2-8. Justification register added to [SECURITY.md](../SECURITY.md) §"Ignored CVEs" (dev-only ESLint/ajv false positives, re-evaluate 2026-Q4). `package.json` `auditConfig` carries a `__justifications` pointer to the register. | — | — |
-| N-4 | No staging environment — code goes CI→prod; Vercel previews cover web only. | Medium | Add Railway staging env (Sprint 44 item). |
-| N-5 | Langfuse `llm_observability_enabled: false`; LLM cost/latency/quality invisible. | Medium | Activate after OPS-3 so traces are meaningful. |
-| N-6 | No load / performance baseline documented for the 12 intelligence endpoints. | Medium | Run `scripts/perf-baseline.sh` once LLM keys live; capture p50/p95 in `docs/baselines/`. |
+| N-4 | No staging environment — code goes CI→prod; Vercel previews cover web only. | Medium | Add Railway staging env. `deploy-staging.yml` + runbook ready Sprint 44; activation pending 5 manual Railway steps. |
+| ~~N-5~~ | ~~Langfuse `llm_observability_enabled: false`; LLM cost/latency/quality invisible.~~ — **closed code-side 2026-04-26 (Sprint 56, T4, [ADR-0008](adr/0008-transparent-ai-accounting.md))**. Langfuse SDK wired with sampling + PII redaction; per-engine cost telemetry surfaced to users at `/dashboard/settings/ai-usage` (tier-aware presentation: scans for free, EUR for premium). Trace volume controlled per-user. Awaiting OPS-3 LLM keys before traces become meaningful in prod. | — | — |
+| ~~N-6~~ | ~~No load / performance baseline documented for the 12 intelligence endpoints.~~ — **closed 2026-04-26 (Sprint 56, T3)**. Pinned `docs/baselines/2026-Q2.json` covers 17 endpoints (health + intelligence dashboards + auth); CI `perf-baseline-regression` job fails any PR with > 25 % p95 drift. Refresh policy in `docs/baselines/README.md`. | — | — |
 | ~~N-7~~ | ~~Deprecated transitive packages in `pnpm-lock.yaml` had no explicit triage decision, blocking future `package.json` touches.~~ — **closed 2026-04-23** (Sprint 43). Five deprecated packages triaged in [docs/dep-triage.md](dep-triage.md). All are dev-only, no CVE, blocked on upstream parent upgrades — PARK decision justified for each. | — | — |
 
 ---
@@ -101,6 +107,7 @@ Code is ready, but these require a human in the Stripe/Railway/Vercel/UptimeRobo
 ### Gate A — Must complete before `/deploy` (hard blockers)
 Estimated ≤1 working session (mostly clicks in external dashboards).
 
+0. **OPS-10 (URGENT — active outage)** Fix `DATABASE_URL` in Railway (Issue #49): replace `postgres.[ref]` with real Supabase project ref, then run `gh workflow run deploy.yml --ref main -f confirm=deploy`. Verify `curl https://api.pathforge.eu/api/v1/health/ready` returns `"status": "ok"`.
 1. **OPS-2** Provision Stripe test mode → webhook → set 7 Railway env vars + 1 Vercel env var → test with `4242 4242 4242 4242`.
 2. **OPS-3** Create Anthropic + Google AI + Voyage AI keys → set in Railway → `LLM_MONTHLY_BUDGET_USD=200`.
 3. **OPS-4** Provision Redis (Railway plugin or Upstash free) → set `REDIS_URL` + `RATELIMIT_STORAGE_URI`.
@@ -114,11 +121,12 @@ Estimated ≤1 working session (mostly clicks in external dashboards).
 Pass criteria: every Gate A step produces observable evidence (Sentry event ID, Stripe charge ID, UptimeRobot monitor ID, `curl /health/ready` 200, successful round-trip smoke).
 
 ### Gate B — Within 2 sprints post-launch (Sprint 42–43)
-- ~~N-2 Coverage gate ≥80% on API.~~ ⚠️ In progress: `--cov-branch` enabled Sprint 44 at 62% floor. Ratchet to 80% by Sprint 47.
+- ~~N-2 Coverage gate ≥80% on API.~~ ✅ closed Sprint 47; **94.36 % line coverage as of Sprint 58** (target was 80 %).
 - ~~Welcome email on verification.~~ ✅ confirmed implemented (Sprint 42 audit).
 - ~~P2-2 `docs/runbooks/secret-rotation.md`.~~ ✅ closed 2026-04-23.
 - ~~P2-3 Circuit-breaker adopted — [ADR-0003](adr/0003-circuit-breaker-adopted-for-external-apis.md) + wired into Adzuna, Jooble, Voyage AI.~~ ✅ closed 2026-04-23.
-- P2-4 N+1 sweep — `warn_on_lazy_load` autouse fixture live; endpoint profiling pending N-6 infra. ⚠️ partial.
+- ~~P2-4 N+1 sweep / endpoint profiling.~~ ✅ closed Sprint 55 (T2). `@route_query_budget(max_queries=N)` decorator on every router-mounted handler in `app/api/v1/`; autouse fixture hard-fails any PR exceeding declared budget; un-annotated handlers also hard-fail.
+- ~~P2-1 / R8 JWT in localStorage XSS exfiltration~~ ✅ closed Sprint 55 (T1, [ADR-0006](adr/0006-auth-via-httponly-cookies.md)). JWT moved to `httpOnly + Secure + SameSite=Strict` cookies + double-submit CSRF. 30-day legacy-bearer overlap window for in-flight clients.
 - ~~N-3 / P2-8 Document CVE-ignore justifications.~~ ✅ closed 2026-04-23.
 - ~~N-7 Dep triage — [docs/dep-triage.md](dep-triage.md) documents all deprecated transitives.~~ ✅ closed 2026-04-23.
 
@@ -129,34 +137,40 @@ Pass criteria: every Gate A step produces observable evidence (Sentry event ID, 
 
 ### Gate D — Post-launch polish (Sprint 44)
 - OPS-9 VR baselines committed; `update-baselines.yml` green.
-- N-5 Langfuse activation.
-- N-4 Railway staging environment.
-- N-6 Performance baseline captured.
-- Mobile app launch plan.
-- Webhook failure alerting in Stripe Dashboard.
-- Canary / blue-green deployment evaluation.
+- ~~N-5 Langfuse activation.~~ ✅ closed code-side Sprint 56 (T4, [ADR-0008](adr/0008-transparent-ai-accounting.md)). Awaits OPS-3 LLM keys for live traces.
+- N-4 Railway staging environment — `deploy-staging.yml` + runbook ready; pending 5 manual Railway steps.
+- ~~N-6 Performance baseline captured.~~ ✅ closed Sprint 56 (T3) — `docs/baselines/2026-Q2.json` + CI regression gate.
+- ~~Mobile app launch plan.~~ ✅ closed Sprint 44 (`docs/mobile-launch-plan.md` 6-phase).
+- ~~Webhook failure alerting~~ ✅ closed Sprint 58 (T6, [ADR-0010](adr/0010-webhook-dlq-and-prod-smoke.md)) — `webhook_event` ledger + admin replay surface + 15-min scheduled prod smoke.
+- ~~Canary / blue-green deployment evaluation.~~ ✅ closed Sprint 57 (T5, [ADR-0009](adr/0009-progressive-deployment-canary.md)) supersedes ADR-0005. GrowthBook-style flag + Sentry-triggered auto-rollback + tier-aware canary delay (paying users trail major releases by 24 h).
 - ~~API response caching (5–60 min) on intelligence endpoints.~~ ✅ closed Sprint 43–44: all 5 intelligence dashboard GETs cached via `ic_cache` (15–60 min TTL, fail-open).
 
 ---
 
-## 5. What's Built (inventory snapshot, 2026-04-22)
+## 5. What's Built (inventory snapshot, 2026-04-27)
 
 ### Backend (`apps/api`)
-- **32 route files** (`app/api/v1/`), **34 services** (`app/services/`), **22 Alembic migrations**.
-- **52 test files**, **1,087+ tests** passing, Ruff ✅ / mypy ✅ (183 files) / pip-audit ✅ (blocking in CI).
-- **Security**: OAuth (Google GIS + Microsoft MSAL + JWKS), email verification, password reset w/ independent token column, Turnstile, refresh rotation + replay detect, fail-closed JWT blacklist, 8-layer prompt sanitizer, PII redactor for Langfuse, Stripe webhook HMAC + idempotent dedup + `SELECT FOR UPDATE`, OWASP headers, bot-trap honeypot, prod-mode guards, GDPR export + **full account deletion**.
-- **Reliability**: Redis-backed 3-state circuit breaker, LLM $200/month budget guard, RPM limits per tier, ordered graceful shutdown, liveness + deep readiness health checks, connection pool 20+10/pre_ping/recycle 3600s.
+- **35+ route files** (`app/api/v1/` + `admin_webhooks` + `ai_usage` + `sentry_auto_rollback` + `sessions`), **35+ services**, **22+ Alembic migrations**, **1 maintenance script** (`apps/api/scripts/purge_causality_data.py` — daily-cron causality retention).
+- **170+ test files**, **4,461 tests** passing (last-measured line coverage **94.61 %** at PR #40 close — 15,937 / 16,889 statements; CI `--cov-fail-under` lifted to **85 %** in PR #44); Ruff ✅ / mypy ✅ / pip-audit ✅ (blocking in CI).
+- **Auth**: JWT in `httpOnly + Secure + SameSite=Strict` cookies (T1, ADR-0006) + double-submit CSRF + 30-day bearer-header overlap; OAuth (Google GIS + Microsoft MSAL + JWKS); email verification; password reset; Turnstile; refresh rotation + replay detect; fail-closed JWT blacklist. **Active-session registry** (T1-extension, [ADR-0011](adr/0011-active-session-registry.md)): Redis-backed `SessionRegistry` (`session:user:{id}` SET + `session:meta:{jti}` HASH) with fail-soft pattern + UA→device-label heuristic; `/api/v1/sessions` + DELETE + revoke-others endpoints; cookie-CSRF on all mutating routes.
+- **Security**: 8-layer prompt sanitizer, PII redactor for Langfuse, Stripe webhook HMAC + idempotent dedup + `SELECT FOR UPDATE`, OWASP headers, bot-trap honeypot, prod-mode guards, GDPR export + **full account deletion**.
+- **Reliability**: Redis-backed 3-state circuit breaker, LLM $200/month budget guard + Sentry @80 % alert, RPM limits per tier, ordered graceful shutdown, liveness + deep readiness health checks, connection pool 20+10/pre_ping/recycle 3600s. **`@route_query_budget` per route + autouse hard-fail gate (T2)**.
+- **Observability**: Structured logging + Sentry SDK; **Langfuse trace shipping wired (T4)**; `/health/ready` exposes structured `db` + `redis_detail` with TLS attestation; **pinned p50/p95 baseline for 17 endpoints (T3)** + 25 % regression gate.
+- **Deployment safety**: GrowthBook-style flag system + tier-aware canary + Sentry-triggered auto-rollback (T5, ADR-0009).
+- **Webhook resilience**: `webhook_event` DLQ ledger + admin replay surface + 15-min scheduled prod smoke (T6, ADR-0010).
 - **12 intelligence engines**: Career DNA, Threat Radar, Skill Decay, Salary Intelligence, Career Simulation, Interview Intelligence, Hidden Job Market, Cross-Border Passport, Collective Intelligence, Predictive Career, Recommendation Intelligence, Workflow Automation.
 
 ### Web (`apps/web`)
-- **Next.js 15 App Router**; marketing (10 pages) + **18 dashboard routes** wired to API: analytics, applications, career-dna, career-passport, career-simulation, command-center, hidden-job-market, interview-prep, matches, notifications, onboarding, recommendations, resumes, salary-intelligence, settings, skill-decay, threat-radar, transition-pathways.
+- **Next.js 15 App Router**; marketing (10 pages) + **19 dashboard routes** wired to API (added `/dashboard/settings/ai-usage` for Transparent AI Accounting in T4); cookie-first auth via `credentials: "include"` + `X-CSRF-Token` (T1).
 - **14 Playwright E2E specs** (`apps/web/e2e/`) including visual regression + axe-core a11y.
+- **267 vitest unit tests** (was 232 pre-Sprint-58); SSR-safe feature flag SDK (T5); SSR-safe relative-time hook on AI usage page.
 - Sentry (`@sentry/nextjs`) integrated — DSN gated on env.
-- Build: 37+ routes, ESLint 0, TSC 0, `pnpm audit` 0 vulns (blocking in CI).
+- Build: 38+ routes, ESLint 0, TSC 0, `pnpm audit` 0 vulns (blocking in CI).
 
 ### Mobile (`apps/mobile`)
-- Expo SDK 52 + Expo Router; auth flow, API client, resume upload (camera + picker), Career DNA view, push notifications.
-- **69 tests** (7 suites).
+- Expo SDK 52 + Expo Router; auth flow (uses `expo-secure-store`, never localStorage), API client, resume upload (camera + picker), Career DNA view, push notifications.
+- **84 tests** (8 suites).
+- **ESLint v9 flat-config migrated** (issue #20 closed Sprint 54).
 - Sentry (`@sentry/react-native`) integrated.
 
 ### Infra
@@ -173,14 +187,14 @@ Pass criteria: every Gate A step produces observable evidence (Sentry event ID, 
 | # | Risk | Likelihood | Impact | Mitigation |
 | :-- | :--- | :--: | :--: | :--- |
 | R1 | Redis outage → rate limit & circuit breaker degrade | Low | High | ~~in-memory circuit-breaker fallback pending~~ ✅ closed Sprint 43: `fail_open=True` on CircuitBreaker — Redis unavailable → CLOSED state assumed, calls proceed. Rate limiter degrades to per-instance memory (surfaced in `/health/ready`). |
-| R2 | Stripe webhook failure in live mode | Med | High | Sprint 43 verification + webhook alert dashboard. |
-| R3 | LLM provider outage | Med | Med | 3-tier fallback chain; monitor via Langfuse once live. |
+| R2 | Stripe webhook failure in live mode | Med | High | ~~Sprint 43 verification + webhook alert dashboard.~~ ✅ closed Sprint 58 (T6, [ADR-0010](adr/0010-webhook-dlq-and-prod-smoke.md)) — `webhook_event` ledger + admin replay surface + 15-min scheduled prod smoke. |
+| R3 | LLM provider outage | Med | Med | 3-tier fallback chain; ✅ Langfuse trace shipping wired (T4); awaits OPS-3 keys to be meaningful in prod. |
 | R4 | GDPR complaint | Low | Critical | Account deletion shipped + tested. |
-| R5 | LLM cost runaway | Low | Med | ~~add Sentry alert @80%~~ ✅ closed Sprint 43: `_check_budget()` fires `sentry_sdk.capture_message` once per month when spend ≥ 80% (Redis-deduped). Budget guard unchanged. |
-| R6 | Single Railway instance saturation | Med | Med | Auto-scaling available; surface `RATE_LIMIT_DEGRADED` in `/health/ready` (done). |
-| R7 | Stolen refresh token | Low | High | Rotation + replay detect + global invalidation on password change (done). |
-| R8 | JWT in localStorage XSS exfiltration | Low | High | CSP + SRI in place; httpOnly cookie migration tracked as P2-1 (post-launch). |
-| R9 | No staging env → prod regression | Med | Med | N-4 — add Railway staging (Sprint 44). |
+| R5 | LLM cost runaway | Low | Med | ~~add Sentry alert @80%~~ ✅ closed Sprint 43: `_check_budget()` fires `sentry_sdk.capture_message` once per month when spend ≥ 80% (Redis-deduped). Budget guard unchanged. **User-facing AI accounting (T4) lets users self-monitor.** |
+| R6 | Single Railway instance saturation | Med | Med | Auto-scaling available; surface `RATE_LIMIT_DEGRADED` in `/health/ready` (done). **Per-route query budget (T2) prevents accidental N+1 surge under load.** |
+| R7 | Stolen refresh token | Low | High | Rotation + replay detect + global invalidation on password change (done). **httpOnly cookie storage (T1) closes the access-token side too.** |
+| ~~R8~~ | ~~JWT in localStorage XSS exfiltration~~ ✅ **closed Sprint 55 (T1, [ADR-0006](adr/0006-auth-via-httponly-cookies.md))** — JWT moved to `httpOnly + Secure + SameSite=Strict` cookies; XSS can no longer read the auth token via JS. Double-submit CSRF protects mutating routes. 30-day bearer-header overlap window for in-flight clients. | — | — | — |
+| R9 | No staging env → prod regression | Med | Low | N-4 — `deploy-staging.yml` + runbook ready Sprint 44; pending 5 manual Railway steps. **Canary + auto-rollback (T5) reduces impact even on a direct-to-prod regression.** |
 
 ---
 

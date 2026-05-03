@@ -18,6 +18,7 @@ from starlette.requests import Request
 
 from app.core.config import settings
 from app.core.llm_observability import get_transparency_log
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import get_current_user
 from app.models.user import User
@@ -41,6 +42,7 @@ router = APIRouter(prefix="/ai-transparency", tags=["AI Transparency"])
     ),
 )
 @limiter.limit(settings.rate_limit_ai_health)
+@route_query_budget(max_queries=4)
 async def get_ai_health(request: Request) -> dict[str, Any]:
     """Return AI system health summary.
 
@@ -63,6 +65,7 @@ async def get_ai_health(request: Request) -> dict[str, Any]:
     ),
 )
 @limiter.limit(settings.rate_limit_ai_analyses)
+@route_query_budget(max_queries=6)
 async def get_recent_analyses(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -110,6 +113,7 @@ async def get_recent_analyses(
     ),
 )
 @limiter.limit(settings.rate_limit_ai_analyses)
+@route_query_budget(max_queries=6)
 async def get_analysis_detail(
     request: Request,
     analysis_id: str,

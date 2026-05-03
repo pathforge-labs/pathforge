@@ -22,8 +22,25 @@ PathForge is an AI-powered career intelligence platform built as a
 - No untyped parameters. No `Any` unless unavoidable (document why).
 - Use `Pydantic` models with `ConfigDict(from_attributes=True)` for all
   request/response schemas.
-- Confidence values from AI/LLM outputs must be **capped at 0.85**
-  (`MAX_*_CONFIDENCE` constants) — never present AI certainty as fact.
+- **Confidence caps — two architecturally distinct categories.** Do not
+  conflate them when reviewing.
+  1. **Semantic confidence** (what the LLM claims about the *output
+     content* — e.g. career-DNA skill-level, salary-range estimate,
+     credential-mapping score) is **capped at 0.85** via the
+     `MAX_*_CONFIDENCE` constants (`MAX_PASSPORT_CONFIDENCE`,
+     `MAX_PLAN_CONFIDENCE`, `MAX_PC_CONFIDENCE`, etc.). DB CHECK
+     constraints enforce `confidence <= 0.85` on these columns.
+     Reviews must flag any LLM-output schema with `le > 0.85`.
+  2. **Pipeline-execution confidence** (how reliably the AI pipeline
+     itself ran — derived from observable telemetry: tier, retries,
+     latency, token utilisation) is **capped at 0.95** via
+     `app/core/llm_observability.py::CONFIDENCE_CAP`. This is a
+     telemetry signal, not a claim about the output content; the
+     0.95 cap is intentional ("never claim 100 % confidence" without
+     suppressing the pipeline-health signal at 0.85). The schema
+     `app/schemas/ai_transparency.py::AnalysisTransparency.confidence_score`
+     documents `0.0–0.95, never 100 %`. Do **not** flag this as a
+     styleguide violation.
 
 ### Naming & Style
 
@@ -58,8 +75,31 @@ PathForge is an AI-powered career intelligence platform built as a
 
 ### Testing
 
-- `pytest` with `@pytest.mark.asyncio` for async tests.
-- Test files must mirror source structure: `tests/test_<module>.py`.
+- `pytest` with `@pytest.mark.asyncio` for async tests. Synchronous
+  test files (those whose tests have no `await`) MUST omit the
+  file-level `pytestmark = pytest.mark.asyncio` marker — declaring
+  it forces every test method into a coroutine and adds runtime
+  overhead with no benefit.
+- **Test file naming — two valid patterns**, do not flag either:
+  1. **Module-mirror** (preferred for canonical coverage):
+     `tests/test_<module>.py` mirrors `app/<package>/<module>.py`.
+     Example: `tests/test_llm_observability.py` covers
+     `app/core/llm_observability.py`.
+  2. **Sprint-themed coverage ratchets**:
+     `tests/test_sprint_<N>_<topic>.py`. These are *additive*
+     suites that close coverage gaps in a specific sprint without
+     bloating the canonical module-mirror file. Each sprint-themed
+     file documents (in its module docstring) which canonical
+     module it ratchets and which exact lines it covers — see
+     `tests/test_sprint_60_llm_observability_ratchet.py` and
+     `tests/test_sprint_61_pii_redaction_hook.py` as templates.
+     Reviews must NOT request these be renamed to module-mirror;
+     the ratchet's whole value is locality-of-intent ("Sprint N
+     closed gap X"), which gets lost if every coverage push lands
+     in the same canonical file. Once a module's coverage stops
+     growing, the sprint-themed file's contents may be folded into
+     the module-mirror file as a refactor, but never in the same
+     PR that adds the coverage.
 - All new endpoints need corresponding test coverage.
 
 ### Database

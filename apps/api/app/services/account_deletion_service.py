@@ -206,6 +206,24 @@ class AccountDeletionService:
         await db.delete(user)
         await db.flush()
 
+        # ── 6. Purge Redis-side session registry entries (ADR-0011) ──
+        # Account-deletion guarantees right-to-erasure. The blacklist
+        # entries auto-expire via TTL; the session-registry sets do
+        # not (they extend the TTL on every login). Drop them here so
+        # no trace of the deleted account lingers in Redis.
+        try:
+            from app.core.sessions import SessionRegistry
+
+            await SessionRegistry.purge_user(user_id=str(user_id))
+        except Exception:
+            logger.warning(
+                "Account deletion: session registry purge failed (user=%s); "
+                "TTL will reclaim entries within %d days",
+                user_id,
+                30,
+                exc_info=True,
+            )
+
         logger.info(
             "GDPR account deletion completed for user %s: %d records across %d tables",
             user_id,

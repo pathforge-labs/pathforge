@@ -1,16 +1,50 @@
 /**
  * PathForge — HTTP Core
  * ======================
- * Type-safe HTTP client with automatic JWT authentication,
- * transparent token refresh, and standardized error handling.
+ * Type-safe HTTP client with cookie-first JWT authentication
+ * (Track 1 / ADR-0006), transparent token refresh, and standardized
+ * error handling.
  *
- * All API calls MUST go through `fetchWithAuth()` — never use raw fetch.
+ * Authentication contract (from 2026-04-25):
+ *   1. The browser carries the auth pair in ``httpOnly`` first-party
+ *      cookies — JS cannot read them; XSS cannot exfiltrate them.
+ *   2. Every request includes ``credentials: "include"`` so the
+ *      cookies flow even on cross-origin localhost dev.
+ *   3. State-changing requests (POST/PUT/PATCH/DELETE) attach a
+ *      ``X-CSRF-Token`` header read from the *non-httpOnly*
+ *      ``pathforge_csrf`` cookie. This is the double-submit pattern.
+ *   4. The legacy ``Authorization: Bearer`` header is still attached
+ *      when ``getAccessToken()`` has a value, so the 30-day overlap
+ *      window keeps mid-flight clients working. After day 30 the
+ *      auth-provider stops persisting tokens and this branch dies.
+ *
+ * All API calls MUST go through ``fetchWithAuth()`` — never use raw fetch.
  */
 
 import { refreshAccessToken } from "./refresh-queue";
 import { getAccessToken } from "./token-manager";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+const CSRF_COOKIE_NAME = "pathforge_csrf";
+const CSRF_HEADER_NAME = "X-CSRF-Token";
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Read the non-httpOnly ``pathforge_csrf`` cookie value.
+ *
+ * Returns ``null`` on the server (no document) and when the cookie is
+ * absent (user not logged in, or pre-Track-1 cookie jar). The caller
+ * gates the header attachment on null so unauthenticated requests
+ * don't add a stale header.
+ */
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + CSRF_COOKIE_NAME + "=([^;]+)"),
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 // ── Error Types ─────────────────────────────────────────────
 
@@ -147,11 +181,27 @@ async function executeRequest(
     ...(options.headers ?? {}),
   };
 
-  // Attach bearer token if available and not explicitly skipped
+  // Track 1 / ADR-0006: legacy bearer header during the 30-day overlap.
+  // The cookie path is the *primary* auth and flows automatically via
+  // `credentials: "include"`; this branch only fires for clients that
+  // still hold a token in localStorage from before the cookie cutover.
   if (!options.skipAuth) {
     const token = getAccessToken();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  // Track 1 / ADR-0006: double-submit CSRF on cookie-authenticated
+  // mutating requests. We attach the header for any mutating method
+  // when the CSRF cookie is present — the server skips the check if
+  // an Authorization header is also present (legacy bearer path), so
+  // attaching unconditionally is safe and keeps the helper simple.
+  const method = (options.method ?? "GET").toUpperCase();
+  if (!options.skipAuth && MUTATING_METHODS.has(method)) {
+    const csrf = readCsrfCookie();
+    if (csrf && !(CSRF_HEADER_NAME in headers)) {
+      headers[CSRF_HEADER_NAME] = csrf;
     }
   }
 
@@ -162,6 +212,11 @@ async function executeRequest(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,
+    // Track 1 / ADR-0006: include cookies on every API call so the
+    // httpOnly auth cookies flow. Required for cross-origin local dev
+    // (localhost:3000 → localhost:8000) — the server's CORS config
+    // already includes `allow_credentials=True`.
+    credentials: "include",
   });
 }
 

@@ -12,6 +12,7 @@ Usage:
 """
 
 import logging
+from datetime import date
 from typing import ClassVar
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -80,6 +81,30 @@ class Settings(BaseSettings):  # type: ignore[misc]
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
     jwt_refresh_token_expire_days: int = 30
+
+    # Track 1 / ADR-0006: cookie-first auth with a 30-day legacy header
+    # fallback. After this date, any bearer-header request emits a Sentry
+    # warning so we can observe the long tail of un-migrated clients.
+    # `None` disables the deprecation telemetry (default until launch).
+    auth_legacy_header_deprecated_after: date | None = None
+
+    # ── Sprint 55-58 Resolved Policy Decisions (ADR-0012) ───────
+    # These knobs each map 1:1 to a §12 default in the Sprint 55-58
+    # plan. Tunable without a deploy so on-call can rebalance during
+    # an incident; defaults are the values accepted in ADR-0012.
+
+    # ADR-0012 #3 — Causality data retention. Per-user attribution
+    # entries in the Engine-of-Record causality ledger (T2) age out
+    # after this many days. Anonymised aggregates are retained
+    # indefinitely (separate column, not deleted by the purge job).
+    causality_retention_days: int = 90
+
+    # ADR-0012 #5 — Auto-rollback threshold. Sentry P0 user rate
+    # at which `app.core.sentry_auto_rollback` flips a feature flag
+    # back to `internal_only`. 0.001 = 0.1 %. Setting this above 0.5
+    # disables the gate in practice — a Sentry alert is paged in
+    # that case (see ADR-0012 §"Operational notes").
+    auto_rollback_p0_user_rate_threshold: float = 0.001
 
     # ── CORS ────────────────────────────────────────────────────
     cors_origins: list[str] = [
@@ -178,6 +203,19 @@ class Settings(BaseSettings):  # type: ignore[misc]
     # ── Stripe Billing (Sprint 34) ────────────────────────────────
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    # T5 / Sprint 57, ADR-0009: shared secret used by the Sentry
+    # alert webhook handler at /api/v1/internal/sentry/auto-rollback.
+    # Empty by default — production sets this via Railway env;
+    # leaving it empty makes the webhook fail-closed (every request
+    # rejected with 401) so an unconfigured deploy can't be exploited
+    # to flip flags.
+    sentry_webhook_secret: str = ""
+    # T1-extension part 2 / Sprint 62: shared secret for the SSO
+    # session-revoke webhook at /api/v1/internal/sso/logout.
+    # Empty by default — production sets this via Railway env; an empty
+    # secret makes the endpoint fail-closed (every request rejected 401)
+    # so an unconfigured deploy cannot be used to force-logout users.
+    sso_webhook_secret: str = ""
     stripe_publishable_key: str = ""
     stripe_pro_price_id: str = ""
     stripe_premium_price_id: str = ""

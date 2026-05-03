@@ -23,15 +23,20 @@ import logging
 from typing import Literal
 
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    set_auth_cookies,
+)
 from app.schemas.user import TokenResponse
 from app.services.user_service import UserService
 
@@ -49,6 +54,7 @@ OAuthProvider = Literal["google", "microsoft"]
 
 class OAuthTokenRequest(BaseModel):
     """ID token received from frontend OAuth SDK."""
+
     id_token: str = Field(min_length=1, description="ID token from OAuth provider")
 
 
@@ -204,12 +210,14 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
         # is safe here because we re-verify the signature below — this
         # decode is purely to learn which issuer string to bind.
         unverified = pyjwt.decode(
-            id_token, options={"verify_signature": False},
+            id_token,
+            options={"verify_signature": False},
         )
         tenant_id = unverified.get("tid")
         if not tenant_id or tenant_id not in allowed_tenants:
             logger.warning(
-                "Microsoft OAuth: tenant %r not in allowlist", tenant_id,
+                "Microsoft OAuth: tenant %r not in allowlist",
+                tenant_id,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -220,9 +228,7 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
 
         # F11: PyJWKClient.get_signing_key_from_jwt() is synchronous HTTP
         # — must run in thread pool to avoid blocking the event loop
-        signing_key = await asyncio.to_thread(
-            jwks_client.get_signing_key_from_jwt, id_token
-        )
+        signing_key = await asyncio.to_thread(jwks_client.get_signing_key_from_jwt, id_token)
 
         expected_issuer = f"https://login.microsoftonline.com/{tenant_id}/v2.0"
         claims = pyjwt.decode(
@@ -273,6 +279,7 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
             detail="Invalid Microsoft ID token",
         ) from exc
 
+
 # ── OAuth Endpoints ────────────────────────────────────────────
 
 
@@ -282,8 +289,10 @@ async def _verify_microsoft_token(id_token: str) -> dict[str, str | bool]:
     summary="Authenticate via OAuth provider (Google or Microsoft)",
 )
 @limiter.limit(settings.rate_limit_login)
+@route_query_budget(max_queries=6)
 async def oauth_login(
     request: Request,
+    response: Response,
     provider: OAuthProvider,
     payload: OAuthTokenRequest,
     db: AsyncSession = Depends(get_db),
@@ -358,8 +367,7 @@ async def oauth_login(
         # personal Microsoft account that advertises it.
         if not email_verified:
             logger.warning(
-                "OAuth user creation blocked: provider=%s did not assert "
-                "email_verified",
+                "OAuth user creation blocked: provider=%s did not assert email_verified",
                 provider,
             )
             raise HTTPException(
@@ -379,7 +387,15 @@ async def oauth_login(
             is_verified=True,
         )
 
-    return TokenResponse(
+    tokens = TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
     )
+    # Track 1 / ADR-0006: OAuth login also sets the cookie pair so the
+    # post-OAuth web flow can switch transparently.
+    set_auth_cookies(
+        response,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    return tokens

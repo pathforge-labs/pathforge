@@ -26,6 +26,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.feature_gate import require_feature
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.predictive_career import (
@@ -69,6 +70,7 @@ router = APIRouter(
     dependencies=[Depends(require_feature("predictive_career"))],
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def scan_emerging_roles(
     request: Request,
     body: EmergingRoleRequest,
@@ -96,10 +98,7 @@ async def scan_emerging_roles(
         if settings.billing_enabled:
             await BillingService.record_usage(database, current_user, "predictive_career")
 
-        return [
-            EmergingRoleResponse.model_validate(role)
-            for role in roles
-        ]
+        return [EmergingRoleResponse.model_validate(role) for role in roles]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -122,6 +121,7 @@ async def scan_emerging_roles(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_disruption_forecasts(
     request: Request,
     body: DisruptionForecastRequest,
@@ -136,10 +136,7 @@ async def get_disruption_forecasts(
             industry=body.industry,
             forecast_horizon_months=body.forecast_horizon_months,
         )
-        return [
-            DisruptionForecastResponse.model_validate(forecast)
-            for forecast in forecasts
-        ]
+        return [DisruptionForecastResponse.model_validate(forecast) for forecast in forecasts]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -162,6 +159,7 @@ async def get_disruption_forecasts(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_opportunity_surfaces(
     request: Request,
     body: OpportunitySurfaceRequest,
@@ -177,10 +175,7 @@ async def get_opportunity_surfaces(
             region=body.region,
             include_cross_border=body.include_cross_border,
         )
-        return [
-            OpportunitySurfaceResponse.model_validate(opp)
-            for opp in opportunities
-        ]
+        return [OpportunitySurfaceResponse.model_validate(opp) for opp in opportunities]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -203,6 +198,7 @@ async def get_opportunity_surfaces(
     ),
 )
 @limiter.limit(settings.rate_limit_career_dna)
+@route_query_budget(max_queries=6)
 async def get_career_forecast(
     request: Request,
     body: PredictiveCareerScanRequest,
@@ -240,6 +236,7 @@ async def get_career_forecast(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=10)
 async def get_dashboard(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -248,18 +245,19 @@ async def get_dashboard(
     """Get aggregated Predictive Career dashboard."""
     try:
         data = await pc_service.get_pc_dashboard(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return PredictiveCareerDashboardResponse(
             latest_forecast=(
                 CareerForecastResponse.model_validate(
                     data["latest_forecast"],
                 )
-                if data["latest_forecast"] else None
+                if data["latest_forecast"]
+                else None
             ),
             emerging_roles=[
-                EmergingRoleResponse.model_validate(role)
-                for role in data["emerging_roles"]
+                EmergingRoleResponse.model_validate(role) for role in data["emerging_roles"]
             ],
             disruption_forecasts=[
                 DisruptionForecastResponse.model_validate(forecast)
@@ -273,7 +271,8 @@ async def get_dashboard(
                 PredictiveCareerPreferenceResponse.model_validate(
                     data["preferences"],
                 )
-                if data["preferences"] else None
+                if data["preferences"]
+                else None
             ),
         )
     except ValueError as exc:
@@ -298,6 +297,7 @@ async def get_dashboard(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def run_scan(
     request: Request,
     body: PredictiveCareerScanRequest,
@@ -318,11 +318,11 @@ async def run_scan(
                 CareerForecastResponse.model_validate(
                     data["career_forecast"],
                 )
-                if data["career_forecast"] else None
+                if data["career_forecast"]
+                else None
             ),
             emerging_roles=[
-                EmergingRoleResponse.model_validate(role)
-                for role in data["emerging_roles"]
+                EmergingRoleResponse.model_validate(role) for role in data["emerging_roles"]
             ],
             disruption_forecasts=[
                 DisruptionForecastResponse.model_validate(forecast)
@@ -350,6 +350,7 @@ async def run_scan(
     description="Get current Predictive Career Engine preferences.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_preferences(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -358,7 +359,8 @@ async def get_preferences(
     """Get user PC preferences."""
     try:
         preference = await pc_service.get_or_update_preferences(
-            database, user_id=current_user.id,
+            database,
+            user_id=current_user.id,
         )
         return PredictiveCareerPreferenceResponse.model_validate(
             preference,
@@ -381,6 +383,7 @@ async def get_preferences(
     ),
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_preferences(
     request: Request,
     body: PredictiveCareerPreferenceUpdate,

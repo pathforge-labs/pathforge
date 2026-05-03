@@ -9,20 +9,27 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.csrf import csrf_protect
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.core.security import (
+    ACCESS_COOKIE_NAME,
+    REFRESH_COOKIE_NAME,
+    clear_auth_cookies,
     create_access_token,
     create_refresh_token,
     get_current_user,
     oauth2_scheme,
+    set_auth_cookies,
 )
+from app.core.sessions import SessionRegistry
 from app.core.token_blacklist import token_blacklist
 from app.models.user import User
 
@@ -53,6 +60,60 @@ from app.services.user_service_errors import (
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+# ── Session registry helpers (T1-extension / ADR-0011) ─────────────
+
+
+def _client_ip(request: Request) -> str | None:
+    """Best-effort IP extraction.
+
+    Honours ``X-Forwarded-For`` (Vercel + Railway both forward it) but
+    only its first hop — anything beyond the first hop is attacker-
+    controlled. Returns ``None`` when no IP can be derived.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or None
+    if request.client and request.client.host:
+        return request.client.host
+    return None
+
+
+async def _register_session_from_tokens(
+    *,
+    request: Request,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Decode the refresh JWT and persist its JTI as an active session.
+
+    Uses the refresh token (not access) because the refresh JTI is the
+    longer-lived identity for the device — every access JTI rotates
+    every hour, but the refresh JTI represents the *device session*
+    until the user revokes or it expires.
+    """
+    try:
+        token_data = jwt.decode(
+            refresh_token,
+            settings.jwt_refresh_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except PyJWTError:
+        return
+    jti = token_data.get("jti")
+    sub = token_data.get("sub")
+    exp = token_data.get("exp")
+    if not jti or not sub or not exp:
+        return
+    remaining = max(int(int(exp) - datetime.now(UTC).timestamp()), 1)
+    await SessionRegistry.register(
+        user_id=str(sub),
+        jti=str(jti),
+        ttl_seconds=remaining,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -60,6 +121,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     summary="Register a new user account",
 )
 @limiter.limit(settings.rate_limit_register)
+@route_query_budget(max_queries=6)
 async def register(
     request: Request,
     payload: UserRegisterRequest,
@@ -67,6 +129,7 @@ async def register(
 ) -> User:
     # D6: Verify Turnstile CAPTCHA before creating user
     from app.core.turnstile import verify_turnstile_token
+
     await verify_turnstile_token(payload.turnstile_token)
 
     try:
@@ -105,15 +168,22 @@ async def register(
     summary="Authenticate and receive access + refresh tokens",
 )
 @limiter.limit(settings.rate_limit_login)
+@route_query_budget(max_queries=4)
 async def login(
     request: Request,
+    response: Response,
     payload: UserLoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """Authenticate and return tokens.
+
+    Track 1 / ADR-0006: tokens are returned in *both* the JSON body
+    (legacy clients) and as `httpOnly` cookies (cookie-first clients).
+    Returning both during the migration window means a client can pick
+    its path with no server-side feature flag.
+    """
     try:
-        return await UserService.authenticate(
-            db, email=payload.email, password=payload.password
-        )
+        tokens = await UserService.authenticate(db, email=payload.email, password=payload.password)
     except InvalidCredentialsError as exc:
         # Credential failure — wrong email or wrong password. Kept at
         # 401 and surfaced with a deliberately generic message so the
@@ -137,6 +207,21 @@ async def login(
             detail=exc.message,
         ) from exc
 
+    set_auth_cookies(
+        response,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    # T1-extension / ADR-0011: register the new refresh JTI in the
+    # session registry so the user can see and revoke this device.
+    # Fail-soft — auth succeeds even if Redis is unreachable.
+    await _register_session_from_tokens(
+        request=request,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+    return tokens
+
 
 @router.post(
     "/refresh",
@@ -144,14 +229,35 @@ async def login(
     summary="Refresh an expired access token",
 )
 @limiter.limit(settings.rate_limit_refresh)
+@route_query_budget(max_queries=3)
 async def refresh_token(
     request: Request,
-    payload: RefreshTokenRequest,
+    response: Response,
+    payload: RefreshTokenRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    """Rotate the refresh + access token pair.
+
+    Track 1 / ADR-0006: the refresh token is accepted from *either* the
+    `pathforge_refresh` cookie (cookie-first path) or the JSON body
+    (legacy path). Body wins if both are present so an explicit client
+    request is always honoured. Empty / missing → 401.
+    """
+    # Cookie-first; body falls back. Body has precedence on conflict so
+    # a client that explicitly passes a token is never overridden by a
+    # stale cookie.
+    body_token = payload.refresh_token if payload else None
+    cookie_token = request.cookies.get(REFRESH_COOKIE_NAME) or None
+    refresh_input = body_token or cookie_token
+    if not refresh_input:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required",
+        )
+
     try:
         token_data = jwt.decode(
-            payload.refresh_token,
+            refresh_input,
             settings.jwt_refresh_secret,
             algorithms=[settings.jwt_algorithm],
         )
@@ -207,6 +313,30 @@ async def refresh_token(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
     )
+    set_auth_cookies(
+        response,
+        access_token=new_tokens.access_token,
+        refresh_token=new_tokens.refresh_token,
+    )
+    # T1-extension / ADR-0011: rotation = revoke old session JTI from
+    # the registry, register the new one. Touching first then registering
+    # would race with `revoke_others`; the explicit ordering matches
+    # `consume_once` above so the user's session list always shows the
+    # currently-valid JTI.
+    if old_jti:
+        try:
+            ttl = max(int(old_exp - datetime.now(UTC).timestamp()), 1) if old_exp else 60
+            await SessionRegistry.revoke(
+                user_id=str(user.id), jti=old_jti, ttl_seconds=ttl,
+            )
+        except Exception:
+            logger.debug("session.refresh.revoke-old failed", exc_info=True)
+    await _register_session_from_tokens(
+        request=request,
+        access_token=new_tokens.access_token,
+        refresh_token=new_tokens.refresh_token,
+    )
+    return new_tokens
 
     return new_tokens
 
@@ -215,12 +345,15 @@ async def refresh_token(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke current access token and optional refresh token",
+    dependencies=[Depends(csrf_protect)],
 )
 @limiter.limit(settings.rate_limit_logout)
+@route_query_budget(max_queries=3)
 async def logout(
     request: Request,
+    response: Response,
     payload: LogoutRequest | None = None,
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     _current_user: User = Depends(get_current_user),
 ) -> None:
     """Blacklist the current access token and optional refresh token.
@@ -240,28 +373,40 @@ async def logout(
     """
     revoke_errors: list[Exception] = []
 
+    # Track 1 / ADR-0006: token may arrive via cookie, header, or both.
+    # Prefer header (oauth2_scheme) when present so an explicit caller's
+    # intent is honoured; fall back to cookie for cookie-first clients.
+    cookie_access = request.cookies.get(ACCESS_COOKIE_NAME) or None
+    access_token = token or cookie_access
+
     # Revoke access token
-    try:
-        decoded = jwt.decode(
-            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
-        )
-        jti: str | None = decoded.get("jti")
-        exp: int | None = decoded.get("exp")
+    if access_token:
+        try:
+            decoded = jwt.decode(
+                access_token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+            )
+            jti: str | None = decoded.get("jti")
+            exp: int | None = decoded.get("exp")
 
-        if jti and exp:
-            remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
-            try:
-                await token_blacklist.revoke(jti, ttl_seconds=remaining)
-            except (ConnectionError, OSError) as exc:
-                revoke_errors.append(exc)
-    except PyJWTError:
-        pass  # Token already invalid — nothing to revoke
+            if jti and exp:
+                remaining = max(int(exp - datetime.now(UTC).timestamp()), 1)
+                try:
+                    await token_blacklist.revoke(jti, ttl_seconds=remaining)
+                except (ConnectionError, OSError) as exc:
+                    revoke_errors.append(exc)
+        except PyJWTError:
+            pass  # Token already invalid — nothing to revoke
 
-    # Sprint 41 P1: Also revoke refresh token if provided
-    if payload and payload.refresh_token:
+    # Sprint 41 P1: Also revoke refresh token if provided.
+    # Track 1 / ADR-0006: refresh from cookie also revoked.
+    cookie_refresh = request.cookies.get(REFRESH_COOKIE_NAME) or None
+    refresh_token_to_revoke = (
+        payload.refresh_token if payload and payload.refresh_token else cookie_refresh
+    )
+    if refresh_token_to_revoke:
         try:
             refresh_data = jwt.decode(
-                payload.refresh_token,
+                refresh_token_to_revoke,
                 settings.jwt_refresh_secret,
                 algorithms=[settings.jwt_algorithm],
             )
@@ -273,6 +418,17 @@ async def logout(
                     await token_blacklist.revoke(refresh_jti, ttl_seconds=remaining_r)
                 except (ConnectionError, OSError) as exc:
                     revoke_errors.append(exc)
+                # T1-extension / ADR-0011: also drop the session record
+                # so the user's "Active sessions" list updates instantly
+                # (rather than waiting for the meta TTL).
+                try:
+                    await SessionRegistry.revoke(
+                        user_id=str(_current_user.id),
+                        jti=refresh_jti,
+                        ttl_seconds=remaining_r,
+                    )
+                except Exception:
+                    logger.debug("session.logout.revoke failed", exc_info=True)
         except PyJWTError:
             pass  # JWT decode failure — token already useless
 
@@ -286,6 +442,8 @@ async def logout(
                 len(revoke_errors),
                 exc_info=revoke_errors[0],
             )
+            # Do NOT clear cookies here — the user's intent (logout)
+            # was not honoured and the session is still live server-side.
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication service temporarily unavailable",
@@ -297,6 +455,11 @@ async def logout(
             exc_info=revoke_errors[0],
         )
 
+    # Track 1 / ADR-0006: clear auth cookies on successful logout (or
+    # fail-open path). The client is told the session is dead even if
+    # Redis-side revocation degraded.
+    clear_auth_cookies(response)
+
 
 # ── Sprint 39: Password Reset ──────────────────────────────────
 
@@ -307,6 +470,7 @@ async def logout(
     summary="Request a password reset email",
 )
 @limiter.limit(settings.rate_limit_forgot_password)
+@route_query_budget(max_queries=4)
 async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
@@ -315,6 +479,7 @@ async def forgot_password(
     """Send password reset email. Always returns 200 to prevent email enumeration."""
     # Sprint 39 audit S-M4: Turnstile gate (no-op when secret not set).
     from app.core.turnstile import verify_turnstile_token
+
     await verify_turnstile_token(payload.turnstile_token)
 
     user = await UserService.get_by_email(db, payload.email)
@@ -344,6 +509,7 @@ async def forgot_password(
     summary="Reset password using a valid reset token",
 )
 @limiter.limit(settings.rate_limit_reset_password)
+@route_query_budget(max_queries=3)
 async def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
@@ -359,7 +525,9 @@ async def reset_password(
     """
     try:
         await UserService.reset_password_with_token(
-            db, token=payload.token, new_password=payload.new_password,
+            db,
+            token=payload.token,
+            new_password=payload.new_password,
         )
     except PasswordResetError as exc:
         raise HTTPException(
@@ -379,6 +547,7 @@ async def reset_password(
     summary="Verify email address using a verification token",
 )
 @limiter.limit(settings.rate_limit_verify_email)
+@route_query_budget(max_queries=4)
 async def verify_email(
     request: Request,
     payload: VerifyEmailRequest,
@@ -387,9 +556,7 @@ async def verify_email(
     """Validate verification token and mark user as verified."""
     incoming_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
-    result = await db.execute(
-        select(User).where(User.verification_token == incoming_hash)
-    )
+    result = await db.execute(select(User).where(User.verification_token == incoming_hash))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -433,6 +600,7 @@ async def verify_email(
     summary="Resend email verification link",
 )
 @limiter.limit(settings.rate_limit_resend_verification)
+@route_query_budget(max_queries=3)
 async def resend_verification(
     request: Request,
     payload: ForgotPasswordRequest,  # Reuse: just needs email
@@ -450,7 +618,6 @@ async def resend_verification(
     await UserService.resend_verification_if_eligible(db, email=payload.email)
     return MessageResponse(
         message=(
-            "If an unverified account with that email exists, "
-            "a verification link has been sent."
+            "If an unverified account with that email exists, a verification link has been sent."
         )
     )

@@ -55,6 +55,12 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
 
+  // Single chromium project. Mobile-viewport coverage is provided by
+  // visual-regression.spec.ts building its own iPhone-13-shaped context
+  // inline via browser.newContext({ isMobile: true, ... }); no separate
+  // playwright project is required, and adding one (webkit-backed via
+  // devices['iPhone 13']) is a footgun because every CI workflow
+  // installs only chromium browsers.
   projects: [
     {
       name: 'chromium',
@@ -66,33 +72,40 @@ export default defineConfig({
         },
       },
     },
-    // Sprint 36 WS-7: Mobile viewport for responsive visual tests
-    {
-      name: 'mobile',
-      use: {
-        ...devices['iPhone 13'],
-        colorScheme: 'light',
-        launchOptions: {
-          args: ['--force-prefers-reduced-motion'],
-        },
-      },
-    },
   ],
 
-  // Sprint 36 WS-7: webServer for both local dev and CI
-  webServer: process.env.CI
-    ? {
-        // CI: serve the pre-built production bundle
-        command: 'pnpm start',
-        port: 3000,
-        timeout: 30_000,
-        reuseExistingServer: false,
-      }
-    : {
-        // Local: start dev server
-        command: 'pnpm dev',
-        url: 'http://localhost:3000',
-        reuseExistingServer: true,
-        timeout: 60_000,
-      },
+  // Sprint 36 WS-7 / Sprint 61 PR #47 / PR #48 (this refactor):
+  // webServer config for both local dev and CI.
+  //
+  // Prod-smoke (Sprint 58, ADR-0010) targets remote production
+  // hosts via PROD_SMOKE_*_BASE_URL env vars and never uses
+  // Playwright's `baseURL`. Spinning up a local Next server in
+  // that mode would (a) require an extra `pnpm build` step in the
+  // workflow and (b) fail anyway because the smoke job intentionally
+  // doesn't build the app. Setting PROD_SMOKE=true bypasses the
+  // webServer entirely.
+  //
+  // Flattened from a nested ternary (PR #47 → Gemini medium #1).
+  // PR #48 → Gemini medium #1: read the same ``E2E_BASE_URL``
+  // override the test runner uses (line 48) so an operator who
+  // points the suite at, say, ``http://localhost:4000`` doesn't
+  // see Playwright spawn ``pnpm dev`` and then time out polling
+  // port 3000 while the actual server is on 4000.
+  //
+  //   - Single ternary on PROD_SMOKE — undefined vs. configured.
+  //   - The configured branch picks `command` and `timeout` by
+  //     ``process.env.CI``; everything else is shared.
+  //   - ``url`` falls back to ``E2E_BASE_URL`` so the health-check
+  //     target stays in lock-step with the test-runner ``baseURL``.
+  //     Polling the URL (not just the port) catches the
+  //     "server started but error-pages-only" failure class.
+  webServer:
+    process.env.PROD_SMOKE === 'true'
+      ? undefined
+      : {
+          command: process.env.CI ? 'pnpm start' : 'pnpm dev',
+          url: process.env.E2E_BASE_URL || 'http://localhost:3000',
+          timeout: process.env.CI ? 30_000 : 60_000,
+          reuseExistingServer: !process.env.CI,
+        },
 });

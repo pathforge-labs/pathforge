@@ -21,8 +21,10 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import (
     admin,
+    admin_webhooks,
     ai,
     ai_transparency,
+    ai_usage,
     analytics,
     applications,
     auth,
@@ -45,6 +47,7 @@ from app.api.v1 import (
     recommendation_intelligence,
     resumes,
     salary_intelligence,
+    sessions,
     skill_decay,
     threat_radar,
     transition_pathways,
@@ -58,7 +61,12 @@ from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
 from app.core.llm_observability import initialize_observability
 from app.core.logging_config import setup_logging
-from app.core.middleware import BotTrapMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import (
+    BotTrapMiddleware,
+    QueryBudgetMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -82,6 +90,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Sprint 30 WS-1: Initialize Sentry error tracking
     from app.core.sentry import init_sentry
     init_sentry()
+
+    # T2 / Sprint 55, ADR-0007: Register the per-request DB query
+    # counter listener on the SQLAlchemy Engine class. Idempotent;
+    # safe to call before any engine instance is opened.
+    from app.core.query_recorder import register_query_counter_listener
+    register_query_counter_listener()
 
     # ADR-0001 / ADR-0002: Tag every event with the effective DB and
     # Redis TLS posture so post-mortem queries can filter "errors while
@@ -253,6 +267,18 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID"],
         max_age=600,  # cache pre-flight results for 10 min
     )
+    # T2 / ADR-0007: query-count gate. Starlette resolves middleware
+    # in the **reverse** of `add_middleware` order — the last add is
+    # the outermost wrapper. We want the request to traverse:
+    #   BotTrap → SecurityHeaders → RequestID → QueryBudget → CORS → endpoint
+    # so QueryBudget runs (a) AFTER `RequestID` has set
+    # `request_id_var` (correlatable breadcrumbs) and (b) AFTER
+    # `BotTrap` has had its chance to short-circuit on bot-probe 404s
+    # (no per-bot ContextVar allocation in production). To produce
+    # that order, `QueryBudgetMiddleware` is added BEFORE the trio
+    # below — the trio later wraps it, in turn wrapped by BotTrap as
+    # the outermost.
+    application.add_middleware(QueryBudgetMiddleware)
     application.add_middleware(RequestIDMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(BotTrapMiddleware)
@@ -271,6 +297,8 @@ def create_app() -> FastAPI:
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(oauth.router, prefix="/api/v1")
     application.include_router(users.router, prefix="/api/v1")
+    # T1-extension / ADR-0011: user-facing session management.
+    application.include_router(sessions.router, prefix="/api/v1")
     application.include_router(ai.router, prefix="/api/v1")
     application.include_router(applications.router, prefix="/api/v1")
     application.include_router(blacklist.router, prefix="/api/v1")
@@ -294,12 +322,22 @@ def create_app() -> FastAPI:
     application.include_router(workflow_automation.router, prefix="/api/v1")
     application.include_router(observability.router, prefix="/api/v1")
     application.include_router(ai_transparency.router, prefix="/api/v1")
+    # T4 / Sprint 56, ADR-0008: Transparent AI Accounting summary endpoint.
+    application.include_router(ai_usage.router, prefix="/api/v1")
+    # T5 / Sprint 57, ADR-0009: Sentry auto-rollback webhook receiver.
+    from app.core.sentry_auto_rollback import router as sentry_rollback_router
+    application.include_router(sentry_rollback_router, prefix="/api/v1")
+    # T1-extension part 2 / Sprint 62: SSO session-revoke webhook.
+    from app.core.sso_session_revoke import router as sso_revoke_router
+    application.include_router(sso_revoke_router, prefix="/api/v1")
     application.include_router(resumes.router, prefix="/api/v1")  # Sprint 50: resume upload
 
     # Sprint 34: Monetization & Growth routers
     application.include_router(billing.router, prefix="/api/v1")
     application.include_router(billing.webhook_router, prefix="/api/v1")
     application.include_router(admin.router, prefix="/api/v1")
+    # T6 / Sprint 58, ADR-0010: webhook DLQ admin surface.
+    application.include_router(admin_webhooks.router, prefix="/api/v1")
     application.include_router(waitlist.router, prefix="/api/v1")
     application.include_router(public_profiles.router, prefix="/api/v1")
 

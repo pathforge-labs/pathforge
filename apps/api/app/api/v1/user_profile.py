@@ -27,6 +27,7 @@ from starlette.requests import Request
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.query_budget import route_query_budget
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.user_profile import (
@@ -59,6 +60,7 @@ router = APIRouter(
     description="Get current user's profile data.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_profile(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -66,7 +68,8 @@ async def get_profile(
 ) -> UserProfileResponse:
     """Get user profile."""
     profile = await UserProfileService.get_profile(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if profile is None:
         raise HTTPException(
@@ -84,6 +87,7 @@ async def get_profile(
     description="Create a new user profile with initial data.",
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def create_profile(
     request: Request,
     body: UserProfileCreateRequest,
@@ -93,7 +97,8 @@ async def create_profile(
     """Create user profile."""
     # Check if profile already exists
     existing = await UserProfileService.get_profile(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if existing is not None:
         raise HTTPException(
@@ -116,6 +121,7 @@ async def create_profile(
     description="Update current user's profile data.",
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def update_profile(
     request: Request,
     body: UserProfileUpdate,
@@ -143,6 +149,7 @@ async def update_profile(
     description="Delete current user's profile data.",
 )
 @limiter.limit(settings.rate_limit_embed)
+@route_query_budget(max_queries=4)
 async def delete_profile(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -150,7 +157,8 @@ async def delete_profile(
 ) -> None:
     """Delete user profile."""
     deleted = await UserProfileService.delete_profile(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     if not deleted:
         raise HTTPException(
@@ -169,6 +177,7 @@ async def delete_profile(
     description="Check user's onboarding completion status.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_onboarding_status(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -176,7 +185,8 @@ async def get_onboarding_status(
 ) -> OnboardingStatusResponse:
     """Check onboarding completion status."""
     data = await UserProfileService.get_onboarding_status(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return OnboardingStatusResponse(**data)
 
@@ -194,6 +204,7 @@ async def get_onboarding_status(
     ),
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=6)
 async def get_data_summary(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -201,7 +212,8 @@ async def get_data_summary(
 ) -> UserDataSummaryResponse:
     """Get record count per engine."""
     data = await UserProfileService.get_data_summary(
-        database, user_id=current_user.id,
+        database,
+        user_id=current_user.id,
     )
     return UserDataSummaryResponse(**data)
 
@@ -220,6 +232,7 @@ async def get_data_summary(
     ),
 )
 @limiter.limit("2/minute")
+@route_query_budget(max_queries=6)
 async def request_export(
     request: Request,
     body: DataExportRequestCreate,
@@ -256,6 +269,7 @@ async def request_export(
     description="List all GDPR data export requests.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def list_exports(
     request: Request,
     page: int = Query(1, ge=1, description="Page number."),
@@ -271,10 +285,7 @@ async def list_exports(
         page_size=page_size,
     )
     return DataExportListResponse(
-        exports=[
-            DataExportRequestResponse.model_validate(export)
-            for export in data["exports"]
-        ],
+        exports=[DataExportRequestResponse.model_validate(export) for export in data["exports"]],
         total=data["total"],
         page=data["page"],
         page_size=data["page_size"],
@@ -288,6 +299,7 @@ async def list_exports(
     description="Get the status of a specific GDPR data export request.",
 )
 @limiter.limit(settings.rate_limit_parse)
+@route_query_budget(max_queries=4)
 async def get_export_status(
     request: Request,
     export_id: uuid.UUID,
