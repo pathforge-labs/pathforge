@@ -43,7 +43,8 @@
       "picomatch@>=3.0.0 <3.0.2": ">=3.0.2",
       "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
       "picomatch@4.0.3": ">=4.0.4",
-      "postcss@<8.5.10": ">=8.5.10"
+      "postcss@<8.5.10": ">=8.5.10",
+      "react-server-dom-webpack": "19.2.5"
     },
     "auditConfig": {
       "__justifications": "SECURITY.md §'Ignored CVEs' — each entry carries owner, rationale, re-eval date.",
