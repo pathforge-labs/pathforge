@@ -12,6 +12,8 @@ from __future__ import annotations
 import ssl
 from typing import Any
 
+import certifi
+
 
 def build_connect_args(enabled: bool) -> dict[str, Any]:
     """Return asyncpg connect_args for the requested TLS posture.
@@ -25,13 +27,20 @@ def build_connect_args(enabled: bool) -> dict[str, Any]:
     - `check_hostname=True` — validate SAN matches the DB hostname.
     - `minimum_version=TLSv1_2` — no legacy TLS/SSL.
 
-    The CA bundle is the system default (loaded by
-    `ssl.create_default_context`). We do not pin; see ADR-0001 alternative E.
+    Trust anchor is the Mozilla CA bundle shipped by `certifi`, not the
+    system bundle. The Supabase pooler chain includes a CA root that
+    `python:3.12-slim` (Debian-slim runtime base) does not ship out of
+    the box — at deploy time `ssl.create_default_context()` against the
+    system bundle fails with `[SSL: CERTIFICATE_VERIFY_FAILED] self-signed
+    certificate in certificate chain`. `certifi.where()` provides a
+    distro-independent, frequently-refreshed Mozilla bundle that includes
+    the modern roots Supabase, AWS, and Let's Encrypt use. This is the
+    standard practice for asyncpg/httpx/requests across Python ecosystem.
     """
     if not enabled:
         return {}
 
-    ctx = ssl.create_default_context()
+    ctx = ssl.create_default_context(cafile=certifi.where())
     ctx.check_hostname = True
     ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2

@@ -36,16 +36,26 @@ def test_ssl_context_minimum_tls_1_2() -> None:
     assert ctx.minimum_version >= ssl.TLSVersion.TLSv1_2
 
 
-def test_ssl_context_uses_system_ca_bundle() -> None:
-    """create_default_context loads the system CAs — we don't pin.
+def test_ssl_context_uses_certifi_ca_bundle() -> None:
+    """create_default_context loads the Mozilla CA bundle from certifi.
 
-    Rationale: Supabase uses a public CA (Let's Encrypt chain); pinning would
-    trade a rare risk (CA compromise) for a common risk (rotation breakage).
-    ADR-0001 alternative E.
+    Reverses ADR-0001 alternative E ("don't pin"). The system CA bundle in
+    `python:3.12-slim` does not include every root in the Supabase pooler
+    cert chain — production deploy fails with `[SSL: CERTIFICATE_VERIFY_FAILED]
+    self-signed certificate in certificate chain`. `certifi` ships the
+    Mozilla bundle, refreshed roughly every 6 weeks, and is the de-facto
+    standard trust store across the Python HTTPS ecosystem (httpx,
+    requests, asyncpg). Pinning to certifi trades the rare CA-compromise
+    risk for the common base-image-CA-drift risk.
     """
+    import certifi
+
     ctx = build_connect_args(True)["ssl"]
-    # At least one trusted cert must be loaded from the system store.
+    # At least one trusted cert must be loaded from the certifi bundle.
     assert ctx.get_ca_certs() or ctx.get_ca_certs(binary_form=True)
+    # Sanity: certifi.where() returns a real path that the context loaded.
+    cafile = certifi.where()
+    assert cafile.endswith("cacert.pem")
 
 
 def test_returns_fresh_context_each_call() -> None:
