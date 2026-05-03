@@ -20,5 +20,14 @@ const API_BASE = process.env.PROD_SMOKE_API_BASE_URL ?? "https://api.pathforge.e
 
 test("DELETE /users/me requires auth", async ({ request }) => {
   const resp = await request.delete(`${API_BASE}/api/v1/users/me`);
-  expect([401, 403]).toContain(resp.status());
+  const status = resp.status();
+  const hint =
+    status === 405
+      ? " Status 405 means the DELETE handler is not registered on the deployed API — " +
+        "redeploy apps/api so the delete_account route in apps/api/app/api/v1/users.py ships."
+      : "";
+  expect(
+    [401, 403],
+    `DELETE /users/me returned ${status}; expected 401 or 403 (unauthenticated reject).${hint}`,
+  ).toContain(status);
 });
