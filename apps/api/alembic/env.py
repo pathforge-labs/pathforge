@@ -42,13 +42,17 @@ target_metadata = Base.metadata
 # ──────────────────────────────────────────────────────────────────
 def _emit_connection_diagnostics() -> None:
     log = logging.getLogger("alembic.diagnostics")
-    log.setLevel(logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(
-        "[ALEMBIC-DIAG] %(message)s",
-    ))
-    log.addHandler(handler)
-    log.propagate = False
+    # Idempotent — env.py can be imported multiple times in the same
+    # process (test suites, multiple alembic CLI invocations); skip
+    # re-adding the handler to avoid duplicate log lines.
+    if not log.handlers:
+        log.setLevel(logging.INFO)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter(
+            "[ALEMBIC-DIAG] %(message)s",
+        ))
+        log.addHandler(handler)
+        log.propagate = False
 
     parts = urlsplit(settings.database_url)
     # Redact password while still showing whether it is non-empty.
@@ -75,9 +79,6 @@ def _emit_connection_diagnostics() -> None:
             log.error("dns_failed %s → gaierror(%s, %s)", host, e.errno, e.strerror)
         except OSError as e:
             log.error("dns_failed %s → %s: %s", host, type(e).__name__, e)
-
-
-_emit_connection_diagnostics()
 
 
 def run_migrations_offline() -> None:
@@ -114,12 +115,16 @@ async def run_async_migrations() -> None:
         connect_args=build_connect_args(settings.database_ssl_enabled),
     )
 
+    # Emit pre-connect diagnostics only here, when an actual connection
+    # is imminent — keeps non-migration alembic commands (history,
+    # current, check) quiet.
+    _emit_connection_diagnostics()
     diag_log = logging.getLogger("alembic.diagnostics")
     try:
         async with connectable.connect() as connection:
             diag_log.info("connect_ok — proceeding with migrations")
             await connection.run_sync(do_run_migrations)
-    except BaseException as exc:
+    except Exception as exc:
         # Wide net intentional — surface the exception class + message
         # explicitly so Railway logs carry the actionable signal even
         # if the wrapped traceback is truncated by the log viewer.
