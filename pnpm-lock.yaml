@@ -25,6 +25,7 @@ overrides:
   picomatch@>=4.0.0 <4.0.4: '>=4.0.4'
   picomatch@4.0.3: '>=4.0.4'
   postcss@<8.5.10: '>=8.5.10'
+  react-server-dom-webpack: ^19.0.2
 
 importers:
 
@@ -7399,12 +7400,12 @@ packages:
       '@types/react':
         optional: true
 
-  react-server-dom-webpack@19.0.0-rc-6230622a1a-20240610:
-    resolution: {integrity: sha512-nr+IsOVD07QdeCr4BLvR5TALfLaZLi9AIaoa6vXymBc051iDPWedJujYYrjRJy5+9jp9oCx3G8Tt/Bs//TckJw==}
+  react-server-dom-webpack@19.2.5:
+    resolution: {integrity: sha512-bYhdd2cZJhXHqyJBoloYaJrn8MrL9Egf3ZZVn0OrIODCCORm2goFD7C+xszf6xgfsSJi0rtgB/ichcuHfkJ4yQ==}
     engines: {node: '>=0.10.0'}
     peerDependencies:
-      react: 19.0.0-rc-6230622a1a-20240610
-      react-dom: 19.0.0-rc-6230622a1a-20240610
+      react: ^19.2.5
+      react-dom: ^19.2.5
       webpack: ^5.59.0
 
   react-shallow-renderer@16.15.0:
@@ -13022,7 +13023,7 @@ snapshots:
 
   acorn-loose@8.5.2:
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.16.0
 
   acorn-walk@8.3.4:
     dependencies:
@@ -15578,7 +15579,7 @@ snapshots:
       json5: 2.2.3
       lodash: 4.17.23
       react-native: 0.76.7(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(@types/react@18.3.28)(react@18.3.1)
-      react-server-dom-webpack: 19.0.0-rc-6230622a1a-20240610(react@18.3.1)(webpack@5.105.3)
+      react-server-dom-webpack: 19.2.5(react@18.3.1)(webpack@5.105.3)
       react-test-renderer: 18.3.1(react@18.3.1)
       server-only: 0.0.1
       stacktrace-js: 2.0.2
@@ -15869,7 +15870,7 @@ snapshots:
   jsdom@20.0.3:
     dependencies:
       abab: 2.0.6
-      acorn: 8.15.0
+      acorn: 8.16.0
       acorn-globals: 7.0.1
       cssom: 0.5.0
       cssstyle: 2.3.0
@@ -17170,12 +17171,13 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  react-server-dom-webpack@19.0.0-rc-6230622a1a-20240610(react@18.3.1)(webpack@5.105.3):
+  react-server-dom-webpack@19.2.5(react@18.3.1)(webpack@5.105.3):
     dependencies:
       acorn-loose: 8.5.2
       neo-async: 2.6.2
       react: 18.3.1
       webpack: 5.105.3
+      webpack-sources: 3.3.4
 
   react-shallow-renderer@16.15.0(react@18.3.1):
     dependencies:
