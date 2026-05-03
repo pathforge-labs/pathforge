@@ -55,23 +55,18 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
 
+  // Single chromium project. Mobile-viewport coverage is provided by
+  // visual-regression.spec.ts building its own iPhone-13-shaped context
+  // inline via browser.newContext({ isMobile: true, ... }); no separate
+  // playwright project is required, and adding one (webkit-backed via
+  // devices['iPhone 13']) is a footgun because every CI workflow
+  // installs only chromium browsers.
   projects: [
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
         // Disable CSS animations/transitions for screenshot stability
-        launchOptions: {
-          args: ['--force-prefers-reduced-motion'],
-        },
-      },
-    },
-    // Sprint 36 WS-7: Mobile viewport for responsive visual tests
-    {
-      name: 'mobile',
-      use: {
-        ...devices['iPhone 13'],
-        colorScheme: 'light',
         launchOptions: {
           args: ['--force-prefers-reduced-motion'],
         },
