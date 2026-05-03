@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import ssl
 
+import certifi
+
 from app.core.db_ssl import build_connect_args
 
 
@@ -48,8 +50,6 @@ def test_ssl_context_uses_certifi_ca_bundle() -> None:
     requests, asyncpg). Pinning to certifi trades the rare CA-compromise
     risk for the common base-image-CA-drift risk.
     """
-    import certifi
-
     ctx = build_connect_args(True)["ssl"]
     # At least one trusted cert must be loaded from the certifi bundle.
     assert ctx.get_ca_certs() or ctx.get_ca_certs(binary_form=True)
