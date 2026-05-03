@@ -27,8 +27,6 @@ from app.core.query_budget import route_query_budget
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["Health"])
 
 # Track process start for cold_start_time and uptime

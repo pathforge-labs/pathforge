@@ -338,8 +338,6 @@ async def refresh_token(
     )
     return new_tokens
 
-    return new_tokens
-
 
 @router.post(
     "/logout",
