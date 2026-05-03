@@ -99,6 +99,7 @@ jobs:
           PROD_SMOKE_UPTIMEROBOT_API_KEY: ${{ secrets.PROD_SMOKE_UPTIMEROBOT_API_KEY }}
         run: |
           npx playwright test e2e/prod-smoke/ \
+            --project=chromium \
             --reporter=github,list \
             --workers=2
 
