@@ -40,6 +40,11 @@ WORKDIR /app
 COPY apps/api/app ./app
 COPY apps/api/alembic ./alembic
 COPY apps/api/alembic.ini .
+# Vendored Supabase root CA — required for Supavisor pooler TLS chain
+# verification. See `app/core/db_ssl.py` and ADR-0001 corrigendum
+# (2026-05-08) for rationale. Mounted at /app/certs/ to match the
+# `Path(__file__).resolve().parents[2] / "certs"` resolution in db_ssl.
+COPY apps/api/certs ./certs
 
 # Switch to non-root user
 USER pathforge
