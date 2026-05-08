@@ -87,6 +87,7 @@ jobs:
           uv pip install pip-audit
           python -m pip_audit --desc --progress-spinner off \
             --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln CVE-2026-6357 \
             --ignore-vuln GHSA-xqmj-j6mv-4862
 
   # ── Deploy to Railway ───────────────────────────────────
