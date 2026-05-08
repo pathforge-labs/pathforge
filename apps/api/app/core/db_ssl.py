@@ -9,6 +9,7 @@ See ADR-0001 (and its 2026-05-08 corrigendum) for the decision rationale.
 """
 from __future__ import annotations
 
+import functools
 import ssl
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,33 @@ _SUPABASE_CA_BUNDLE = (
 )
 
 
+@functools.lru_cache(maxsize=1)
+def _validated_supabase_bundle() -> Path:
+    """Return the validated Supabase CA bundle path (cached after first call).
+
+    The `is_file()` syscall runs on the first invocation only; subsequent
+    calls hit the LRU cache and return the cached path with no I/O.
+
+    Loud-failure semantics from ADR-0001 §"No break-glass knob" are
+    preserved — the first call after a deploy that forgot to ship
+    `apps/api/certs/` still raises `FileNotFoundError`, the deploy log
+    surfaces the problem, and the container restart loop never serves
+    traffic with a Supabase-incapable trust store.
+
+    Tests can reset the cache via `_validated_supabase_bundle.cache_clear()`
+    after monkeypatching `_SUPABASE_CA_BUNDLE`.
+    """
+    if not _SUPABASE_CA_BUNDLE.is_file():
+        raise FileNotFoundError(
+            f"Supabase CA bundle missing at {_SUPABASE_CA_BUNDLE}. "
+            "The Docker image must include `apps/api/certs/` (see "
+            "docker/Dockerfile.api). Refusing to build SSL context "
+            "with public-only trust — would fail against pooler at "
+            "runtime."
+        )
+    return _SUPABASE_CA_BUNDLE
+
+
 def build_connect_args(enabled: bool) -> dict[str, Any]:
     """Return asyncpg connect_args for the requested TLS posture.
 
@@ -75,25 +103,19 @@ def build_connect_args(enabled: bool) -> dict[str, Any]:
       Supabase-private root not present in any public bundle.
 
     The Supabase root is vendored at `apps/api/certs/supabase-prod-ca-
-    2021.crt`. If that file is missing the function raises `FileNotFoundError`
-    at startup rather than silently downgrading to a Supabase-incapable
-    trust store — failure must be loud, not silent (ADR-0001 §"No break-
-    glass knob").
+    2021.crt`. Bundle existence is validated once via
+    `_validated_supabase_bundle()` — first call performs the syscall,
+    subsequent calls hit the LRU cache. If the file is missing the
+    function raises `FileNotFoundError` rather than silently downgrading
+    to a Supabase-incapable trust store (ADR-0001 §"No break-glass
+    knob").
     """
     if not enabled:
         return {}
 
-    if not _SUPABASE_CA_BUNDLE.is_file():
-        raise FileNotFoundError(
-            f"Supabase CA bundle missing at {_SUPABASE_CA_BUNDLE}. "
-            "The Docker image must include `apps/api/certs/` (see "
-            "docker/Dockerfile.api). Refusing to build SSL context "
-            "with public-only trust — would fail against pooler at "
-            "runtime."
-        )
-
+    bundle = _validated_supabase_bundle()
     ctx = ssl.create_default_context(cafile=certifi.where())
-    ctx.load_verify_locations(cafile=str(_SUPABASE_CA_BUNDLE))
+    ctx.load_verify_locations(cafile=str(bundle))
     ctx.check_hostname = True
     ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2

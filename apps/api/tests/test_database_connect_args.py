@@ -122,11 +122,21 @@ def test_missing_supabase_bundle_raises_loudly(monkeypatch: pytest.MonkeyPatch) 
     Per ADR-0001 §"No break-glass knob": failure modes that compromise
     TLS posture (here: silently downgrading to a Supabase-incapable
     trust store) must be loud, not silent.
+
+    The cache on `_validated_supabase_bundle` must be cleared both before
+    (so the bad path is seen, not a cached good path from a prior test)
+    and after (so subsequent tests don't see the bad path frozen in
+    cache).
     """
     from app.core import db_ssl
 
     monkeypatch.setattr(
         db_ssl, "_SUPABASE_CA_BUNDLE", Path("/nonexistent/path/that-cannot-exist.crt")
     )
-    with pytest.raises(FileNotFoundError, match="Supabase CA bundle missing"):
-        db_ssl.build_connect_args(True)
+    db_ssl._validated_supabase_bundle.cache_clear()
+    try:
+        with pytest.raises(FileNotFoundError, match="Supabase CA bundle missing"):
+            db_ssl.build_connect_args(True)
+    finally:
+        # Ensure the next test doesn't see the bad path cached.
+        db_ssl._validated_supabase_bundle.cache_clear()
