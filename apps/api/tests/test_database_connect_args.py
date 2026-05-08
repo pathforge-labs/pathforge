@@ -14,7 +14,6 @@ import pytest
 
 from app.core.db_ssl import build_connect_args
 
-
 # ──────────────────────────────────────────────────────────────────────
 # Identifiers used in trust-store assertions. The Subject CN match must
 # stay in lock-step with the cert vendored at
