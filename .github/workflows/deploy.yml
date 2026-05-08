@@ -102,7 +102,14 @@ jobs:
 
       - name: Install Railway CLI
         run: |
-          curl -fsSL https://railway.com/install.sh | sh
+          # Pipe to `bash`, not `sh`. The Railway installer (as of
+          # 2026-05) uses bashisms (parameter substitution at line
+          # ~141) that fail under POSIX `sh`. On Ubuntu runners
+          # `/bin/sh` is `dash`, which raises `Bad substitution`
+          # and the install exits 2 even though the binary did
+          # land in `~/.railway/bin/railway`.
+          curl -fsSL https://railway.com/install.sh | bash
+          echo "$HOME/.railway/bin" >> "$GITHUB_PATH"
 
       - name: Deploy
         run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
