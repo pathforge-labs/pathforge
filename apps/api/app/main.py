@@ -9,6 +9,7 @@ Sprint 30: Graceful shutdown, structured rate limit responses.
 Run with: uvicorn app.main:app --reload
 """
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator
@@ -80,6 +81,68 @@ def get_process_start_time() -> float:
     return _PROCESS_START_TIME
 
 
+# ── Lifespan startup helpers (Sprint 62 deploy fix, 2026-05-08) ─────
+# Each startup concern lives in its own private helper so the
+# `lifespan` context manager stays readable and the individual
+# initialisation paths can be unit-tested in isolation. Helpers MUST
+# tolerate failure — startup must not abort on a transient infra
+# blip; the next healthcheck or request retries through the same
+# path.
+
+# Bound on how long startup is allowed to wait for Redis to respond.
+# Aligned with `socket_connect_timeout=5` in `TokenBlacklist.get_redis`
+# so a network blip on the Railway↔Redis link can't make the new
+# container hang past Railway's healthcheck-grace window. Five seconds
+# is enough for a healthy Redis to ping and short enough that startup
+# always makes progress.
+_REDIS_STARTUP_PING_TIMEOUT_SECONDS: float = 5.0
+
+
+async def _init_redis_pool() -> None:
+    """Eagerly initialise the Redis client used by `TokenBlacklist`.
+
+    The Sprint-55 readiness contract in `/api/v1/health/ready` returns
+    503 when `redis_status == "not_initialized"`, and `_redis` only
+    becomes non-None when `get_redis()` is called from the auth path.
+    On a freshly-deployed container the very first inbound request is
+    Railway's healthcheck — so without this eager init the new
+    container would always fail its first probe, Railway would mark
+    the deploy failed, and traffic would never cut over from the
+    previous deployment.
+
+    The ping is wrapped in `asyncio.wait_for` so a hung Redis socket
+    cannot stall startup indefinitely (gemini-code-assist HIGH review
+    on PR #62: `TokenBlacklist.get_redis` does not configure a general
+    `socket_timeout`, only `socket_connect_timeout`, so a stuck server
+    after handshake could hang a `redis_client.ping()` forever).
+
+    Tolerates failure: a transient blip during cold-start should not
+    abort startup; the next healthcheck attempt or auth request will
+    retry through the same lazy path.
+    """
+    try:
+        from app.core.token_blacklist import token_blacklist
+        redis_client = await token_blacklist.get_redis()
+        await asyncio.wait_for(
+            redis_client.ping(),
+            timeout=_REDIS_STARTUP_PING_TIMEOUT_SECONDS,
+        )
+        logger.info("Redis connection pool initialised at startup")
+    except TimeoutError:
+        logger.warning(
+            "Redis eager-init ping timed out after %.1fs; readiness "
+            "probe may report `not_initialized` until first successful "
+            "contact",
+            _REDIS_STARTUP_PING_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        logger.warning(
+            "Redis eager-init at startup failed; readiness probe may "
+            "report `not_initialized` until first successful contact",
+            exc_info=True,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown events (Audit C2: graceful shutdown)."""
@@ -98,30 +161,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     register_query_counter_listener()
 
     # Sprint 55 / Sprint 62 deploy fix (2026-05-08): eagerly initialise
-    # the Redis pool used by `TokenBlacklist`. The Sprint-55 readiness
-    # contract in `/api/v1/health/ready` returns 503 when
-    # `redis_status == "not_initialized"` — and `_redis` only becomes
-    # non-None when `get_redis()` is called from the auth path. On a
-    # freshly-deployed container the very first inbound request is
-    # Railway's healthcheck, so without this eager init the new
-    # container would always fail its first probe, Railway would
-    # mark the deploy failed, and traffic would never cut over from
-    # the previous deployment. We attempt the ping with a short
-    # timeout and tolerate failure (logged) so a transient Redis
-    # blip during cold-start does not abort startup — the next
-    # healthcheck attempt or auth request will retry the
-    # initialisation via the same lazy path.
-    try:
-        from app.core.token_blacklist import token_blacklist
-        redis_client = await token_blacklist.get_redis()
-        await redis_client.ping()
-        logger.info("Redis connection pool initialised at startup")
-    except Exception:
-        logger.warning(
-            "Redis eager-init at startup failed; readiness probe may "
-            "report `not_initialized` until first successful contact",
-            exc_info=True,
-        )
+    # the Redis pool so the Sprint-55 readiness probe finds a live
+    # client on the first request. See `_init_redis_pool` for the full
+    # rationale.
+    await _init_redis_pool()
 
     # ADR-0001 / ADR-0002: Tag every event with the effective DB and
     # Redis TLS posture so post-mortem queries can filter "errors while

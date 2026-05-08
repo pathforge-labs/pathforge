@@ -248,65 +248,11 @@ async def test_attestation_cache_does_not_cache_failures() -> None:
     assert call_count == 2
 
 
-# ── Sprint 55 / Sprint 62 deploy regression ─────────────────────────
-# Issue tracked from PR #59 → #60 production deploy of 2026-05-08:
-# Railway healthcheck failed because `token_blacklist._redis` was
-# never initialised at startup. The Sprint 55 readiness contract
-# returns 503 when `redis_status == "not_initialized"`, and the
-# original `_redis` only became non-None when an auth request hit
-# `get_redis()`. On a freshly-deployed container the very first
-# request is the healthcheck itself, so the new container could
-# never pass its first probe and Railway never cut traffic over.
-# This test pins the eager-init behaviour into the lifespan.
+# Lifespan-level regression tests for the Sprint 55 / Sprint 62 deploy
+# fix (eager Redis init) live in `tests/test_main.py`, mirroring
+# `app/main.py` per the repository style guide's module-mirror rule.
+# The bug surfaced via `/health/ready` returning 503 on cold start,
+# but the failing path is in `app.main:lifespan`, so the test belongs
+# next to that module's other unit tests.
 
-@pytest.mark.asyncio
-async def test_lifespan_eagerly_initialises_redis_pool(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The application lifespan must call `token_blacklist.get_redis()`
-    at startup so the Sprint 55 readiness probe finds a live Redis
-    client on the very first request (Railway's healthcheck).
 
-    A regression here re-introduces the 2026-05-08 deploy outage:
-    healthchecks return 503 with `redis_status=\"not_initialized\"`,
-    Railway marks every deploy failed, and traffic never cuts over
-    from the previous deployment.
-    """
-    from fastapi import FastAPI
-
-    from app.core import token_blacklist as tb_module
-    from app.main import lifespan
-
-    called = {"get_redis": False, "ping": False}
-
-    class _FakeRedis:
-        async def ping(self) -> bool:
-            called["ping"] = True
-            return True
-
-        async def aclose(self) -> None:
-            return None
-
-    async def fake_get_redis() -> _FakeRedis:
-        called["get_redis"] = True
-        return _FakeRedis()
-
-    monkeypatch.setattr(
-        tb_module.token_blacklist, "get_redis", fake_get_redis,
-    )
-
-    fake_app = FastAPI()
-    async with lifespan(fake_app):
-        pass
-
-    assert called["get_redis"], (
-        "lifespan must call token_blacklist.get_redis() at startup so "
-        "the readiness probe sees an initialised Redis client; without "
-        "this the new container's first healthcheck returns 503 and "
-        "Railway never cuts traffic over."
-    )
-    assert called["ping"], (
-        "lifespan must ping Redis after acquiring the client to verify "
-        "connectivity at boot — silently obtaining a client without a "
-        "ping would let a misconfigured REDIS_URL slip past startup."
-    )
