@@ -1,0 +1,6 @@
+# Treat vendored CA cert files as binary so Windows clones don't
+# CRLF-mangle the PEM payload — OpenSSL accepts LF or CRLF, but
+# normalisation churn produces noisy diffs and risks accidental
+# in-place edits during checkout.
+*.crt -text
+*.pem -text
