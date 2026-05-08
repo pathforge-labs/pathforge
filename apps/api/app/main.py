@@ -97,6 +97,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.core.query_recorder import register_query_counter_listener
     register_query_counter_listener()
 
+    # Sprint 55 / Sprint 62 deploy fix (2026-05-08): eagerly initialise
+    # the Redis pool used by `TokenBlacklist`. The Sprint-55 readiness
+    # contract in `/api/v1/health/ready` returns 503 when
+    # `redis_status == "not_initialized"` — and `_redis` only becomes
+    # non-None when `get_redis()` is called from the auth path. On a
+    # freshly-deployed container the very first inbound request is
+    # Railway's healthcheck, so without this eager init the new
+    # container would always fail its first probe, Railway would
+    # mark the deploy failed, and traffic would never cut over from
+    # the previous deployment. We attempt the ping with a short
+    # timeout and tolerate failure (logged) so a transient Redis
+    # blip during cold-start does not abort startup — the next
+    # healthcheck attempt or auth request will retry the
+    # initialisation via the same lazy path.
+    try:
+        from app.core.token_blacklist import token_blacklist
+        redis_client = await token_blacklist.get_redis()
+        await redis_client.ping()
+        logger.info("Redis connection pool initialised at startup")
+    except Exception:
+        logger.warning(
+            "Redis eager-init at startup failed; readiness probe may "
+            "report `not_initialized` until first successful contact",
+            exc_info=True,
+        )
+
     # ADR-0001 / ADR-0002: Tag every event with the effective DB and
     # Redis TLS posture so post-mortem queries can filter "errors while
     # TLS was off" in one click. Intentionally process-global (isolation
