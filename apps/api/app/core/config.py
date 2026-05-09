@@ -44,7 +44,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     app_name: str = "PathForge"
     app_slug: str = "pathforge"
     app_tagline: str = "Career Intelligence for Everyone"
-    app_version: str = "0.1.0"
+    app_version: str = "0.1.1"
 
     # ── Server ──────────────────────────────────────────────────
     api_host: str = "0.0.0.0"
