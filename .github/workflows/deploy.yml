@@ -112,9 +112,34 @@ jobs:
           echo "$HOME/.railway/bin" >> "$GITHUB_PATH"
 
       - name: Deploy
+        id: railway_deploy
         run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Surface Railway-side logs (pre-deploy command output, container
+      # start, healthcheck) into the GitHub Actions log so failures
+      # surfaced as bare "Deploy failed" exit-1 from `railway up` are
+      # diagnosable without dashboard access. Runs on both success
+      # (post-mortem record) and failure (root-cause diagnosis), with
+      # `continue-on-error: true` so a logging hiccup never masks the
+      # real deploy result.
+      - name: Capture Railway deployment logs
+        if: always()
+        continue-on-error: true
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set +e
+          echo "=== Railway service status ==="
+          railway status --service "${{ secrets.RAILWAY_SERVICE_ID }}" 2>&1 || true
+          echo
+          echo "=== Railway deployment logs (last ~500 lines) ==="
+          # `railway logs` streams; force JSON + cap with timeout so the
+          # step finishes even when the service is still spewing.
+          timeout 30s railway logs \
+            --service "${{ secrets.RAILWAY_SERVICE_ID }}" \
+            --deployment 2>&1 | tail -500 || true
 
       # Health check verification after deploy
       - name: Verify deployment health
