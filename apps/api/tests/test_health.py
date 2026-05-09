@@ -246,3 +246,13 @@ async def test_attestation_cache_does_not_cache_failures() -> None:
     assert second is not None
     assert second.ssl is True
     assert call_count == 2
+
+
+# Lifespan-level regression tests for the Sprint 55 / Sprint 62 deploy
+# fix (eager Redis init) live in `tests/test_main.py`, mirroring
+# `app/main.py` per the repository style guide's module-mirror rule.
+# The bug surfaced via `/health/ready` returning 503 on cold start,
+# but the failing path is in `app.main:lifespan`, so the test belongs
+# next to that module's other unit tests.
+
+

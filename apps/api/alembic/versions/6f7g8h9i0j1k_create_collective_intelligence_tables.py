@@ -16,6 +16,7 @@ Create Date: 2026-02-22
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
 
@@ -31,8 +32,8 @@ def upgrade() -> None:
     op.create_table(
         "ci_industry_snapshots",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("industry", sa.String(200), nullable=False),
         sa.Column("region", sa.String(100), nullable=False),
         sa.Column(
@@ -122,8 +123,8 @@ def upgrade() -> None:
     op.create_table(
         "ci_salary_benchmarks",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("role", sa.String(255), nullable=False),
         sa.Column("location", sa.String(200), nullable=False),
         sa.Column(
@@ -219,8 +220,8 @@ def upgrade() -> None:
     op.create_table(
         "ci_peer_cohort_analyses",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("cohort_criteria", sa.JSON(), nullable=False),
         sa.Column(
             "cohort_size", sa.Integer(), nullable=False,
@@ -312,8 +313,8 @@ def upgrade() -> None:
     op.create_table(
         "ci_career_pulse_entries",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "pulse_score", sa.Float(), nullable=False,
             server_default="50.0",
@@ -413,8 +414,8 @@ def upgrade() -> None:
     op.create_table(
         "ci_preferences",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False, unique=True),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False, unique=True),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "include_industry_pulse",
             sa.Boolean(),

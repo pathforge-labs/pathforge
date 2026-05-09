@@ -102,12 +102,63 @@ jobs:
 
       - name: Install Railway CLI
         run: |
-          curl -fsSL https://railway.com/install.sh | sh
+          # Pipe to `bash`, not `sh`. The Railway installer (as of
+          # 2026-05) uses bashisms (parameter substitution at line
+          # ~141) that fail under POSIX `sh`. On Ubuntu runners
+          # `/bin/sh` is `dash`, which raises `Bad substitution`
+          # and the install exits 2 even though the binary did
+          # land in `~/.railway/bin/railway`.
+          curl -fsSL https://railway.com/install.sh | bash
+          echo "$HOME/.railway/bin" >> "$GITHUB_PATH"
 
       - name: Deploy
+        id: railway_deploy
         run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Surface Railway-side logs (pre-deploy command output, container
+      # start, healthcheck) into the GitHub Actions log so failures
+      # surfaced as bare "Deploy failed" exit-1 from `railway up` are
+      # diagnosable without dashboard access. Runs on both success
+      # (post-mortem record) and failure (root-cause diagnosis), with
+      # `continue-on-error: true` so a logging hiccup never masks the
+      # real deploy result.
+      - name: Capture Railway deployment logs
+        if: always()
+        continue-on-error: true
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SVC: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          set +e
+          echo "=== Railway CLI version + help (sanity) ==="
+          railway --version 2>&1 || true
+          echo
+          echo "=== Railway logs flags ==="
+          railway logs --help 2>&1 | head -30 || true
+          echo
+          echo "=== Railway status ==="
+          railway status 2>&1 | head -50 || true
+          echo
+          echo "=== Railway BUILD logs (the deploy we just attempted) ==="
+          # The `--build` flag shows pre-deploy + builder output for the
+          # most recent deployment. This is a DIFFERENT log stream from
+          # the runtime container's stdout; it includes alembic
+          # `[ALEMBIC-DIAG]` output and any pre-deploy command failures.
+          timeout 45s railway logs --build --service "$RAILWAY_SVC" 2>&1 | tail -800 || true
+          echo
+          echo "=== Railway DEPLOYMENT logs (runtime container) ==="
+          # Runtime container's stdout. NOTE: this defaults to the
+          # currently-active deployment, which may be the previous
+          # working deploy if our new one never reached "active"
+          # status — that's why we ALSO capture --build above.
+          timeout 30s railway logs --deployment --service "$RAILWAY_SVC" 2>&1 | tail -400 || true
+          echo
+          echo "=== Railway ALL logs (no filter) ==="
+          # Catch-all in case --deployment / --build don't match the
+          # log stream Railway is using for failed deployments.
+          timeout 20s railway logs --service "$RAILWAY_SVC" 2>&1 | tail -300 || true
 
       # Health check verification after deploy
       - name: Verify deployment health
