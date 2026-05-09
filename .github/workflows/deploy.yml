@@ -129,17 +129,36 @@ jobs:
         continue-on-error: true
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SVC: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
           set +e
-          echo "=== Railway service status ==="
-          railway status --service "${{ secrets.RAILWAY_SERVICE_ID }}" 2>&1 || true
+          echo "=== Railway CLI version + help (sanity) ==="
+          railway --version 2>&1 || true
           echo
-          echo "=== Railway deployment logs (last ~500 lines) ==="
-          # `railway logs` streams; force JSON + cap with timeout so the
-          # step finishes even when the service is still spewing.
-          timeout 30s railway logs \
-            --service "${{ secrets.RAILWAY_SERVICE_ID }}" \
-            --deployment 2>&1 | tail -500 || true
+          echo "=== Railway logs flags ==="
+          railway logs --help 2>&1 | head -30 || true
+          echo
+          echo "=== Railway status ==="
+          railway status 2>&1 | head -50 || true
+          echo
+          echo "=== Railway BUILD logs (the deploy we just attempted) ==="
+          # The `--build` flag shows pre-deploy + builder output for the
+          # most recent deployment. This is a DIFFERENT log stream from
+          # the runtime container's stdout; it includes alembic
+          # `[ALEMBIC-DIAG]` output and any pre-deploy command failures.
+          timeout 45s railway logs --build --service "$RAILWAY_SVC" 2>&1 | tail -800 || true
+          echo
+          echo "=== Railway DEPLOYMENT logs (runtime container) ==="
+          # Runtime container's stdout. NOTE: this defaults to the
+          # currently-active deployment, which may be the previous
+          # working deploy if our new one never reached "active"
+          # status — that's why we ALSO capture --build above.
+          timeout 30s railway logs --deployment --service "$RAILWAY_SVC" 2>&1 | tail -400 || true
+          echo
+          echo "=== Railway ALL logs (no filter) ==="
+          # Catch-all in case --deployment / --build don't match the
+          # log stream Railway is using for failed deployments.
+          timeout 20s railway logs --service "$RAILWAY_SVC" 2>&1 | tail -300 || true
 
       # Health check verification after deploy
       - name: Verify deployment health
