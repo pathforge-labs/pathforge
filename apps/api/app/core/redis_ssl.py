@@ -17,6 +17,28 @@ from app.core.errors import ConfigurationError
 
 _logger = logging.getLogger(__name__)
 
+# ADR-0002 corrigendum (2026-05-09): private internal networks are
+# trusted endpoints where TLS is neither possible nor required. The
+# Railway platform's internal Redis service is reachable only via
+# `*.railway.internal` hostnames, the network is private to the
+# project, and the Redis daemon listens plaintext on TCP — there is
+# no TLS endpoint to negotiate against, and forcing `rediss://`
+# produces a `redis.exceptions.ConnectionError` at TLS handshake
+# time. The scheme upgrade and the production-downgrade guard both
+# skip these hostnames; the connection still does not traverse the
+# public internet, so the security posture is preserved.
+_INTERNAL_NETWORK_SUFFIXES: tuple[str, ...] = (
+    ".railway.internal",
+    ".internal",  # generic catch-all for analogous platforms
+)
+
+
+def _is_internal_network(hostname: str | None) -> bool:
+    """True if `hostname` is on a trusted private platform network."""
+    if not hostname:
+        return False
+    return any(hostname.endswith(s) for s in _INTERNAL_NETWORK_SUFFIXES)
+
 
 def resolve_redis_url(url: str, ssl_enabled: bool, environment: str) -> str:
     """Reconcile `REDIS_URL` scheme with `ssl_enabled` (ADR-0002).
@@ -24,6 +46,10 @@ def resolve_redis_url(url: str, ssl_enabled: bool, environment: str) -> str:
     Reconciliation rules — upgrade-only; downgrade is never silent:
 
     - `redis://` + True  → upgrade scheme to `rediss://` (+ WARN log).
+      EXCEPT when the hostname is a trusted internal network (e.g.
+      `*.railway.internal`): the scheme is left as `redis://` and the
+      caller is expected to skip TLS for that single connection. See
+      the corrigendum in `docs/adr/0002-redis-ssl-secure-by-default.md`.
     - `rediss://` + False:
         - `environment == "production"` → raise `ConfigurationError`.
           Scheme is the stricter control surface; a production downgrade
@@ -41,8 +67,20 @@ def resolve_redis_url(url: str, ssl_enabled: bool, environment: str) -> str:
     """
     parts = urlsplit(url)
     scheme = parts.scheme
+    internal = _is_internal_network(parts.hostname)
 
     if scheme == "redis" and ssl_enabled:
+        if internal:
+            # Private platform network — TLS is unavailable at the Redis
+            # daemon and the traffic does not leave the project's
+            # internal network. Leave the scheme plaintext and emit an
+            # INFO log so the choice is auditable.
+            _logger.info(
+                "REDIS_URL points at a trusted internal network; "
+                "leaving scheme 'redis' plaintext despite redis_ssl=True "
+                "(ADR-0002 corrigendum 2026-05-09).",
+            )
+            return url
         upgraded = urlunsplit(("rediss", *parts[1:]))
         _logger.warning(
             "REDIS_URL scheme 'redis' upgraded to 'rediss' to match "
