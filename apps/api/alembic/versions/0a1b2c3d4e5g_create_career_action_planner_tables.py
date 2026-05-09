@@ -16,6 +16,7 @@ Create Date: 2026-02-23
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
 
@@ -31,8 +32,8 @@ def upgrade() -> None:
     op.create_table(
         "career_action_plans",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("title", sa.String(300), nullable=False),
         sa.Column("objective", sa.Text(), nullable=False),
         sa.Column(
@@ -127,7 +128,7 @@ def upgrade() -> None:
     op.create_table(
         "plan_milestones",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("plan_id", sa.String(), nullable=False),
+        sa.Column("plan_id", UUID(as_uuid=True), nullable=False),
         sa.Column("title", sa.String(300), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column(
@@ -194,7 +195,7 @@ def upgrade() -> None:
     op.create_table(
         "milestone_progress",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("milestone_id", sa.String(), nullable=False),
+        sa.Column("milestone_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "progress_percent", sa.Float(), nullable=False,
             server_default="0.0",
@@ -235,7 +236,7 @@ def upgrade() -> None:
     op.create_table(
         "plan_recommendations",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("plan_id", sa.String(), nullable=False),
+        sa.Column("plan_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "source_engine", sa.String(40), nullable=False,
         ),
@@ -291,9 +292,9 @@ def upgrade() -> None:
         "career_action_planner_preferences",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column(
-            "career_dna_id", sa.String(), nullable=False, unique=True,
+            "career_dna_id", UUID(as_uuid=True), nullable=False, unique=True,
         ),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "preferred_sprint_length_weeks", sa.Integer(), nullable=False,
             server_default="2",

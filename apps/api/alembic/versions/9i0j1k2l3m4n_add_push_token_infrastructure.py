@@ -37,7 +37,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column(
             "user_id",
-            sa.String(),
+            sa.Uuid(),
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),
