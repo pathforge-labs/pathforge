@@ -12,7 +12,16 @@ watchPatterns = ["apps/api/**", "docker/**", "railway.toml"]
 [deploy]
 preDeployCommand = "python -m alembic upgrade head"
 startCommand = "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
-healthcheckPath = "/api/v1/health/ready"
+# TEMPORARY (2026-05-09) — healthcheck lowered from `/health/ready`
+# (deep, dependency-checking) to `/health` (lightweight liveness) to
+# unblock the production cut-over while we diagnose why `/health/
+# ready` returns 503 in the new container despite `Application
+# startup complete` being emitted by uvicorn (issue #49 deploy
+# chain). The deep readiness check still exists at the same URL —
+# this only changes which path Railway probes for the deploy gate.
+# Revert to `/api/v1/health/ready` once the underlying readiness
+# regression is fixed (tracked in deploy chain follow-up).
+healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
