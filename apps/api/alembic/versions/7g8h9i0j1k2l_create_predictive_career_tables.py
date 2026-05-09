@@ -16,6 +16,7 @@ Create Date: 2026-02-23
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
 
@@ -31,8 +32,8 @@ def upgrade() -> None:
     op.create_table(
         "pc_emerging_roles",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("role_title", sa.String(255), nullable=False),
         sa.Column("industry", sa.String(200), nullable=False),
         sa.Column(
@@ -127,8 +128,8 @@ def upgrade() -> None:
     op.create_table(
         "pc_disruption_forecasts",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("disruption_title", sa.String(255), nullable=False),
         sa.Column(
             "disruption_type", sa.String(30), nullable=False,
@@ -215,8 +216,8 @@ def upgrade() -> None:
     op.create_table(
         "pc_opportunity_surfaces",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("opportunity_title", sa.String(255), nullable=False),
         sa.Column(
             "opportunity_type", sa.String(30), nullable=False,
@@ -303,8 +304,8 @@ def upgrade() -> None:
     op.create_table(
         "pc_career_forecasts",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("career_dna_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("career_dna_id", UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "outlook_score", sa.Float(), nullable=False,
             server_default="50.0",
@@ -405,9 +406,9 @@ def upgrade() -> None:
         "pc_preferences",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column(
-            "career_dna_id", sa.String(), nullable=False, unique=True,
+            "career_dna_id", UUID(as_uuid=True), nullable=False, unique=True,
         ),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "forecast_horizon_months", sa.Integer(), nullable=False,
             server_default="12",
