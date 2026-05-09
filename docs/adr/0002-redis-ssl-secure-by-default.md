@@ -221,3 +221,127 @@ covers Upstash and Railway's managed offerings.
 - [apps/api/tests/test_llm_redis_ssl.py](../../apps/api/tests/test_llm_redis_ssl.py)
 - redis-py docs: `Redis.from_url` scheme parsing, `SSLConnection` class.
 - ARQ docs: `RedisSettings(ssl=...)`.
+
+---
+
+## Corrigendum (2026-05-09): Trusted internal-network bypass
+
+### What was wrong
+
+The original ADR (§"Decision" item 1) enforced an unconditional
+upgrade of `redis://` to `rediss://` whenever `redis_ssl_enabled` was
+true — and `redis_ssl_enabled` auto-derives to `true` when
+`environment=production`. The implicit premise: any Redis endpoint
+reachable from the API service is on a hostile network, so TLS is
+non-negotiable.
+
+This premise breaks for **platform-managed internal Redis services**.
+On Railway, when the application service and a Redis service share
+the same project, they communicate over a project-local private
+network addressed via `*.railway.internal` hostnames. Two
+consequences:
+
+1. The Redis daemon listens **plaintext** — the platform does not
+   terminate TLS for internal-network traffic, and the daemon is not
+   configured with a server cert. Forcing `rediss://` produces a
+   `redis.exceptions.ConnectionError` at TLS handshake time:
+   `Error … connecting to redis.railway.internal:6379. SSL: WRONG_VERSION_NUMBER`
+   (or analogous), repeated on every `PING`. The Sprint-55 readiness
+   probe consequently reports `redis_status="error"` and Railway's
+   healthcheck fails the deploy.
+2. The traffic does **not** traverse the public internet — it never
+   leaves the platform's private address space, so the original
+   ADR-0002 rationale (defence against passive sniffing on hostile
+   wireless / transit networks) does not apply.
+
+This was the final blocker on the issue #49 deploy chain — the
+production cut-over reached uvicorn-running state but every
+healthcheck returned 503 because of this one rule.
+
+### What changes
+
+**Updated decision (supersedes Decision item 1 for trusted internal
+hostnames)**: when `urlsplit(redis_url).hostname` ends in
+`.railway.internal` or `.internal` (generic catch-all for analogous
+platform networks), the scheme upgrade is **skipped** and an `INFO`
+log records the bypass. `redis_ssl_enabled` may remain `True` —
+`Redis.from_url` derives the actual TLS posture from the URL scheme
+(`redis://` → no TLS), so the connection is correctly plaintext on
+the trusted network. The rest of the reconciliation logic — including
+the `rediss://` + `False` downgrade guard for production — is
+unchanged. Public / external hostnames still receive the standard
+upgrade.
+
+This is **not** a relaxation of the security posture. The original
+threat model (passive sniffing on hostile transit) is preserved for
+every endpoint that actually traverses such a network. The bypass
+narrows to a structurally-trusted topology — the platform's private
+network — where TLS is unavailable at the daemon and unnecessary at
+the wire.
+
+### Why Alternative E ("don't allow plaintext") was rejected on incorrect data
+
+The original ADR considered and rejected the option of allowing
+plaintext Redis at all in production. That rejection was correct
+**for externally-routable endpoints** (the case the ADR contemplated)
+but overgeneralised — it did not contemplate platform-internal
+networks where TLS is structurally absent. The corrigendum carves
+out the one class of endpoint where the original rejection's premise
+(the threat of an attacker on the network path) cannot be physically
+realised within the platform's private address space.
+
+If a future provider exposes its internal network to a wider
+adversary surface (e.g. cross-tenant routing on a shared platform),
+the carve-out would need re-evaluation. Today neither Railway nor
+analogous platforms (Fly, Render private networks) expose that risk.
+
+### Operational addendum
+
+- The carve-out matches `*.railway.internal` and `*.internal`. New
+  platform suffixes can be added to `_INTERNAL_NETWORK_SUFFIXES` in
+  `apps/api/app/core/redis_ssl.py` if PathForge ever migrates.
+- The bypass logs at `INFO`, not `WARNING` — it is an expected,
+  auditable choice on Railway, and using `WARNING` would cause false
+  alarms in normal operation.
+- The ARQ worker path (`arq_ssl_flag`) does **not** yet incorporate
+  internal-network detection. ARQ is not currently deployed alongside
+  the API on Railway internal Redis; if/when it is, the helper will
+  need a parallel update. Tracked in the post-issue-#49 follow-up
+  list.
+
+### Verification (additions to original §Verification)
+
+5. **Internal-network regression tests**
+   (`tests/test_redis_ssl.py`):
+   - `test_redis_internal_url_keeps_plaintext_scheme_in_production` —
+     fails if a `*.railway.internal` URL is upgraded.
+   - `test_redis_external_url_still_upgrades_in_production` —
+     fails if the carve-out broadens beyond internal hostnames.
+   - `test_redis_internal_url_logs_info_not_warning` — fails if the
+     log level changes or credentials leak into the message.
+
+6. **Live post-deploy probe** — `/api/v1/health/ready` against an
+   internal-network Redis returns:
+
+   ```json
+   "redis_detail": {
+       "status": "connected",
+       "ssl": false,
+       "ssl_attested": true,
+       "scheme": "redis"
+   }
+   ```
+
+   The `scheme: redis` (not `rediss`) is the visible signal that the
+   corrigendum is in effect; `ssl: false` with `ssl_attested: true`
+   confirms the connection actually negotiated as plaintext (vs. the
+   pre-corrigendum failure mode of an unattested error).
+
+### References (additions)
+
+- [PR #70](https://github.com/pathforge-labs/pathforge/pull/70) —
+  internal-network bypass implementation.
+- [Issue #49](https://github.com/pathforge-labs/pathforge/issues/49) —
+  production outage that surfaced the structural mismatch.
+- Railway docs: [Private Networking](https://docs.railway.com/guides/private-networking) —
+  describes the `.railway.internal` plaintext-only contract.
