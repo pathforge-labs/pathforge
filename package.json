@@ -52,7 +52,9 @@
         "CVE-2025-69873",
         "CVE-2025-09073",
         "CVE-2026-33671",
-        "CVE-2026-33672",
+        "CVE-2026-33672"
+      ],
+      "ignoreGhsas": [
         "GHSA-q3j6-qgpj-74h6",
         "GHSA-v39h-62p7-jpjc",
         "GHSA-fv7c-fp4j-7gwp"
