@@ -138,7 +138,9 @@ export default function DashboardPage() {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                {threatRadar.data ? `${threatRadar.data.alerts_summary.unread} unread alerts` : "Monitoring inactive"}
+                {threatRadar.data?.alerts_summary
+                  ? `${threatRadar.data.alerts_summary.unread} unread alerts`
+                  : "Monitoring inactive"}
               </p>
             </CardContent>
           </Card>
