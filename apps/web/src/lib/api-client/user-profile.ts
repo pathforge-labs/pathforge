@@ -34,7 +34,7 @@ export const userProfileApi = {
 
   // ── Onboarding ──────────────────────────────────────────
   getOnboardingStatus: (): Promise<OnboardingStatusResponse> =>
-    get<OnboardingStatusResponse>(`${BASE}/onboarding`),
+    get<OnboardingStatusResponse>(`${BASE}/onboarding-status`),
 
   // ── Data Summary ────────────────────────────────────────
   getDataSummary: (): Promise<UserDataSummaryResponse> =>
